@@ -21,6 +21,54 @@ A Lambda runs on a configurable schedule (default every 15 minutes). For each ru
 
 **Default**: 15 min × 4 checks = **60 minutes idle** before auto-shutdown.
 
+## AWS Setup
+
+### 1. Create an IAM User
+
+1. Go to the [AWS IAM Console](https://console.aws.amazon.com/iam/) → **Users** → **Create user**
+2. Give it a name (e.g. `game-server-deploy`)
+3. On the permissions step, choose **Attach policies directly** and add:
+   - `AmazonECS_FullAccess`
+   - `AmazonElasticFileSystemFullAccess`
+   - `AmazonVPCFullAccess`
+   - `AWSLambda_FullAccess`
+   - `CloudWatchFullAccess`
+   - `AmazonRoute53FullAccess`
+   - `IAMFullAccess`
+   - `AWSCostExplorerReadOnlyAccess`
+4. After creating the user, go to **Security credentials** → **Create access key**
+5. Choose **Command Line Interface (CLI)** as the use case
+6. Save the **Access Key ID** and **Secret Access Key** — you won't see the secret again
+
+> **Tip**: For a tighter security boundary, use a custom IAM policy scoped to only the resources this project creates instead of the managed policies above.
+
+### 2. Configure AWS CLI
+
+```bash
+aws configure
+```
+
+Enter your credentials when prompted:
+
+```
+AWS Access Key ID:     AKIA...
+AWS Secret Access Key: ****
+Default region name:   us-east-1   # must match aws_region in terraform.tfvars
+Default output format: json
+```
+
+This writes to `~/.aws/credentials` and `~/.aws/config`, which Terraform and the management app both read automatically.
+
+### 3. Verify
+
+```bash
+aws sts get-caller-identity
+```
+
+You should see your account ID and user ARN. If this works, you're ready to run Terraform.
+
+---
+
 ## Quick Start
 
 ### Option A — Run the app directly
