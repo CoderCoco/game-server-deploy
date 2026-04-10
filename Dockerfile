@@ -2,8 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir pipenv
+
+COPY Pipfile Pipfile.lock* ./
+RUN pipenv install --deploy --system
 
 COPY app/ ./app/
 

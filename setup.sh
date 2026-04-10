@@ -15,6 +15,17 @@ if ! command -v python3 >/dev/null 2>&1; then
   sudo apt-get update -qq && sudo apt-get install -y python3 python3-pip
 fi
 
+# pipenv (installed via pipx to avoid externally-managed-environment errors)
+if ! command -v pipenv >/dev/null 2>&1; then
+  echo "📥  pipenv not found — installing via pipx..."
+  if ! command -v pipx >/dev/null 2>&1; then
+    sudo apt-get update -qq && sudo apt-get install -y pipx
+    pipx ensurepath
+  fi
+  pipx install pipenv
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
 # Terraform
 if ! command -v terraform >/dev/null 2>&1; then
   echo "📥  terraform not found — installing via official HashiCorp repo..."
@@ -38,9 +49,9 @@ echo "✅  Prerequisites found (python3, terraform, aws cli)"
 
 # 2. Python dependencies
 echo ""
-echo "📦  Installing Python dependencies..."
+echo "📦  Installing Python dependencies via pipenv..."
 cd "$SCRIPT_DIR"
-python3 -m pip install -r requirements.txt --quiet
+pipenv install --quiet
 
 # 3. Terraform init
 echo ""
@@ -60,7 +71,7 @@ echo "    1. Edit terraform/terraform.tfvars with your game servers and domain"
 echo "    2. Run: cd terraform && terraform plan"
 echo "    3. Run: cd terraform && terraform apply"
 echo "    4. Run the management app:"
-echo "         Direct:  cd app && python3 app.py"
+echo "         Direct:  cd app && pipenv run python app.py"
 echo "         Docker:  docker compose up --build"
 echo "    5. Open http://localhost:5000"
 echo ""
