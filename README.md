@@ -176,6 +176,14 @@ game_servers = {
 - **Cost Monitoring** — per-game Fargate cost estimates and AWS Cost Explorer actuals
 - **Live Logs** — streams CloudWatch log events from the most recent task
 
+## Cost Tracking
+
+All resources are tagged with `Project = "game-servers-poc"` (via Terraform `default_tags`). To break down costs by this project in Cost Explorer:
+
+1. Go to **AWS Billing → Cost allocation tags**
+2. Find `Project` under user-defined tags and click **Activate**
+3. Wait up to 24 hours — then in **Cost Explorer** you can filter or group by `Project` to see all spend attributed to this deployment
+
 ## Cost Breakdown
 
 | Resource | Cost |
