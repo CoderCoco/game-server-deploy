@@ -85,7 +85,7 @@ locals {
 
 resource "aws_security_group" "game_servers" {
   name_prefix = "${var.project_name}-sg-"
-  description = "Game server tasks — allows all configured game ports inbound"
+  description = "Game server tasks - allows all configured game ports inbound"
   vpc_id      = aws_vpc.main.id
 
   dynamic "ingress" {

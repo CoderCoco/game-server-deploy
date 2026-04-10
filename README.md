@@ -33,6 +33,7 @@ A Lambda runs on a configurable schedule (default every 15 minutes). For each ru
    - `AmazonVPCFullAccess`
    - `AWSLambda_FullAccess`
    - `CloudWatchFullAccess`
+   - `AmazonEventBridgeFullAccess`
    - `AmazonRoute53FullAccess`
    - `IAMFullAccess`
    - `AWSCostExplorerReadOnlyAccess`
@@ -41,6 +42,31 @@ A Lambda runs on a configurable schedule (default every 15 minutes). For each ru
 6. Save the **Access Key ID** and **Secret Access Key** — you won't see the secret again
 
 > **Tip**: For a tighter security boundary, use a custom IAM policy scoped to only the resources this project creates instead of the managed policies above.
+
+#### Additional inline policy required
+
+The Terraform AWS provider tags EventBridge rules on creation, which requires `events:TagResource` — a permission not included in any of the managed policies above. Add it as an inline policy:
+
+IAM → Users → your-user → **Add inline policy** → JSON tab:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "events:TagResource",
+        "events:UntagResource",
+        "events:ListTagsForResource"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Name it something like `EventBridgeTagging` and save.
 
 ### 2. Configure AWS CLI
 
