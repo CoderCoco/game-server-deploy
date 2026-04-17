@@ -29,7 +29,10 @@ export function createDiscordRouter(
       ...(body.botToken !== undefined ? { botToken: body.botToken } : {}),
       ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
     });
-    res.json({ success: true, config: config.getRedacted() });
+    res.json({
+      success: true,
+      config: { ...config.getRedacted(), botStatus: bot.getStatus() },
+    });
   };
 
   /** `GET /discord/guilds` — list guild IDs the bot is allowed to operate in. */
@@ -74,20 +77,36 @@ export function createDiscordRouter(
     res.json(config.getConfig().gamePermissions);
   };
 
-  /** `PUT /discord/permissions/:game` — overwrite the permission entry for one game. */
+  /**
+   * `PUT /discord/permissions/:game` — overwrite the permission entry for one game.
+   * Returns 400 if the `:game` key is rejected as unsafe (prototype-pollution guard).
+   */
   const putPermission: RequestHandler = (req, res) => {
     const body = req.body as DiscordGamePermission;
-    config.setGamePermission(req.params['game']!, {
+    const game = req.params['game']!;
+    const written = config.setGamePermission(game, {
       userIds: body.userIds ?? [],
       roleIds: body.roleIds ?? [],
       actions: body.actions ?? [],
     });
+    if (!written) {
+      res.status(400).json({ success: false, error: `invalid game key: ${game}` });
+      return;
+    }
     res.json({ success: true, permissions: config.getConfig().gamePermissions });
   };
 
-  /** `DELETE /discord/permissions/:game` — remove the permission entry for one game. */
+  /**
+   * `DELETE /discord/permissions/:game` — remove the permission entry for one game.
+   * Returns 400 if the `:game` key is rejected as unsafe.
+   */
   const deletePermission: RequestHandler = (req, res) => {
-    config.deleteGamePermission(req.params['game']!);
+    const game = req.params['game']!;
+    const deleted = config.deleteGamePermission(game);
+    if (!deleted) {
+      res.status(400).json({ success: false, error: `invalid game key: ${game}` });
+      return;
+    }
     res.json({ success: true, permissions: config.getConfig().gamePermissions });
   };
 

@@ -212,9 +212,16 @@ describe('DiscordConfigService', () => {
     it('should refuse to write a permission under a prototype-pollution key', () => {
       mockExists.mockReturnValue(false);
       for (const bad of ['__proto__', 'constructor', 'prototype', '']) {
-        service.setGamePermission(bad, { userIds: ['u1'], roleIds: [], actions: ['start'] });
+        const ok = service.setGamePermission(bad, { userIds: ['u1'], roleIds: [], actions: ['start'] });
+        expect(ok).toBe(false);
       }
       expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it('should return true on a successful write', () => {
+      mockExists.mockReturnValue(false);
+      const ok = service.setGamePermission('minecraft', { userIds: ['u1'], roleIds: [], actions: ['start'] });
+      expect(ok).toBe(true);
     });
 
     it('should deduplicate user and role IDs per game', () => {
@@ -237,7 +244,8 @@ describe('DiscordConfigService', () => {
           minecraft: { userIds: [], roleIds: [], actions: ['start'] },
         },
       });
-      service.deleteGamePermission('__proto__');
+      const ok = service.deleteGamePermission('__proto__');
+      expect(ok).toBe(false);
       expect(mockWrite).not.toHaveBeenCalled();
     });
 

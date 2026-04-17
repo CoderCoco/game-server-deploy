@@ -78,7 +78,7 @@ const EMPTY_CONFIG: DiscordConfig = {
 
 @injectable()
 export class DiscordConfigService {
-  /** Parsed config cached in-memory; cleared on every `save()` so writes are atomic. */
+  /** Parsed config cached in-memory; refreshed on every `save()` after the new value is written to disk. */
   private cache: DiscordConfig | null = null;
 
   /** Read the config from disk (or return an empty one) and populate the in-memory cache. */
@@ -190,11 +190,15 @@ export class DiscordConfigService {
    * dropped silently. Rejects dangerous prototype keys (`__proto__`,
    * `constructor`, `prototype`) to avoid prototype pollution since `game` is
    * caller-supplied.
+   *
+   * @returns `true` if the permission was written; `false` if the `game` key
+   *   was rejected (caller should surface this as a 4xx so the API client
+   *   doesn't think the update succeeded).
    */
-  setGamePermission(game: string, perm: DiscordGamePermission): void {
+  setGamePermission(game: string, perm: DiscordGamePermission): boolean {
     if (!isSafeGameKey(game)) {
       logger.warn('Rejected setGamePermission with unsafe key', { game });
-      return;
+      return false;
     }
     const cfg = this.load();
     cfg.gamePermissions[game] = {
@@ -203,17 +207,24 @@ export class DiscordConfigService {
       actions: [...new Set((perm.actions ?? []).filter((a) => a === 'start' || a === 'stop' || a === 'status'))],
     };
     this.save(cfg);
+    return true;
   }
 
-  /** Remove the permission entry for a game so no non-admin can run commands on it. */
-  deleteGamePermission(game: string): void {
+  /**
+   * Remove the permission entry for a game so no non-admin can run commands on it.
+   *
+   * @returns `true` if a delete was performed; `false` if the `game` key was
+   *   rejected for safety reasons.
+   */
+  deleteGamePermission(game: string): boolean {
     if (!isSafeGameKey(game)) {
       logger.warn('Rejected deleteGamePermission with unsafe key', { game });
-      return;
+      return false;
     }
     const cfg = this.load();
     delete cfg.gamePermissions[game];
     this.save(cfg);
+    return true;
   }
 
   /**

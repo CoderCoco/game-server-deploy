@@ -213,7 +213,7 @@ Admins and per-game entries are kept separate, so you can give one group of Disc
 
 1. **Create a Discord application.** Visit <https://discord.com/developers/applications> → **New Application** → add a **Bot**.
    - Copy the **Application ID** (the "client ID") and the **Bot Token**. Treat the token like a password.
-   - Enable the **Server Members Intent** under *Privileged Gateway Intents* (needed so the bot can see the roles of command invokers).
+   - You do **not** need to enable any *Privileged Gateway Intents* (e.g. Server Members Intent) for the slash commands and permission checks documented here — the bot reads the invoker's role IDs directly from the interaction payload.
 2. **Invite the bot to your Discord server.** In the app's **OAuth2 → URL Generator**, select scopes `bot` and `applications.commands` and bot permissions `Send Messages` + `Use Application Commands`. Open the generated URL and add the bot to your server.
 3. **Enable Developer Mode in Discord** (User Settings → Advanced → Developer Mode) so you can right-click a server/user/role and **Copy ID**.
 4. **Start the management app** (Option A or B under Quick Start).
