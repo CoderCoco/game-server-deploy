@@ -5,6 +5,7 @@ import { FileManagerModal } from './components/FileManagerModal.js';
 import { CostPanel } from './components/CostPanel.js';
 import { LogsPanel } from './components/LogsPanel.js';
 import { WatchdogPanel } from './components/WatchdogPanel.js';
+import { DiscordPanel } from './components/DiscordPanel.js';
 
 export default function App() {
   const { statuses, estimates, loading, refreshGame } = useGameStatus();
@@ -50,6 +51,9 @@ export default function App() {
           <CostPanel estimates={estimates} />
           <WatchdogPanel />
         </div>
+
+        {/* Discord bot panel */}
+        <DiscordPanel games={gameNames} />
 
         {/* Logs panel */}
         {gameNames.length > 0 && <LogsPanel games={gameNames} />}

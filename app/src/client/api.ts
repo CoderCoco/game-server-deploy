@@ -49,6 +49,36 @@ export interface FileMgrStatus {
   taskArn?: string;
 }
 
+export type DiscordAction = 'start' | 'stop' | 'status';
+
+export interface DiscordAdmins {
+  userIds: string[];
+  roleIds: string[];
+}
+
+export interface DiscordGamePermission {
+  userIds: string[];
+  roleIds: string[];
+  actions: DiscordAction[];
+}
+
+export interface DiscordBotStatus {
+  state: 'stopped' | 'starting' | 'running' | 'error';
+  clientId: string | null;
+  username: string | null;
+  connectedGuildIds: string[];
+  message?: string;
+}
+
+export interface DiscordConfigRedacted {
+  clientId: string;
+  allowedGuilds: string[];
+  admins: DiscordAdmins;
+  gamePermissions: Record<string, DiscordGamePermission>;
+  botTokenSet: boolean;
+  botStatus: DiscordBotStatus;
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   return res.json() as Promise<T>;
@@ -74,4 +104,47 @@ export const api = {
   filesMgrStatus: (game: string) => request<FileMgrStatus>(`/api/files/${game}`),
   filesMgrStart: (game: string) => request<ActionResult>(`/api/files/${game}/start`, { method: 'POST' }),
   filesMgrStop: (game: string) => request<ActionResult>(`/api/files/${game}/stop`, { method: 'POST' }),
+
+  discordConfig: () => request<DiscordConfigRedacted>('/api/discord/config'),
+  discordSaveCredentials: (body: { botToken?: string; clientId?: string }) =>
+    request<{ success: boolean; config: DiscordConfigRedacted }>('/api/discord/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  discordAddGuild: (guildId: string) =>
+    request<{ success: boolean; guilds: string[] }>('/api/discord/guilds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guildId }),
+    }),
+  discordRemoveGuild: (guildId: string) =>
+    request<{ success: boolean; guilds: string[] }>(`/api/discord/guilds/${guildId}`, {
+      method: 'DELETE',
+    }),
+  discordSaveAdmins: (admins: DiscordAdmins) =>
+    request<{ success: boolean; admins: DiscordAdmins }>('/api/discord/admins', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(admins),
+    }),
+  discordSavePermission: (game: string, perm: DiscordGamePermission) =>
+    request<{ success: boolean; permissions: Record<string, DiscordGamePermission> }>(
+      `/api/discord/permissions/${game}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(perm),
+      },
+    ),
+  discordDeletePermission: (game: string) =>
+    request<{ success: boolean; permissions: Record<string, DiscordGamePermission> }>(
+      `/api/discord/permissions/${game}`,
+      { method: 'DELETE' },
+    ),
+  discordRestart: () =>
+    request<{ success: boolean; message: string; botStatus: DiscordBotStatus }>(
+      '/api/discord/restart',
+      { method: 'POST' },
+    ),
 };

@@ -8,6 +8,8 @@ services:
       - ./terraform:/app/terraform:ro
       # Persists server_config.json across container restarts
       - ./app/server_config.json:/app/server_config.json
+      # Persists discord_config.json across container restarts
+      - ./app/discord_config.json:/app/discord_config.json
       # AWS credentials — remove if using env vars instead
       - ~/.aws:/root/.aws:ro
     environment:
@@ -16,3 +18,5 @@ services:
       # AWS_ACCESS_KEY_ID: ""
       # AWS_SECRET_ACCESS_KEY: ""
       # AWS_DEFAULT_REGION: "us-east-1"
+      # Discord bot token (wins over app/discord_config.json if both set):
+      # DISCORD_BOT_TOKEN: ""
