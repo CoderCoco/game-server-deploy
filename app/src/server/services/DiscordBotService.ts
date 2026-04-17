@@ -2,21 +2,15 @@ import { Injectable } from '@nestjs/common';
 import {
   Client,
   GatewayIntentBits,
-  GuildMember,
   REST,
   Routes,
-  SlashCommandBuilder,
-  type APIInteractionGuildMember,
-  type ChatInputCommandInteraction,
-  type AutocompleteInteraction,
   type Interaction,
-  type RESTPostAPIChatInputApplicationCommandsJSONBody,
   MessageFlags,
 } from 'discord.js';
 import { logger } from '../logger.js';
-import { ConfigService } from './ConfigService.js';
-import { EcsService } from './EcsService.js';
-import { DiscordConfigService, type DiscordAction } from './DiscordConfigService.js';
+import { DiscordConfigService } from './DiscordConfigService.js';
+import { SlashCommandRegistry } from '../discord/SlashCommandRegistry.js';
+import { CommandInvoker } from '../discord/CommandInvoker.js';
 
 /**
  * Lifecycle state of the Discord bot. Mapped 1:1 to the badge colors in the
@@ -43,9 +37,6 @@ export interface BotStatus {
   message?: string;
 }
 
-/** The shape of the `interaction.member` field for slash commands invoked in a guild. */
-type InteractionMember = GuildMember | APIInteractionGuildMember;
-
 /**
  * Owns the single shared `discord.js` `Client` instance for the app process.
  *
@@ -56,8 +47,10 @@ type InteractionMember = GuildMember | APIInteractionGuildMember;
  *   are never exposed to guilds outside the allowlist.
  * - Auto-leaves any guild that isn't on the allowlist, both at startup and on
  *   new `guildCreate` events.
- * - Delegates every incoming slash command through `DiscordConfigService.canRun()`
- *   for permission enforcement, then calls into `EcsService` for start/stop.
+ * - Dispatches every incoming interaction to the matching {@link SlashCommand}
+ *   via {@link SlashCommandRegistry}. Per-command permission checks,
+ *   option parsing, and service calls all live on the command class — this
+ *   service is a thin transport/dispatcher.
  *
  * Permission order lives in `DiscordConfigService.canRun()` — keep it there, not here.
  */
@@ -71,9 +64,8 @@ export class DiscordBotService {
   private statusMessage: string | undefined;
 
   constructor(
-    private readonly config: ConfigService,
-    private readonly ecs: EcsService,
     private readonly discord: DiscordConfigService,
+    private readonly registry: SlashCommandRegistry,
   ) {}
 
   /** Redacted snapshot of the current bot state, safe to return to the web client. */
@@ -203,36 +195,6 @@ export class DiscordBotService {
     }
   }
 
-  /** Construct the four slash command descriptors. Returned as JSON ready to PUT to Discord. */
-  private buildCommands(): RESTPostAPIChatInputApplicationCommandsJSONBody[] {
-    const start = new SlashCommandBuilder()
-      .setName('server-start')
-      .setDescription('Start a game server')
-      .addStringOption((o) =>
-        o.setName('game').setDescription('Game to start').setRequired(true).setAutocomplete(true),
-      );
-
-    const stop = new SlashCommandBuilder()
-      .setName('server-stop')
-      .setDescription('Stop a running game server')
-      .addStringOption((o) =>
-        o.setName('game').setDescription('Game to stop').setRequired(true).setAutocomplete(true),
-      );
-
-    const status = new SlashCommandBuilder()
-      .setName('server-status')
-      .setDescription('Show status of a game server (or all if omitted)')
-      .addStringOption((o) =>
-        o.setName('game').setDescription('Game to check').setRequired(false).setAutocomplete(true),
-      );
-
-    const list = new SlashCommandBuilder()
-      .setName('server-list')
-      .setDescription('List all configured game servers and their state');
-
-    return [start.toJSON(), stop.toJSON(), status.toJSON(), list.toJSON()];
-  }
-
   /** Register commands for every allowlisted guild. Called once after `ready`. */
   private async registerCommandsForAllowedGuilds(): Promise<void> {
     const cfg = this.discord.getConfig();
@@ -266,7 +228,7 @@ export class DiscordBotService {
     try {
       const rest = new REST({ version: '10' }).setToken(token);
       await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-        body: this.buildCommands(),
+        body: this.registry.buildAll(),
       });
       logger.info('Registered slash commands for guild', { guildId });
     } catch (err) {
@@ -281,12 +243,10 @@ export class DiscordBotService {
    * 1. Reject interactions we don't handle (not slash command, not autocomplete).
    * 2. Enforce guild + allowlist for both types — autocomplete is also gated so
    *    non-allowlisted guilds never see configured game names suggested.
-   * 3. For autocomplete, respond with filtered suggestions and stop.
-   * 4. For slash commands: map name → action, extract `game` + invoker role IDs.
-   * 5. `/server-list` and `/server-status` (no game arg) filter to games the user
-   *    has `status` permission on; admins see everything.
-   * 6. Otherwise, check `DiscordConfigService.canRun()` and either deny or
-   *    dispatch to `EcsService` (with a deferred ephemeral reply).
+   * 3. Look up the matching {@link SlashCommand} in the registry and delegate:
+   *    autocomplete → `command.autocomplete(ctx)`; chat input → `command.execute(ctx)`.
+   *    Per-command permission checks, option parsing, and service dispatch all
+   *    live on the command class.
    */
   private async handleInteraction(interaction: Interaction): Promise<void> {
     const isAutocomplete = interaction.isAutocomplete();
@@ -322,224 +282,35 @@ export class DiscordBotService {
       return;
     }
 
-    if (isAutocomplete) {
-      await this.handleAutocomplete(interaction);
+    const command = this.registry.get(interaction.commandName);
+    if (!command) {
+      if (isChatInput) {
+        logger.warn('Discord command with unknown name ignored', { command: interaction.commandName });
+      } else {
+        await interaction.respond([]).catch(() => undefined);
+      }
       return;
     }
 
-    // isChatInput is true past this point.
+    const invoker = CommandInvoker.from(interaction, this.discord);
+    if (!invoker) {
+      // Defensive: guildId was already checked above, so this shouldn't happen.
+      if (isAutocomplete) await interaction.respond([]).catch(() => undefined);
+      return;
+    }
+
+    if (isAutocomplete) {
+      const focused = interaction.options.getFocused(true);
+      await command.autocomplete({ interaction, invoker, focused: { name: focused.name, value: focused.value } });
+      return;
+    }
+
+    // isChatInput past this point.
     logger.info('Discord interaction received', {
       command: interaction.commandName,
       userId: interaction.user.id,
       guildId,
     });
-
-    const action = this.commandToAction(interaction.commandName);
-    if (!action) {
-      logger.warn('Discord command with unknown name ignored', { command: interaction.commandName });
-      return;
-    }
-
-    const game = interaction.options.getString('game') ?? undefined;
-    const roleIds = this.extractRoleIds(interaction.member);
-
-    // /server-list has no `game` option; /server-status with the option omitted
-    // hits the same path. Both map to action === 'status' via commandToAction.
-    if (!game && action === 'status') {
-      await this.replyVisibleList(interaction, guildId, roleIds);
-      return;
-    }
-
-    if (!game) {
-      await interaction.reply({ content: 'Game is required.', flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    const allowed = this.discord.canRun({ guildId, userId: interaction.user.id, roleIds, game, action });
-    if (!allowed) {
-      logger.warn('Discord command denied', {
-        guildId,
-        userId: interaction.user.id,
-        command: interaction.commandName,
-        game,
-      });
-      await interaction.reply({
-        content: `You don't have permission to ${action} **${game}**.`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    await this.dispatchAction(interaction, action, game);
-  }
-
-  /** Run the permitted action (`start`/`stop`/`status`) against `EcsService` and report back. */
-  private async dispatchAction(
-    interaction: ChatInputCommandInteraction,
-    action: DiscordAction,
-    game: string,
-  ): Promise<void> {
-    logger.info('Discord command dispatching', {
-      command: interaction.commandName,
-      userId: interaction.user.id,
-      guildId: interaction.guildId,
-      game,
-    });
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      if (action === 'start') {
-        const result = await this.ecs.start(game);
-        await interaction.editReply((result.success ? '✅ ' : '❌ ') + result.message);
-      } else if (action === 'stop') {
-        const result = await this.ecs.stop(game);
-        await interaction.editReply((result.success ? '✅ ' : '❌ ') + result.message);
-      } else {
-        const status = await this.ecs.getStatus(game);
-        await interaction.editReply(this.formatStatus(status));
-      }
-      logger.info('Discord command completed', { command: interaction.commandName, game });
-    } catch (err) {
-      logger.error('Discord command execution failed', { err, command: interaction.commandName, game });
-      await interaction.editReply('❌ Command failed. Check server logs.');
-    }
-  }
-
-  /**
-   * Suggest game names from Terraform outputs that match the user's partial input.
-   *
-   * Permission-gated: the suggestion list is filtered to the games the invoker
-   * can actually execute the *current* command on. So `/server-start <tab>`
-   * only shows games the user has `start` permission on, and `/server-stop`
-   * only shows `stop`. This keeps autocomplete visibility in sync with the
-   * per-command `canRun()` check done at execution time instead of leaking
-   * every configured game name to anyone in an allowlisted guild.
-   */
-  private async handleAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
-    const focused = interaction.options.getFocused(true);
-    if (focused.name !== 'game') return;
-    const action = this.commandToAction(interaction.commandName);
-    if (!action) {
-      await interaction.respond([]).catch(() => undefined);
-      return;
-    }
-    // Re-read Terraform state so new/removed games show up without a bot restart
-    // (matches how /api/status handles the same concern in routes/games.ts).
-    this.config.invalidateCache();
-    const games = this.config.getTfOutputs()?.game_names ?? [];
-    const query = focused.value.toLowerCase();
-    const guildId = interaction.guildId;
-    if (!guildId) {
-      // Should have been filtered upstream; defend anyway.
-      await interaction.respond([]).catch(() => undefined);
-      return;
-    }
-    const roleIds = this.extractRoleIds(interaction.member);
-    const matches = games
-      .filter((g) => g.toLowerCase().includes(query))
-      .filter((g) =>
-        this.discord.canRun({ guildId, userId: interaction.user.id, roleIds, game: g, action }),
-      )
-      .slice(0, 25)
-      .map((g) => ({ name: g, value: g }));
-    await interaction.respond(matches).catch(() => undefined);
-  }
-
-  /**
-   * Reply with a status summary, filtered to the games the caller has
-   * `status` permission on (admins see everything). If no game is visible,
-   * reply with a denial rather than an empty list so non-permitted users get
-   * clear feedback instead of silently seeing "no games configured".
-   */
-  private async replyVisibleList(
-    interaction: ChatInputCommandInteraction,
-    guildId: string,
-    roleIds: string[],
-  ): Promise<void> {
-    // Re-read Terraform state so the list reflects recent deploys (matches
-    // /api/status behavior — see routes/games.ts).
-    this.config.invalidateCache();
-    const games = this.config.getTfOutputs()?.game_names ?? [];
-    if (!games.length) {
-      await interaction.reply({ content: 'No games configured.', flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const visible = games.filter((g) =>
-      this.discord.canRun({ guildId, userId: interaction.user.id, roleIds, game: g, action: 'status' }),
-    );
-    if (!visible.length) {
-      logger.warn('Discord list/status command denied (no visible games)', {
-        guildId,
-        userId: interaction.user.id,
-        command: interaction.commandName,
-      });
-      await interaction.reply({
-        content: "You don't have permission to view any server statuses.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    try {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const statuses = await Promise.all(visible.map((g) => this.ecs.getStatus(g)));
-      const lines = statuses.map((s) => this.formatStatus(s));
-      await interaction.editReply(lines.join('\n'));
-    } catch (err) {
-      logger.error('Failed to fetch Discord server statuses', {
-        err,
-        guildId,
-        userId: interaction.user.id,
-        command: interaction.commandName,
-        visibleGames: visible,
-      });
-      const content = '❌ Could not fetch server statuses right now. Check server logs.';
-      // deferReply may or may not have succeeded; pick the matching finisher
-      // so we don't throw "already replied" on top of the original failure.
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply(content).catch(() => undefined);
-      } else {
-        await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
-      }
-    }
-  }
-
-  /** One-line status for a game: emoji + state + optional hostname/IP. */
-  private formatStatus(status: { game: string; state: string; publicIp?: string; hostname?: string; message?: string }): string {
-    const emoji =
-      status.state === 'running' ? '🟢'
-      : status.state === 'starting' ? '🟡'
-      : status.state === 'stopped' ? '⚫'
-      : '⚠️';
-    const host = status.hostname ?? status.publicIp;
-    const addr = host ? ` — \`${host}\`` : '';
-    return `${emoji} **${status.game}**: ${status.state}${addr}`;
-  }
-
-  /** Map a slash command name to the permission-gated action it performs. */
-  private commandToAction(name: string): DiscordAction | null {
-    switch (name) {
-      case 'server-start': return 'start';
-      case 'server-stop': return 'stop';
-      case 'server-status': return 'status';
-      case 'server-list': return 'status';
-      default: return null;
-    }
-  }
-
-  /**
-   * Extract the role IDs the invoker holds in the guild where the command ran.
-   *
-   * discord.js gives `interaction.member` one of two shapes:
-   * - `GuildMember` (cached) — `.roles` is a `GuildMemberRoleManager` with a `cache` Collection keyed by role ID.
-   * - `APIInteractionGuildMember` (uncached) — `.roles` is a `readonly string[]` of role IDs.
-   *
-   * We handle both explicitly instead of leaning on `any`; null means "no member" (shouldn't happen in a guild command).
-   */
-  private extractRoleIds(member: InteractionMember | null): string[] {
-    if (!member) return [];
-    if (member instanceof GuildMember) {
-      return [...member.roles.cache.keys()];
-    }
-    // APIInteractionGuildMember: `roles` is a plain array of role IDs.
-    return [...member.roles];
+    await command.execute({ interaction, invoker });
   }
 }

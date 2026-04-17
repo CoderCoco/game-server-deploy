@@ -84,6 +84,14 @@ Key design rules to preserve:
 - **Permission resolution is in `DiscordConfigService.canRun()`.** Order is guild allowlist → admin user/role → per-game user/role + action gate. Keep this ordering; tests encode it.
 - **Token is never sent to the client.** `getRedacted()` returns `botTokenSet: boolean` instead of the token. API response shapes should preserve this.
 
+#### Slash commands are class-based, one file per command
+
+Slash commands live under `app/src/server/discord/commands/` as `@Injectable()` subclasses of the abstract `SlashCommand` (`app/src/server/discord/SlashCommand.ts`). Each class owns its own `name`, `action` (the `DiscordConfigService.canRun()` permission bucket), `build()` (the Discord REST descriptor), and `execute(ctx)` / `autocomplete(ctx)`. `DiscordBotService.handleInteraction()` is a thin dispatcher: it enforces guild + allowlist, looks the command up by `commandName` in `SlashCommandRegistry`, and delegates — it does **not** know about specific commands. Adding a new slash command is: (1) write a new `SlashCommand` subclass, (2) add it to `SlashCommandRegistry`'s constructor, (3) register it as a provider in `discord.module.ts`. Don't add `if (commandName === ...)` branches back to the dispatcher.
+
+- **`GameOptionSlashCommand`** is the shared base for commands that take a `game` option with autocomplete (start/stop/status). It implements the autocomplete flow once (re-read Terraform state → filter by partial input → filter by `canRun(game, this.action)`) so the three commands stay in sync. List has no autocomplete and extends `SlashCommand` directly.
+- **`/server-status` with no game arg delegates to `ServerListCommand`.** `ServerStatusCommand` injects `ServerListCommand` and calls `list.execute(ctx)` for the no-game branch — the multi-game view has one implementation, not two.
+- **`CommandInvoker`** (`app/src/server/discord/CommandInvoker.ts`) wraps `(guildId, userId, roleIds)` and exposes `canRun(game, action)`. It's built once per interaction by the dispatcher via `CommandInvoker.from(interaction, discord)`, which does the strongly-typed `GuildMember` vs `APIInteractionGuildMember` discrimination in one place. Commands access caller identity through `ctx.invoker` — they should never touch `interaction.member` directly or re-implement role extraction.
+
 ### Known Lambda env-var quirk
 
 Lambda env vars named `AWS_REGION` are reserved by the runtime. Both Lambdas use `AWS_REGION_` (trailing underscore) to pass the configured region — preserve this when editing.
