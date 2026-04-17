@@ -1,5 +1,6 @@
 import './container.js'; // must be first — sets up DI registrations
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { container } from 'tsyringe';
@@ -23,6 +24,14 @@ const isDev = process.env['NODE_ENV'] !== 'production';
 const app = express();
 app.use(express.json());
 app.use(requestLogger);
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
 
 // Resolve services from DI container
 const configService = container.resolve(ConfigService);
