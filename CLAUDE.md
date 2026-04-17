@@ -103,6 +103,10 @@ All resources inherit `default_tags` from `provider "aws"` (`Project = "game-ser
 - **Typing in tests**: avoid `as unknown as SomeType` casts. Prefer `vi.mocked(fn)` for mocked modules and `Partial<T>` + a single `as T` for service-shaped stubs.
 - **No raw `process.env` in business logic**: wrap environment access behind a service method so tests can stub it via `vi.spyOn` instead of mutating `process.env` (which is flaky and leaks across tests).
 
+## PR Conventions
+
+- **PR titles use Conventional Commits.** Every PR title must start with a conventional-commit type (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`), optionally with a scope in parentheses, then a colon and a short imperative summary — e.g. `refactor(app): migrate server from Express+tsyringe to Nest.js`, `docs: reflect Nest.js migration in CLAUDE.md`, `fix(watchdog): stop leaking tags on failed runs`. This matters because we squash-merge: the PR title becomes the merge commit subject on `main`, so a badly-formed title produces a badly-formed commit. Keep the subject under ~70 characters; put details in the PR body.
+
 ## PR Review Workflow
 
 **Be strict with Copilot review suggestions.** Do not rubber-stamp them. When a Copilot comment lands on a PR:
