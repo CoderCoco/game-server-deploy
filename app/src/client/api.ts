@@ -110,15 +110,6 @@ export function setStoredApiToken(token: string): void {
 }
 
 /**
- * Error thrown when the server returns 401 for `/api/*`. Callers (the token
- * modal in `App.tsx`) catch this to surface a "please re-enter your API
- * token" prompt instead of crashing.
- */
-export class UnauthorizedError extends Error {
-  constructor() { super('Unauthorized'); this.name = 'UnauthorizedError'; }
-}
-
-/**
  * Module-level handler invoked whenever a `/api/*` call returns 401. The
  * `App` component registers one on mount so it can open the "enter API
  * token" modal; other call sites don't need to care.

@@ -590,7 +590,10 @@ describe('DiscordBotService', () => {
         options: { getFocused: () => ({ name: 'game', value: '' }) },
         respond,
       });
-      expect(respond).not.toHaveBeenCalled();
+      // Should respond with an empty list rather than timing out — an
+      // unanswered autocomplete surfaces to users as "interaction failed".
+      // Empty still hides configured game names from non-allowlisted guilds.
+      expect(respond).toHaveBeenCalledWith([]);
     });
 
     it('should filter autocomplete to only games the invoker has permission for', async () => {

@@ -43,9 +43,6 @@ export interface BotStatus {
   message?: string;
 }
 
-/** One action the bot can perform via slash command on a game. */
-type BotAction = DiscordAction;
-
 /** The shape of the `interaction.member` field for slash commands invoked in a guild. */
 type InteractionMember = GuildMember | APIInteractionGuildMember;
 
@@ -301,6 +298,10 @@ export class DiscordBotService {
       if (isChatInput) {
         logger.warn('Discord command in DM rejected', { userId: interaction.user.id, command: interaction.commandName });
         await interaction.reply({ content: 'This bot only works in configured servers.', flags: MessageFlags.Ephemeral });
+      } else {
+        // Autocomplete: respond with no suggestions rather than timing out —
+        // an unanswered autocomplete surfaces to the user as "interaction failed".
+        await interaction.respond([]).catch(() => undefined);
       }
       return;
     }
@@ -313,8 +314,11 @@ export class DiscordBotService {
           command: interaction.commandName,
         });
         await interaction.reply({ content: 'This server is not allowlisted.', flags: MessageFlags.Ephemeral });
+      } else {
+        // Autocomplete: respond empty rather than silently drop. Empty still
+        // hides configured game names from non-allowlisted guilds (no leakage).
+        await interaction.respond([]).catch(() => undefined);
       }
-      // Autocomplete: silently drop — no allowlist leakage.
       return;
     }
 
@@ -339,7 +343,9 @@ export class DiscordBotService {
     const game = interaction.options.getString('game') ?? undefined;
     const roleIds = this.extractRoleIds(interaction.member);
 
-    if (interaction.commandName === 'server-list' || (!game && action === 'status')) {
+    // /server-list has no `game` option; /server-status with the option omitted
+    // hits the same path. Both map to action === 'status' via commandToAction.
+    if (!game && action === 'status') {
       await this.replyVisibleList(interaction, guildId, roleIds);
       return;
     }
@@ -370,7 +376,7 @@ export class DiscordBotService {
   /** Run the permitted action (`start`/`stop`/`status`) against `EcsService` and report back. */
   private async dispatchAction(
     interaction: ChatInputCommandInteraction,
-    action: BotAction,
+    action: DiscordAction,
     game: string,
   ): Promise<void> {
     logger.info('Discord command dispatching', {
@@ -509,7 +515,7 @@ export class DiscordBotService {
   }
 
   /** Map a slash command name to the permission-gated action it performs. */
-  private commandToAction(name: string): BotAction | null {
+  private commandToAction(name: string): DiscordAction | null {
     switch (name) {
       case 'server-start': return 'start';
       case 'server-stop': return 'stop';

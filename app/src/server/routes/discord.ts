@@ -74,12 +74,12 @@ export function createDiscordRouter(
   const addGuild: RequestHandler = (req, res) => {
     const raw = (req.body as { guildId?: unknown })?.guildId;
     if (typeof raw !== 'string') {
-      res.status(400).json({ error: 'guildId required' });
+      res.status(400).json({ success: false, error: 'guildId required' });
       return;
     }
     const guildId = raw.trim();
     if (!guildId) {
-      res.status(400).json({ error: 'guildId required' });
+      res.status(400).json({ success: false, error: 'guildId required' });
       return;
     }
     config.addAllowedGuild(guildId);
@@ -94,7 +94,7 @@ export function createDiscordRouter(
   const removeGuild: RequestHandler = (req, res) => {
     const guildId = (req.params['guildId'] ?? '').trim();
     if (!guildId) {
-      res.status(400).json({ error: 'guildId required' });
+      res.status(400).json({ success: false, error: 'guildId required' });
       return;
     }
     config.removeAllowedGuild(guildId);

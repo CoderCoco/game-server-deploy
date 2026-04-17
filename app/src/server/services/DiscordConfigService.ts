@@ -97,13 +97,21 @@ function sanitizeGamePermission(v: unknown): DiscordGamePermission {
   };
 }
 
-const EMPTY_CONFIG: DiscordConfig = {
-  botToken: '',
-  clientId: '',
-  allowedGuilds: [],
-  admins: { userIds: [], roleIds: [] },
-  gamePermissions: {},
-};
+/**
+ * Factory for a blank, freshly-allocated config. Important: returns a new
+ * object graph on every call so callers can mutate the returned arrays /
+ * maps (e.g. `addAllowedGuild` does `.push(...)`) without leaking into a
+ * module-level constant and contaminating other service instances.
+ */
+function emptyConfig(): DiscordConfig {
+  return {
+    botToken: '',
+    clientId: '',
+    allowedGuilds: [],
+    admins: { userIds: [], roleIds: [] },
+    gamePermissions: {},
+  };
+}
 
 @injectable()
 export class DiscordConfigService {
@@ -121,7 +129,7 @@ export class DiscordConfigService {
   private load(): DiscordConfig {
     if (this.cache) return this.cache;
     if (!existsSync(CONFIG_PATH)) {
-      this.cache = { ...EMPTY_CONFIG, admins: { userIds: [], roleIds: [] }, gamePermissions: {} };
+      this.cache = emptyConfig();
       return this.cache;
     }
     try {
@@ -145,7 +153,7 @@ export class DiscordConfigService {
       return this.cache;
     } catch (err) {
       logger.error('Failed to parse discord_config.json', { err });
-      this.cache = { ...EMPTY_CONFIG, admins: { userIds: [], roleIds: [] }, gamePermissions: {} };
+      this.cache = emptyConfig();
       return this.cache;
     }
   }
