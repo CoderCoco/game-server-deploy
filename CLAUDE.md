@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Commands
 
-The management app is a TypeScript project (Express API + React/Vite UI) under `app/`. Dependencies are managed with **npm**.
+The management app is a TypeScript project (Nest.js API + React/Vite UI) under `app/`. Dependencies are managed with **npm**.
 
 ```bash
 # Install app deps
 cd app && npm install
 
-# Run the dev servers (Express on 3001, Vite on 5173 with /api proxy)
+# Run the dev servers (Nest on 3001, Vite on 5173 with /api proxy)
 cd app && npm run dev
 
 # Production build + run
@@ -41,7 +41,7 @@ No linter is configured in this repo.
 Two loosely-coupled halves communicate via the Terraform state file:
 
 1. **Terraform (`terraform/`)** provisions all AWS infrastructure.
-2. **Management app (`app/`)** — Express + TypeScript backend reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs, then drives AWS via the AWS SDK v3. React/Vite frontend talks to the Express API. Services use **tsyringe** for DI and **Winston** for structured logging.
+2. **Management app (`app/`)** — Nest.js (on `@nestjs/platform-express`) + TypeScript backend reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs, then drives AWS via the AWS SDK v3. React/Vite frontend talks to the Nest API. Services use **Nest's built-in DI** (`@Injectable()`) and **Winston** for structured logging. Feature modules under `app/src/server/modules/` (`AwsModule`, `DiscordModule`) group related providers; HTTP handlers live in `app/src/server/controllers/` as `@Controller`-decorated classes wired up through `AppModule`.
 
 There is **no persistent ECS Service**. Servers run only when the user clicks Start — the app calls `ecs.run_task()` / `ecs.stop_task()` against per-game task definitions named `{game}-server`. This is the core cost-saving design choice; don't introduce a long-running Service.
 
@@ -71,11 +71,11 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 
 ### API authentication
 
-Every `/api/*` route is gated behind a bearer token via middleware in `app/src/server/middleware/auth.ts`. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the middleware or bypass it on individual routes — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
+Every `/api/*` route is gated behind a bearer token via `ApiTokenGuard` in `app/src/server/guards/api-token.guard.ts`, registered globally in `AppModule` as an `APP_GUARD` provider so it applies to every controller automatically. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts in `main.ts` if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the guard or bypass it on individual controllers — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
 
 ### Discord bot lives inside the management app process
 
-There is no separate bot service — `DiscordBotService` (in `app/src/server/services/DiscordBotService.ts`) holds a single `discord.js` `Client` that is started from `index.ts` on app boot (only if a token is configured) and reuses `EcsService` for start/stop. Config is persisted to `app/discord_config.json`; `DISCORD_BOT_TOKEN` env var overrides the file value. Don't spin this out into its own container.
+There is no separate bot service — `DiscordBotService` (in `app/src/server/services/DiscordBotService.ts`) holds a single `discord.js` `Client` that is started from `main.ts` after `app.listen()` (only if a token is configured) and reuses `EcsService` for start/stop. Config is persisted to `app/discord_config.json`; `DISCORD_BOT_TOKEN` env var overrides the file value. Don't spin this out into its own container.
 
 Key design rules to preserve:
 
