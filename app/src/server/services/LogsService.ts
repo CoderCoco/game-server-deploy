@@ -1,4 +1,4 @@
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import {
   CloudWatchLogsClient,
   DescribeLogStreamsCommand,
@@ -7,7 +7,7 @@ import {
 import { logger } from '../logger.js';
 import { ConfigService } from './ConfigService.js';
 
-@injectable()
+@Injectable()
 export class LogsService {
   private client: CloudWatchLogsClient | null = null;
 

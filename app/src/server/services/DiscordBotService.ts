@@ -1,4 +1,4 @@
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import {
   Client,
   GatewayIntentBits,
@@ -61,7 +61,7 @@ type InteractionMember = GuildMember | APIInteractionGuildMember;
  *
  * Permission order lives in `DiscordConfigService.canRun()` — keep it there, not here.
  */
-@injectable()
+@Injectable()
 export class DiscordBotService {
   /** The live discord.js client while the bot is running; `null` when stopped. */
   private client: Client | null = null;

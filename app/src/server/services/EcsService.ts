@@ -1,4 +1,4 @@
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import {
   ECSClient,
   ListTasksCommand,
@@ -27,7 +27,7 @@ export interface StartResult {
   taskArn?: string;
 }
 
-@injectable()
+@Injectable()
 export class EcsService {
   private client: ECSClient | null = null;
 

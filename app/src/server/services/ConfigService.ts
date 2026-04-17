@@ -1,4 +1,4 @@
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -35,7 +35,7 @@ const DEFAULT_CONFIG: WatchdogConfig = {
   watchdog_min_packets: 100,
 };
 
-@injectable()
+@Injectable()
 export class ConfigService {
   private tfCache: TfOutputs | null = null;
 
