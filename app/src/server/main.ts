@@ -32,14 +32,24 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api');
 
-  // Serve the Vite-built React app in production. Mounted directly on Express
-  // (rather than via ServeStaticModule) so the SPA fallback doesn't collide
-  // with Nest's /api routes and so it stays inert in dev.
+  // Serve the Vite-built React app in production. Both handlers short-circuit
+  // on `/api` paths so they never shadow controllers or Nest's 404 handler —
+  // Copilot (PR #8) flagged that a naive `.get('*')` can intercept API routes
+  // because Nest registers its routes later during `listen()`/init and also
+  // installs its own not-found handler at the end of the Express stack.
   if (!isDev) {
-    const clientDist = join(__dirname, '../../client');
+    // dist/server/main.js → ../client gives dist/client (vite's build.outDir).
+    const clientDist = join(__dirname, '../client');
     const httpAdapter = app.getHttpAdapter().getInstance() as express.Express;
-    httpAdapter.use(express.static(clientDist));
-    httpAdapter.get('*', (_req, res) => {
+    const staticHandler = express.static(clientDist);
+    const isApiRequest = (req: express.Request): boolean =>
+      req.path === '/api' || req.path.startsWith('/api/');
+    httpAdapter.use((req, res, next) => {
+      if (isApiRequest(req)) return next();
+      staticHandler(req, res, next);
+    });
+    httpAdapter.get('*', (req, res, next) => {
+      if (isApiRequest(req)) return next();
       res.sendFile(join(clientDist, 'index.html'));
     });
   }
