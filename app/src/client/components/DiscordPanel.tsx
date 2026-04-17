@@ -8,6 +8,12 @@ import {
 
 const ALL_ACTIONS: DiscordAction[] = ['start', 'stop', 'status'];
 
+/**
+ * Dashboard panel for configuring the Discord bot: credentials, the guild
+ * allowlist (the bot auto-leaves any guild not listed here), server-wide
+ * admins, and per-game user/role permissions. `games` is the current list
+ * of game names from Terraform outputs, used to populate the per-game tab.
+ */
 export function DiscordPanel({ games }: { games: string[] }) {
   const [cfg, setCfg] = useState<DiscordConfigRedacted | null>(null);
   const [tab, setTab] = useState<'bot' | 'guilds' | 'admins' | 'perms'>('bot');
