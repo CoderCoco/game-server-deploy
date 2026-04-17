@@ -19,6 +19,7 @@ export function DiscordPanel({ games }: { games: string[] }) {
   const [tab, setTab] = useState<'bot' | 'guilds' | 'admins' | 'perms'>('bot');
   const [busy, setBusy] = useState(false);
 
+  /** Re-fetch the (redacted) Discord config from the API after mutations. */
   async function refresh() {
     setCfg(await api.discordConfig());
   }
@@ -35,6 +36,10 @@ export function DiscordPanel({ games }: { games: string[] }) {
     );
   }
 
+  /**
+   * Guard an API-mutating action with the `busy` flag (disables child buttons)
+   * and refresh config afterwards so the UI reflects the server-side change.
+   */
   async function wrap<T>(fn: () => Promise<T>) {
     setBusy(true);
     try {
@@ -67,6 +72,11 @@ export function DiscordPanel({ games }: { games: string[] }) {
   );
 }
 
+/**
+ * Compact status indicator (colored dot + bot state + username) shown in the
+ * panel header. Colors map to bot state: running=green, starting=amber,
+ * error=red, anything else=dim.
+ */
 function BotStatusBadge({ cfg }: { cfg: DiscordConfigRedacted }) {
   const { state, username } = cfg.botStatus;
   const color =
@@ -82,6 +92,12 @@ function BotStatusBadge({ cfg }: { cfg: DiscordConfigRedacted }) {
   );
 }
 
+/**
+ * Form for the Discord application's client ID and bot token. The token field
+ * is write-only: leaving it blank when one is already set preserves the
+ * existing value, so we never need to send the secret back to the client.
+ * Restart kicks the bot so it picks up any new credentials.
+ */
 function CredentialsTab({
   cfg,
   busy,
@@ -125,6 +141,11 @@ function CredentialsTab({
   );
 }
 
+/**
+ * Manage the guild (server) allowlist. Each row shows whether the bot is
+ * currently connected to that guild so you can spot misconfiguration (e.g.
+ * the bot hasn't been invited, or the wrong ID was pasted).
+ */
 function GuildsTab({
   cfg,
   busy,
@@ -176,6 +197,10 @@ function GuildsTab({
   );
 }
 
+/**
+ * Editor for the server-wide admin list — users or roles that bypass the
+ * per-game permission check and can run every Discord command.
+ */
 function AdminsTab({
   cfg,
   busy,
@@ -208,6 +233,11 @@ function AdminsTab({
   );
 }
 
+/**
+ * Outer wrapper for the per-game permission editor. Picks the game whose
+ * permissions are being edited; the actual editor is rendered with a `key`
+ * tied to `selected` so its internal form state resets when the game changes.
+ */
 function PermissionsTab({
   cfg,
   games,
@@ -249,6 +279,11 @@ function PermissionsTab({
   );
 }
 
+/**
+ * Form for a single game's permission entry: allowed user IDs, role IDs, and
+ * the set of actions (start/stop/status) those principals can invoke.
+ * `Clear` deletes the entry entirely.
+ */
 function PermissionEditor({
   initial,
   busy,
@@ -264,6 +299,7 @@ function PermissionEditor({
   const [roleIds, setRoleIds] = useState(initial.roleIds.join(', '));
   const [actions, setActions] = useState<DiscordAction[]>(initial.actions);
 
+  /** Toggle an action in or out of the allowed-actions set. */
   function toggle(a: DiscordAction) {
     setActions((cur) => (cur.includes(a) ? cur.filter((x) => x !== a) : [...cur, a]));
   }
@@ -300,6 +336,7 @@ function PermissionEditor({
   );
 }
 
+/** A tab-strip button with an underline when active; used for the panel's top navigation. */
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -319,6 +356,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
+/** A single-line text input with a dim label above it. Pass `type="password"` for secrets. */
 function LabeledInput({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
     <div>
@@ -328,6 +366,7 @@ function LabeledInput({ label, value, onChange, type = 'text' }: { label: string
   );
 }
 
+/** A two-row textarea with a dim label — used for comma-separated ID lists. */
 function LabeledTextarea({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
@@ -343,6 +382,7 @@ function LabeledTextarea({ label, value, onChange }: { label: string; value: str
   );
 }
 
+/** Parse a comma-separated string into a trimmed, non-empty array of tokens. */
 function splitList(v: string): string[] {
   return v.split(',').map((s) => s.trim()).filter(Boolean);
 }

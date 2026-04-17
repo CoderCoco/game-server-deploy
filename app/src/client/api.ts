@@ -49,19 +49,23 @@ export interface FileMgrStatus {
   taskArn?: string;
 }
 
+/** Discord slash-command action a user can be permitted to invoke on a game. */
 export type DiscordAction = 'start' | 'stop' | 'status';
 
+/** Users and roles with server-wide admin privileges (all commands on all games). */
 export interface DiscordAdmins {
   userIds: string[];
   roleIds: string[];
 }
 
+/** Per-game permission entry: which users/roles can run which actions on this game. */
 export interface DiscordGamePermission {
   userIds: string[];
   roleIds: string[];
   actions: DiscordAction[];
 }
 
+/** Live status of the Discord bot connection (populated by the server). */
 export interface DiscordBotStatus {
   state: 'stopped' | 'starting' | 'running' | 'error';
   clientId: string | null;
@@ -70,6 +74,11 @@ export interface DiscordBotStatus {
   message?: string;
 }
 
+/**
+ * The Discord bot config as returned by `GET /api/discord/config`. The bot
+ * token itself is never sent to the client — `botTokenSet` indicates whether
+ * one is configured on the server (via file or `DISCORD_BOT_TOKEN` env).
+ */
 export interface DiscordConfigRedacted {
   clientId: string;
   allowedGuilds: string[];
