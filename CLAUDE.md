@@ -28,9 +28,13 @@ terraform destroy
 
 # First-time environment bootstrap (installs terraform, aws CLI if missing, runs terraform init)
 ./setup.sh
+
+# Unit tests (vitest + aws-sdk-client-mock)
+cd app && npm test             # one-off run
+cd app && npm run test:watch   # watch mode
 ```
 
-No test suite or linter is configured in this repo.
+No linter is configured in this repo.
 
 ## Architecture
 
@@ -64,6 +68,17 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 ### App → Terraform coupling
 
 `ConfigService.getTfOutputs()` (in `app/src/server/services/ConfigService.ts`) parses `terraform.tfstate` as JSON and caches it in-memory. `invalidateTfCache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes.
+
+### Discord bot lives inside the management app process
+
+There is no separate bot service — `DiscordBotService` (in `app/src/server/services/DiscordBotService.ts`) holds a single `discord.js` `Client` that is started from `index.ts` on app boot (only if a token is configured) and reuses `EcsService` for start/stop. Config is persisted to `app/discord_config.json`; `DISCORD_BOT_TOKEN` env var overrides the file value. Don't spin this out into its own container.
+
+Key design rules to preserve:
+
+- **Per-guild command registration only.** `registerCommandsForGuild()` calls `Routes.applicationGuildCommands(clientId, guildId)` for each allowlisted guild. Never register global commands — that would expose them to any guild the bot is invited to.
+- **Guild allowlist is enforced at two points.** On `ready` the bot iterates `guilds.cache` and leaves anything not on the list; the `guildCreate` listener does the same for new invites. Both must stay — removing either creates a path for the bot to operate in unauthorized guilds.
+- **Permission resolution is in `DiscordConfigService.canRun()`.** Order is guild allowlist → admin user/role → per-game user/role + action gate. Keep this ordering; tests encode it.
+- **Token is never sent to the client.** `getRedacted()` returns `botTokenSet: boolean` instead of the token. API response shapes should preserve this.
 
 ### Known Lambda env-var quirk
 

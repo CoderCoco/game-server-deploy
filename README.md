@@ -9,7 +9,8 @@ A cost-efficient multi-game dedicated server platform on **AWS Fargate** with a 
 - **Route 53** — auto-updates `{game}.yourdomain.com` DNS records when tasks start/stop via a Lambda
 - **Watchdog Lambda** — automatically shuts down idle servers based on network traffic
 - **Terraform** — provisions all AWS infrastructure
-- **Flask web app** — local dashboard to start/stop servers, edit config, monitor costs, and stream logs
+- **Express + React management app** — local dashboard to start/stop servers, edit config, monitor costs, stream logs, and manage the optional Discord bot
+- **Discord bot (optional)** — runs inside the management app; permitted Discord users/roles can `/server-start`, `/server-stop`, `/server-status`, and `/server-list` from chat
 
 ### Auto-DNS
 
@@ -130,7 +131,7 @@ docker compose up --build
 # Open http://localhost:5000
 ```
 
-The Docker setup mounts `./terraform` (read-only for state), `./app/server_config.json`, and `~/.aws` credentials.
+The Docker setup mounts `./terraform` (read-only for state), `./app/server_config.json`, `./app/discord_config.json` (if using the Discord bot), and `~/.aws` credentials.
 
 ## Configuration
 
@@ -177,6 +178,54 @@ game_servers = {
 - **Server Config** — edit watchdog settings (interval, idle checks, min packets)
 - **Cost Monitoring** — per-game Fargate cost estimates and AWS Cost Explorer actuals
 - **Live Logs** — streams CloudWatch log events from the most recent task
+- **Discord Bot** — configure bot token, guild allowlist, admins, and per-game permissions (see next section)
+
+## Discord Bot
+
+The management app runs an optional Discord bot so permitted users can start/stop servers from chat with slash commands. The bot **only joins guilds you explicitly allowlist** — if it's ever added to a guild that isn't on the list, it auto-leaves.
+
+### Commands
+
+| Command | What it does |
+|---------|--------------|
+| `/server-start <game>` | Start a configured game server |
+| `/server-stop <game>`  | Stop a running game server |
+| `/server-status [game]` | Show status of a game (or all if omitted) |
+| `/server-list` | List all configured games and their current state |
+
+Replies are ephemeral (only the invoker sees them), so commands don't spam the channel.
+
+### Permission model
+
+Every command invocation is checked in this order:
+
+1. **Guild allowlist** — if the guild isn't allowlisted, the bot refuses entirely.
+2. **Server-wide admins** — any user ID or role ID in the admin lists can run every command on every game.
+3. **Per-game permissions** — otherwise the command is permitted only if the user's ID or one of their role IDs is listed for that game *and* the requested action (`start` / `stop` / `status`) is in that entry's allowed actions.
+
+Admins and per-game entries are kept separate, so you can give one group of Discord users full control and another group stop-only access to a single game.
+
+### Setup
+
+1. **Create a Discord application.** Visit <https://discord.com/developers/applications> → **New Application** → add a **Bot**.
+   - Copy the **Application ID** (the "client ID") and the **Bot Token**. Treat the token like a password.
+   - Enable the **Server Members Intent** under *Privileged Gateway Intents* (needed so the bot can see the roles of command invokers).
+2. **Invite the bot to your Discord server.** In the app's **OAuth2 → URL Generator**, select scopes `bot` and `applications.commands` and bot permissions `Send Messages` + `Use Application Commands`. Open the generated URL and add the bot to your server.
+3. **Enable Developer Mode in Discord** (User Settings → Advanced → Developer Mode) so you can right-click a server/user/role and **Copy ID**.
+4. **Start the management app** (Option A or B under Quick Start).
+5. **Open the dashboard** → the **Discord Bot** panel has four tabs:
+   - **Credentials** — paste the client ID and bot token, Save, then **Restart Bot**. (You can also set `DISCORD_BOT_TOKEN` as an env var; env wins over the file.)
+   - **Guilds** — add the ID of each Discord server the bot should operate in. It will auto-leave any other server.
+   - **Admins** — comma-separated user IDs and/or role IDs who can run every command on every game.
+   - **Per-Game Permissions** — select a game, paste allowed user/role IDs, tick which actions (`start`/`stop`/`status`) they can invoke, Save.
+
+Config is persisted to `app/discord_config.json` (gitignored). In Docker Compose this file is volume-mounted so it survives container rebuilds; the token can alternatively be passed via the `DISCORD_BOT_TOKEN` environment variable.
+
+### Troubleshooting
+
+- **Bot shows `error` in the status badge** — check the Credentials tab for the error message; most commonly an invalid token.
+- **Slash commands don't appear in Discord** — make sure the guild's ID is in the allowlist (commands are registered per-guild on startup and when joining) and that the bot was invited with the `applications.commands` scope. Click **Restart Bot** after allowlisting a new guild.
+- **Command replies "You don't have permission…"** — confirm your Discord user ID or one of your role IDs is in the admin list or the per-game entry, *and* that the action you invoked is ticked.
 
 ## Cost Tracking
 
@@ -213,11 +262,14 @@ game-server-deploy/
 │   │   └── watchdog.py          # Shuts down idle servers
 │   └── terraform.example.tfvars
 ├── app/
-│   ├── app.py                   # Flask web server + REST API
-│   ├── server_manager.py        # AWS SDK logic (ECS, CloudWatch, Cost Explorer)
-│   ├── server_config.json       # Watchdog config (persisted locally)
-│   └── templates/
-│       └── index.html           # Dashboard UI
+│   ├── src/
+│   │   ├── server/              # Express API (routes, services, DI container)
+│   │   │   ├── routes/          # Per-feature routers (games, costs, logs, files, discord)
+│   │   │   └── services/        # AWS + Discord logic (ConfigService, EcsService, DiscordBotService, …)
+│   │   └── client/              # React/Vite dashboard (components, hooks, api.ts)
+│   ├── server_config.json       # Watchdog config (persisted locally, gitignored)
+│   ├── discord_config.json      # Discord bot config (persisted locally, gitignored)
+│   └── vitest.config.ts         # Test runner config
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
