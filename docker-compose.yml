@@ -2,17 +2,17 @@ services:
   app:
     build: .
     ports:
-      - "5000:5000"
+      - "5000:3001"
     volumes:
       # Makes terraform.tfstate readable by the app
       - ./terraform:/app/terraform:ro
       # Persists server_config.json across container restarts
-      - ./app/server_config.json:/app/app/server_config.json
+      - ./app/server_config.json:/app/server_config.json
       # AWS credentials — remove if using env vars instead
       - ~/.aws:/root/.aws:ro
     environment:
+      NODE_ENV: production
       # Uncomment and set these instead of mounting ~/.aws if you prefer:
       # AWS_ACCESS_KEY_ID: ""
       # AWS_SECRET_ACCESS_KEY: ""
       # AWS_DEFAULT_REGION: "us-east-1"
-      PYTHONUNBUFFERED: "1"

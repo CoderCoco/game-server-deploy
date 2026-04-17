@@ -1,16 +1,17 @@
-FROM python:3.12-slim
+FROM node:20-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir pipenv
+# Install dependencies first (layer cache)
+COPY app/package.json app/package-lock.json* ./
+RUN npm ci --ignore-scripts
 
-COPY Pipfile Pipfile.lock* ./
-RUN pipenv install --deploy --system
+# Copy source and build
+COPY app/ .
+RUN npm run build
 
-COPY app/ ./app/
+EXPOSE 3001
 
-WORKDIR /app/app
+ENV NODE_ENV=production
 
-EXPOSE 5000
-
-CMD ["python", "app.py"]
+CMD ["node", "dist/server/index.js"]

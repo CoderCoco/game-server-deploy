@@ -1,0 +1,77 @@
+// Typed API wrappers — all fetch calls go through here
+
+export interface GameStatus {
+  game: string;
+  state: 'running' | 'starting' | 'stopped' | 'not_deployed' | 'error';
+  publicIp?: string;
+  hostname?: string;
+  taskArn?: string;
+  message?: string;
+}
+
+export interface ActionResult {
+  success: boolean;
+  message: string;
+  taskArn?: string;
+}
+
+export interface WatchdogConfig {
+  watchdog_interval_minutes: number;
+  watchdog_idle_checks: number;
+  watchdog_min_packets: number;
+}
+
+export interface GameEstimate {
+  vcpu: number;
+  memoryGb: number;
+  costPerHour: number;
+  costPerDay24h: number;
+  costPerMonth4hpd: number;
+}
+
+export interface CostEstimates {
+  games: Record<string, GameEstimate>;
+  totalPerHourIfAllOn: number;
+}
+
+export interface ActualCosts {
+  daily: { date: string; cost: number }[];
+  total: number;
+  currency: string;
+  days: number;
+  error?: string;
+}
+
+export interface FileMgrStatus {
+  game: string;
+  state: 'running' | 'starting' | 'stopped' | 'not_deployed';
+  url?: string;
+  taskArn?: string;
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  games: () => request<{ games: string[] }>('/api/games'),
+  status: () => request<GameStatus[]>('/api/status'),
+  statusGame: (game: string) => request<GameStatus>(`/api/status/${game}`),
+  start: (game: string) => request<ActionResult>(`/api/start/${game}`, { method: 'POST' }),
+  stop: (game: string) => request<ActionResult>(`/api/stop/${game}`, { method: 'POST' }),
+  config: () => request<WatchdogConfig>('/api/config'),
+  saveConfig: (cfg: WatchdogConfig) =>
+    request<{ success: boolean; config: WatchdogConfig }>('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+    }),
+  costsEstimate: () => request<CostEstimates>('/api/costs/estimate'),
+  costsActual: (days = 7) => request<ActualCosts>(`/api/costs/actual?days=${days}`),
+  logs: (game: string, limit = 50) =>
+    request<{ game: string; lines: string[] }>(`/api/logs/${game}?limit=${limit}`),
+  filesMgrStatus: (game: string) => request<FileMgrStatus>(`/api/files/${game}`),
+  filesMgrStart: (game: string) => request<ActionResult>(`/api/files/${game}/start`, { method: 'POST' }),
+  filesMgrStop: (game: string) => request<ActionResult>(`/api/files/${game}/stop`, { method: 'POST' }),
+};

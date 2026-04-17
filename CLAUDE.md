@@ -4,17 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Commands
 
-Dependencies are managed with **pipenv** (Pipfile is authoritative; `requirements.txt` is legacy and unused).
+The management app is a TypeScript project (Express API + React/Vite UI) under `app/`. Dependencies are managed with **npm**.
 
 ```bash
 # Install app deps
-pipenv install
+cd app && npm install
 
-# Run the Flask UI locally
-cd app && pipenv run python app.py          # http://localhost:5000
+# Run the dev servers (Express on 3001, Vite on 5173 with /api proxy)
+cd app && npm run dev
+
+# Production build + run
+cd app && npm run build && npm start    # http://localhost:3001
 
 # Run the app in Docker (mounts ./terraform ro, ./app/server_config.json, ~/.aws)
-docker compose up --build
+docker compose up --build               # http://localhost:5000
 
 # Terraform (all infra lives under terraform/)
 cd terraform
@@ -23,7 +26,7 @@ terraform plan
 terraform apply
 terraform destroy
 
-# First-time environment bootstrap (installs python3, pipenv, terraform, aws CLI if missing, runs terraform init)
+# First-time environment bootstrap (installs terraform, aws CLI if missing, runs terraform init)
 ./setup.sh
 ```
 
@@ -34,7 +37,7 @@ No test suite or linter is configured in this repo.
 Two loosely-coupled halves communicate via the Terraform state file:
 
 1. **Terraform (`terraform/`)** provisions all AWS infrastructure.
-2. **Flask app (`app/`)** reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs, then drives AWS via boto3.
+2. **Management app (`app/`)** — Express + TypeScript backend reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs, then drives AWS via the AWS SDK v3. React/Vite frontend talks to the Express API. Services use **tsyringe** for DI and **Winston** for structured logging.
 
 There is **no persistent ECS Service**. Servers run only when the user clicks Start — the app calls `ecs.run_task()` / `ecs.stop_task()` against per-game task definitions named `{game}-server`. This is the core cost-saving design choice; don't introduce a long-running Service.
 
@@ -60,7 +63,7 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 
 ### App → Terraform coupling
 
-`app/server_manager.py:get_tf_outputs()` parses `terraform.tfstate` as JSON and caches it in a module-level `_tf_outputs`. `invalidate_tf_cache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes.
+`ConfigService.getTfOutputs()` (in `app/src/server/services/ConfigService.ts`) parses `terraform.tfstate` as JSON and caches it in-memory. `invalidateTfCache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes.
 
 ### Known Lambda env-var quirk
 

@@ -19,6 +19,11 @@ env/
 # App runtime
 app/server_config.json
 
+# Node.js
+node_modules/
+app/dist/
+app/*.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db

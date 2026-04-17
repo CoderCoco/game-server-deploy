@@ -1,0 +1,62 @@
+import { useState, useEffect } from 'react';
+import { api, type WatchdogConfig } from '../api.js';
+
+export function WatchdogPanel() {
+  const [cfg, setCfg] = useState<WatchdogConfig>({
+    watchdog_interval_minutes: 15,
+    watchdog_idle_checks: 4,
+    watchdog_min_packets: 100,
+  });
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    void api.config().then(setCfg);
+  }, []);
+
+  const idleMinutes = cfg.watchdog_interval_minutes * cfg.watchdog_idle_checks;
+
+  async function handleSave() {
+    await api.saveConfig(cfg);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
+      <h2 style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-dim)', marginBottom: '1rem' }}>
+        Watchdog Settings
+      </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+        <Field label="Check interval (min)" value={cfg.watchdog_interval_minutes}
+          onChange={(v) => setCfg((c) => ({ ...c, watchdog_interval_minutes: v }))} />
+        <Field label="Idle checks before shutdown" value={cfg.watchdog_idle_checks}
+          onChange={(v) => setCfg((c) => ({ ...c, watchdog_idle_checks: v }))} />
+        <Field label="Min packets (activity threshold)" value={cfg.watchdog_min_packets}
+          onChange={(v) => setCfg((c) => ({ ...c, watchdog_min_packets: v }))} />
+      </div>
+      <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.6rem' }}>
+        Auto-shutdown after {idleMinutes} minutes idle ({cfg.watchdog_interval_minutes} min × {cfg.watchdog_idle_checks} checks).
+        Update Terraform vars to change the Lambda schedule.
+      </p>
+      <div style={{ marginTop: '0.75rem' }}>
+        <button className="btn-secondary btn-sm" onClick={() => void handleSave()}>
+          {saved ? 'Saved ✓' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div>
+      <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{label}</label>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
+        style={{ width: '100%', padding: '0.4rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontSize: '0.82rem' }}
+      />
+    </div>
+  );
+}

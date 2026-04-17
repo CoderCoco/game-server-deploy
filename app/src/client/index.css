@@ -1,0 +1,41 @@
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242836;
+  --border: #2e3346;
+  --text: #e1e4ed;
+  --text-dim: #8b90a5;
+  --accent: #6c8cff;
+  --accent-h: #8ba4ff;
+  --green: #4ade80;
+  --red: #f87171;
+  --yellow: #fbbf24;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+button {
+  border: none;
+  border-radius: 7px;
+  padding: 0.5rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
+.btn-sm { padding: 0.35rem 0.7rem; font-size: 0.75rem; }
+.btn-start { background: var(--green); color: #000; }
+.btn-start:hover:not(:disabled) { filter: brightness(1.1); }
+.btn-stop { background: var(--red); color: #fff; }
+.btn-stop:hover:not(:disabled) { filter: brightness(1.1); }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover:not(:disabled) { background: var(--border); }
