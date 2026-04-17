@@ -18,6 +18,7 @@ env/
 
 # App runtime
 app/server_config.json
+app/discord_config.json
 
 # Node.js
 node_modules/

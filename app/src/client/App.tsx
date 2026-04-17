@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useGameStatus } from './hooks/useGameStatus.js';
 import { useFileManager } from './hooks/useFileManager.js';
 import { GameCard } from './components/GameCard.js';
@@ -5,8 +6,27 @@ import { FileManagerModal } from './components/FileManagerModal.js';
 import { CostPanel } from './components/CostPanel.js';
 import { LogsPanel } from './components/LogsPanel.js';
 import { WatchdogPanel } from './components/WatchdogPanel.js';
+import { DiscordPanel } from './components/DiscordPanel.js';
+import { ApiTokenModal } from './components/ApiTokenModal.js';
+import { setUnauthorizedHandler } from './api.js';
 
 export default function App() {
+  // Open the token modal only once the API actually rejects us with a 401.
+  // In dev mode the server allows unauthenticated requests when no API_TOKEN
+  // is configured, so defaulting to "needs token" would block local iteration
+  // for no reason. The first failing /api request will flip this flag.
+  const [needsToken, setNeedsToken] = useState(false);
+  useEffect(() => {
+    setUnauthorizedHandler(() => setNeedsToken(true));
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  if (needsToken) return <ApiTokenModal />;
+
+  return <Dashboard />;
+}
+
+function Dashboard() {
   const { statuses, estimates, loading, refreshGame } = useGameStatus();
   const fileMgr = useFileManager();
 
@@ -50,6 +70,9 @@ export default function App() {
           <CostPanel estimates={estimates} />
           <WatchdogPanel />
         </div>
+
+        {/* Discord bot panel */}
+        <DiscordPanel games={gameNames} />
 
         {/* Logs panel */}
         {gameNames.length > 0 && <LogsPanel games={gameNames} />}

@@ -28,9 +28,13 @@ terraform destroy
 
 # First-time environment bootstrap (installs terraform, aws CLI if missing, runs terraform init)
 ./setup.sh
+
+# Unit tests (vitest + aws-sdk-client-mock)
+cd app && npm test             # one-off run
+cd app && npm run test:watch   # watch mode
 ```
 
-No test suite or linter is configured in this repo.
+No linter is configured in this repo.
 
 ## Architecture
 
@@ -65,6 +69,21 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 
 `ConfigService.getTfOutputs()` (in `app/src/server/services/ConfigService.ts`) parses `terraform.tfstate` as JSON and caches it in-memory. `invalidateTfCache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes.
 
+### API authentication
+
+Every `/api/*` route is gated behind a bearer token via middleware in `app/src/server/middleware/auth.ts`. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the middleware or bypass it on individual routes — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
+
+### Discord bot lives inside the management app process
+
+There is no separate bot service — `DiscordBotService` (in `app/src/server/services/DiscordBotService.ts`) holds a single `discord.js` `Client` that is started from `index.ts` on app boot (only if a token is configured) and reuses `EcsService` for start/stop. Config is persisted to `app/discord_config.json`; `DISCORD_BOT_TOKEN` env var overrides the file value. Don't spin this out into its own container.
+
+Key design rules to preserve:
+
+- **Per-guild command registration only.** `registerCommandsForGuild()` calls `Routes.applicationGuildCommands(clientId, guildId)` for each allowlisted guild. Never register global commands — that would expose them to any guild the bot is invited to.
+- **Guild allowlist is enforced at two points.** On `ready` the bot iterates `guilds.cache` and leaves anything not on the list; the `guildCreate` listener does the same for new invites. Both must stay — removing either creates a path for the bot to operate in unauthorized guilds.
+- **Permission resolution is in `DiscordConfigService.canRun()`.** Order is guild allowlist → admin user/role → per-game user/role + action gate. Keep this ordering; tests encode it.
+- **Token is never sent to the client.** `getRedacted()` returns `botTokenSet: boolean` instead of the token. API response shapes should preserve this.
+
 ### Known Lambda env-var quirk
 
 Lambda env vars named `AWS_REGION` are reserved by the runtime. Both Lambdas use `AWS_REGION_` (trailing underscore) to pass the configured region — preserve this when editing.
@@ -83,3 +102,15 @@ All resources inherit `default_tags` from `provider "aws"` (`Project = "game-ser
 - **TSDoc comments**: document non-trivial functions, helpers, and notable constants/variables with TSDoc (`/** ... */`) so their intent is clear later. This applies to test-file helpers (stub factories, fixtures) as well as production code.
 - **Typing in tests**: avoid `as unknown as SomeType` casts. Prefer `vi.mocked(fn)` for mocked modules and `Partial<T>` + a single `as T` for service-shaped stubs.
 - **No raw `process.env` in business logic**: wrap environment access behind a service method so tests can stub it via `vi.spyOn` instead of mutating `process.env` (which is flaky and leaks across tests).
+
+## PR Review Workflow
+
+**Be strict with Copilot review suggestions.** Do not rubber-stamp them. When a Copilot comment lands on a PR:
+
+1. **Evaluate first.** Read the surrounding code and reason about whether the critique describes a real problem and whether the proposed fix actually addresses it. Copilot can hallucinate issues or suggest fixes that introduce worse problems.
+2. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
+3. **Ask the user if unsure.** If the suggestion is ambiguous, architecturally significant, or the trade-off isn't clear-cut, use `AskUserQuestion` before acting. Don't silently dismiss — surface the disagreement.
+4. **Reply on the thread** explaining either the fix applied, the deviation taken, or that you're checking with the user before acting. Reference the commit SHA.
+5. **Resolve the thread** with `mcp__github__resolve_review_thread` after the fix is committed and the reply is posted, so the PR's conversation tab shows a clean state. Only leave a thread unresolved when you're waiting on the user, you declined the suggestion and want visibility, or the issue genuinely isn't fixed yet.
+
+This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often.

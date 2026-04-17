@@ -9,12 +9,16 @@ import { createConfigRouter } from './routes/config.js';
 import { createCostsRouter } from './routes/costs.js';
 import { createLogsRouter } from './routes/logs.js';
 import { createFilesRouter } from './routes/files.js';
+import { createDiscordRouter } from './routes/discord.js';
+import { createApiTokenMiddleware } from './middleware/auth.js';
 import { ConfigService } from './services/ConfigService.js';
 import { EcsService } from './services/EcsService.js';
 import { Ec2Service } from './services/Ec2Service.js';
 import { LogsService } from './services/LogsService.js';
 import { CostService } from './services/CostService.js';
 import { FileManagerService } from './services/FileManagerService.js';
+import { DiscordConfigService } from './services/DiscordConfigService.js';
+import { DiscordBotService } from './services/DiscordBotService.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
@@ -31,6 +35,20 @@ const ec2Service = container.resolve(Ec2Service);
 const logsService = container.resolve(LogsService);
 const costService = container.resolve(CostService);
 const fileManagerService = container.resolve(FileManagerService);
+const discordConfigService = container.resolve(DiscordConfigService);
+const discordBotService = container.resolve(DiscordBotService);
+
+// Gate every /api/* route behind a bearer token. In production, refuse to
+// start at all if no token is configured — that's the point where Copilot
+// (PR #4) flagged the un-authenticated exposure risk.
+if (!isDev && !configService.getApiToken()) {
+  logger.error(
+    'NODE_ENV=production but no API_TOKEN is configured (neither env nor server_config.json.api_token). Refusing to start. ' +
+      'Set API_TOKEN or api_token to a random secret before running in production.',
+  );
+  process.exit(1);
+}
+app.use('/api', createApiTokenMiddleware(() => configService.getApiToken()));
 
 // Mount API routes
 app.use('/api', createGamesRouter(configService, ecsService, ec2Service));
@@ -38,6 +56,7 @@ app.use('/api', createConfigRouter(configService));
 app.use('/api', createCostsRouter(configService, costService, ecsService));
 app.use('/api', createLogsRouter(logsService));
 app.use('/api', createFilesRouter(configService, fileManagerService, ec2Service));
+app.use('/api', createDiscordRouter(discordConfigService, discordBotService));
 
 // Serve the Vite-built React app in production
 if (!isDev) {
@@ -53,4 +72,12 @@ app.listen(PORT, () => {
     mode: isDev ? 'development' : 'production',
     port: PORT,
   });
+  // Auto-start the Discord bot if a token is configured. Failures are logged but non-fatal.
+  if (discordConfigService.getEffectiveToken()) {
+    void discordBotService.start().then((r) => {
+      if (!r.success) logger.warn('Discord bot did not start', { message: r.message });
+    });
+  } else {
+    logger.info('Discord bot token not configured — bot remains stopped.');
+  }
 });

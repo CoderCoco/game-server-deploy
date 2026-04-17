@@ -6,13 +6,37 @@ services:
     volumes:
       # Makes terraform.tfstate readable by the app
       - ./terraform:/app/terraform:ro
-      # Persists server_config.json across container restarts
-      - ./app/server_config.json:/app/server_config.json
+      # Persists server_config.json across container restarts.
+      # NOTE: the host file must exist before `docker compose up` — create it with
+      #       `touch app/server_config.json` on first run. With
+      #       `bind.create_host_path: false`, Compose fails fast with a clear error
+      #       if the file is missing; that's the whole point of the long-syntax
+      #       bind mount, which avoids the silent-directory/EISDIR issue Docker's
+      #       default short-syntax mounts would otherwise cause.
+      - type: bind
+        source: ./app/server_config.json
+        target: /app/server_config.json
+        bind:
+          create_host_path: false
+      # Persists discord_config.json across container restarts. Same caveat as above:
+      # create `app/discord_config.json` before first run; `create_host_path: false`
+      # makes Compose fail fast if it's missing rather than silently creating a dir.
+      - type: bind
+        source: ./app/discord_config.json
+        target: /app/discord_config.json
+        bind:
+          create_host_path: false
       # AWS credentials — remove if using env vars instead
       - ~/.aws:/root/.aws:ro
     environment:
       NODE_ENV: production
+      # REQUIRED in production: long random bearer token gating /api/*.
+      # Override via `API_TOKEN=... docker compose up` or uncomment and set here.
+      # The app refuses to start in production if this is missing.
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN in your shell before running docker compose}
       # Uncomment and set these instead of mounting ~/.aws if you prefer:
       # AWS_ACCESS_KEY_ID: ""
       # AWS_SECRET_ACCESS_KEY: ""
       # AWS_DEFAULT_REGION: "us-east-1"
+      # Discord bot token (wins over app/discord_config.json if both set):
+      # DISCORD_BOT_TOKEN: ""
