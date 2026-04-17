@@ -16,5 +16,6 @@
     "allowSyntheticDefaultImports": true,
     "composite": true
   },
-  "include": ["src/server"]
+  "include": ["src/server"],
+  "exclude": ["src/server/**/*.test.ts"]
 }
