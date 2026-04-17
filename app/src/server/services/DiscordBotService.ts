@@ -245,9 +245,14 @@ export class DiscordBotService {
   }
 
   /**
-   * Register the slash command set with Discord for a single guild. Throws if
-   * token or clientId are missing — that indicates the caller sequence is broken
-   * (should always be invoked after a successful `login`, which implies both).
+   * Register the slash command set with Discord for a single guild.
+   *
+   * Called from the `ready` and `guildCreate` event handlers — both are
+   * fire-and-forget from discord.js's perspective, so we must NOT throw
+   * here. A thrown error would surface as an unhandled promise rejection
+   * from the gateway client and destabilize the process. Instead we log
+   * loudly and record the reason in `statusMessage` so operators see it
+   * both in the server logs and on the dashboard status badge.
    */
   private async registerCommandsForGuild(guildId: string): Promise<void> {
     const token = this.discord.getEffectiveToken();
@@ -258,7 +263,8 @@ export class DiscordBotService {
         .join(' and ');
       const message = `Cannot register slash commands for guild ${guildId}: missing ${missing}. Set it in the Discord panel or via DISCORD_BOT_TOKEN.`;
       logger.error(message);
-      throw new Error(message);
+      this.statusMessage = message;
+      return;
     }
     try {
       const rest = new REST({ version: '10' }).setToken(token);
@@ -392,14 +398,38 @@ export class DiscordBotService {
     }
   }
 
-  /** Suggest game names from Terraform outputs that match the user's partial input. */
+  /**
+   * Suggest game names from Terraform outputs that match the user's partial input.
+   *
+   * Permission-gated: the suggestion list is filtered to the games the invoker
+   * can actually execute the *current* command on. So `/server-start <tab>`
+   * only shows games the user has `start` permission on, and `/server-stop`
+   * only shows `stop`. This keeps autocomplete visibility in sync with the
+   * per-command `canRun()` check done at execution time instead of leaking
+   * every configured game name to anyone in an allowlisted guild.
+   */
   private async handleAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
     const focused = interaction.options.getFocused(true);
     if (focused.name !== 'game') return;
+    const action = this.commandToAction(interaction.commandName);
+    if (!action) {
+      await interaction.respond([]).catch(() => undefined);
+      return;
+    }
     const games = this.config.getTfOutputs()?.game_names ?? [];
     const query = focused.value.toLowerCase();
+    const guildId = interaction.guildId;
+    if (!guildId) {
+      // Should have been filtered upstream; defend anyway.
+      await interaction.respond([]).catch(() => undefined);
+      return;
+    }
+    const roleIds = this.extractRoleIds(interaction.member);
     const matches = games
       .filter((g) => g.toLowerCase().includes(query))
+      .filter((g) =>
+        this.discord.canRun({ guildId, userId: interaction.user.id, roleIds, game: g, action }),
+      )
       .slice(0, 25)
       .map((g) => ({ name: g, value: g }));
     await interaction.respond(matches).catch(() => undefined);

@@ -14,13 +14,20 @@
  */
 import { injectable } from 'tsyringe';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { logger } from '../logger.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-/** On-disk location of the persisted Discord config (gitignored). */
-const CONFIG_PATH = join(__dirname, '../../../../../app/discord_config.json');
+/**
+ * On-disk location of the persisted Discord config (gitignored).
+ *
+ * Resolved from `process.cwd()` rather than a relative walk from
+ * `import.meta.url` so the same code path works in both:
+ *  - Dev: `cd app && npm run dev` → cwd is `<repo>/app`, file is `<repo>/app/discord_config.json`.
+ *  - Docker: `WORKDIR /app`, `npm start` → cwd is `/app`, file is `/app/discord_config.json`.
+ *
+ * Override via `DISCORD_CONFIG_PATH` for tests or custom deployments.
+ */
+const CONFIG_PATH = process.env['DISCORD_CONFIG_PATH'] ?? join(process.cwd(), 'discord_config.json');
 
 /** Slash-command action that can be gated via permissions. */
 export type DiscordAction = 'start' | 'stop' | 'status';

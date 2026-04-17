@@ -521,11 +521,11 @@ describe('DiscordBotService', () => {
   });
 
   describe('autocomplete', () => {
-    it('should offer game names filtered by the focused option value', async () => {
+    it('should offer game names filtered by the focused option value and canRun', async () => {
       const svc = new DiscordBotService(
         makeConfigService(['minecraft', 'factorio', 'valheim']),
         makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'] }),
+        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
       );
       await svc.start();
       const client = latestClient();
@@ -535,6 +535,9 @@ describe('DiscordBotService', () => {
         isAutocomplete: () => true,
         isChatInputCommand: () => false,
         guildId: 'g1',
+        commandName: 'server-start',
+        user: { id: 'user-1' },
+        member: { roles: ['role-1'] },
         options: { getFocused: () => ({ name: 'game', value: 'fact' }) },
         respond,
       };
@@ -546,7 +549,7 @@ describe('DiscordBotService', () => {
       const svc = new DiscordBotService(
         makeConfigService(['minecraft']),
         makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'] }),
+        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
       );
       await svc.start();
       const client = latestClient();
@@ -556,6 +559,9 @@ describe('DiscordBotService', () => {
         isAutocomplete: () => true,
         isChatInputCommand: () => false,
         guildId: 'g1',
+        commandName: 'server-start',
+        user: { id: 'user-1' },
+        member: { roles: [] },
         options: { getFocused: () => ({ name: 'other', value: 'x' }) },
         respond,
       });
@@ -566,7 +572,7 @@ describe('DiscordBotService', () => {
       const svc = new DiscordBotService(
         makeConfigService(['minecraft']),
         makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'] }),
+        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
       );
       await svc.start();
       const client = latestClient();
@@ -576,10 +582,48 @@ describe('DiscordBotService', () => {
         isAutocomplete: () => true,
         isChatInputCommand: () => false,
         guildId: 'other',
+        commandName: 'server-start',
+        user: { id: 'user-1' },
+        member: { roles: [] },
         options: { getFocused: () => ({ name: 'game', value: '' }) },
         respond,
       });
       expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('should filter autocomplete to only games the invoker has permission for', async () => {
+      // Allow only "minecraft" through canRun.
+      const discord = {
+        getEffectiveToken: () => 'tok',
+        getConfig: () => ({
+          botToken: 'tok',
+          clientId: '',
+          allowedGuilds: ['g1'],
+          admins: { userIds: [], roleIds: [] },
+          gamePermissions: {},
+        }),
+        canRun: vi.fn().mockImplementation(({ game }: { game: string }) => game === 'minecraft'),
+      } as unknown as import('./DiscordConfigService.js').DiscordConfigService;
+      const svc = new DiscordBotService(
+        makeConfigService(['minecraft', 'factorio']),
+        makeEcsService(),
+        discord,
+      );
+      await svc.start();
+      const client = latestClient();
+      const handler = client.listeners['interactionCreate']?.[0];
+      const respond = vi.fn().mockResolvedValue(undefined);
+      await handler!({
+        isAutocomplete: () => true,
+        isChatInputCommand: () => false,
+        guildId: 'g1',
+        commandName: 'server-start',
+        user: { id: 'user-1' },
+        member: { roles: [] },
+        options: { getFocused: () => ({ name: 'game', value: '' }) },
+        respond,
+      });
+      expect(respond).toHaveBeenCalledWith([{ name: 'minecraft', value: 'minecraft' }]);
     });
   });
 });

@@ -100,12 +100,17 @@ export class ConfigService {
    * Token required on every `/api/*` request's `Authorization: Bearer <token>` header.
    *
    * Resolution order:
-   *  1. Env var `API_TOKEN` (wins when set, even if explicitly empty — explicit empty
-   *     is treated as "no token" so the env can disable it without editing the file).
+   *  1. Env var `API_TOKEN` — wins when set, including when explicitly set to an
+   *     empty string. Empty is normalized to `null` (treated as "no token
+   *     configured") so setting `API_TOKEN=""` does not fall back to the file.
    *  2. `api_token` field in `server_config.json`.
    *
-   * Returns `null` when no token is configured. The auth middleware decides what that
-   * means (refuse to start in production; warn and allow in dev).
+   * Returns `null` when no token is configured. The auth middleware + startup
+   * check interpret null differently depending on environment:
+   *  - `NODE_ENV=production` → `index.ts` refuses to start. An empty env var
+   *    is therefore NOT a supported "auth disabled" mode in production.
+   *  - development → the middleware logs a warning and allows unauthenticated
+   *    requests so local iteration isn't blocked.
    */
   getApiToken(): string | null {
     const env = this.readEnvApiToken();

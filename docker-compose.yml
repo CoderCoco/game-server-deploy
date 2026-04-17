@@ -8,14 +8,19 @@ services:
       - ./terraform:/app/terraform:ro
       # Persists server_config.json across container restarts.
       # NOTE: the host file must exist before `docker compose up` — create it with
-      #       `touch app/server_config.json` on first run, otherwise Docker silently
-      #       creates a directory at this path and the app errors with EISDIR.
+      #       `touch app/server_config.json` on first run. With
+      #       `bind.create_host_path: false`, Compose fails fast with a clear error
+      #       if the file is missing; that's the whole point of the long-syntax
+      #       bind mount, which avoids the silent-directory/EISDIR issue Docker's
+      #       default short-syntax mounts would otherwise cause.
       - type: bind
         source: ./app/server_config.json
         target: /app/server_config.json
         bind:
           create_host_path: false
-      # Persists discord_config.json across container restarts (same caveat as above).
+      # Persists discord_config.json across container restarts. Same caveat as above:
+      # create `app/discord_config.json` before first run; `create_host_path: false`
+      # makes Compose fail fast if it's missing rather than silently creating a dir.
       - type: bind
         source: ./app/discord_config.json
         target: /app/discord_config.json

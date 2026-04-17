@@ -56,10 +56,19 @@ export function createDiscordRouter(
     res.json({ guilds: config.getConfig().allowedGuilds });
   };
 
-  /** `POST /discord/guilds` — add a guild to the allowlist; body: `{ guildId: string }`. */
+  /**
+   * `POST /discord/guilds` — add a guild to the allowlist; body: `{ guildId: string }`.
+   * Trims whitespace so a pasted ID with surrounding newlines/spaces doesn't get
+   * stored and then silently fail later allowlist checks.
+   */
   const addGuild: RequestHandler = (req, res) => {
-    const { guildId } = req.body as { guildId?: string };
-    if (!guildId || typeof guildId !== 'string') {
+    const raw = (req.body as { guildId?: unknown })?.guildId;
+    if (typeof raw !== 'string') {
+      res.status(400).json({ error: 'guildId required' });
+      return;
+    }
+    const guildId = raw.trim();
+    if (!guildId) {
       res.status(400).json({ error: 'guildId required' });
       return;
     }
@@ -67,9 +76,18 @@ export function createDiscordRouter(
     res.json({ success: true, guilds: config.getConfig().allowedGuilds });
   };
 
-  /** `DELETE /discord/guilds/:guildId` — remove a guild from the allowlist. */
+  /**
+   * `DELETE /discord/guilds/:guildId` — remove a guild from the allowlist.
+   * Trimmed so an ID with surrounding whitespace (e.g. URL-encoded weirdness)
+   * still matches the stored value.
+   */
   const removeGuild: RequestHandler = (req, res) => {
-    config.removeAllowedGuild(req.params['guildId']!);
+    const guildId = (req.params['guildId'] ?? '').trim();
+    if (!guildId) {
+      res.status(400).json({ error: 'guildId required' });
+      return;
+    }
+    config.removeAllowedGuild(guildId);
     res.json({ success: true, guilds: config.getConfig().allowedGuilds });
   };
 
