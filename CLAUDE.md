@@ -109,12 +109,20 @@ All resources inherit `default_tags` from `provider "aws"` (`Project = "game-ser
 
 ## PR Review Workflow
 
-**Be strict with Copilot review suggestions.** Do not rubber-stamp them. When a Copilot comment lands on a PR:
+**Be strict with Copilot review suggestions. Don't enter a fix-and-repush loop.** Copilot runs automatically on every push, so a cycle of "Copilot comments → fix → Copilot comments on the fix → fix again" can go on forever on nitpicks. Most Copilot suggestions on a given PR are **not actionable** — expect to apply maybe one in three, decline the rest on the thread, and keep moving.
 
-1. **Evaluate first.** Read the surrounding code and reason about whether the critique describes a real problem and whether the proposed fix actually addresses it. Copilot can hallucinate issues or suggest fixes that introduce worse problems.
-2. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
-3. **Ask the user if unsure.** If the suggestion is ambiguous, architecturally significant, or the trade-off isn't clear-cut, use `AskUserQuestion` before acting. Don't silently dismiss — surface the disagreement.
-4. **Reply on the thread** explaining either the fix applied, the deviation taken, or that you're checking with the user before acting. Reference the commit SHA.
-5. **Resolve the thread** with `mcp__github__resolve_review_thread` after the fix is committed and the reply is posted, so the PR's conversation tab shows a clean state. Only leave a thread unresolved when you're waiting on the user, you declined the suggestion and want visibility, or the issue genuinely isn't fixed yet.
+**The bar for acting on a Copilot comment:** the code is actually buggy, insecure, broken in production, or clearly wrong. Not "could be clearer", "consider renaming", "add a log line here", "extract a helper", "slight inconsistency with other files", "prefer X over Y". Those get declined with a one-line reply explaining why, and the thread stays unresolved only if you want visibility (resolve it otherwise).
 
-This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often.
+When a Copilot comment lands on a PR:
+
+1. **Evaluate first.** Read the surrounding code and reason about whether the critique describes a real problem and whether the proposed fix actually addresses it. Copilot hallucinates issues and suggests fixes that introduce worse problems. Assume the comment is wrong until you've convinced yourself otherwise.
+2. **Triage the category.**
+   - *Genuine bug, security issue, crash, or incorrect logic* → fix it.
+   - *Style, naming, readability, idiom preference, "consider", "might want to", missing-but-non-essential docstring/log/comment, minor duplication, test-organization nit* → **decline on the thread.** Do not rewrite the code. A short reply like "Declined — stylistic, not a correctness issue; leaving as-is." is enough.
+   - *Ambiguous or architecturally significant* → `AskUserQuestion` before acting. Don't silently dismiss.
+3. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
+4. **Reply on the thread** explaining either the fix applied, why you declined, or that you're checking with the user. Reference the commit SHA when a fix was committed.
+5. **Resolve the thread** with `mcp__github__resolve_review_thread` after a fix is committed and the reply is posted, or after you decline a clear nitpick, so the PR's conversation tab shows a clean state. Only leave a thread unresolved when you're waiting on the user or the issue genuinely isn't fixed yet.
+6. **Stop when the signal is noise.** If Copilot's latest round is only nitpicks, don't push another commit. Reply to each thread with a brief decline and move on — the PR is ready to merge.
+
+This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often. Copilot's system-level behavior is tuned via `.github/copilot-instructions.md` in this repo — keep that file and this section in sync.
