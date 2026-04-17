@@ -126,7 +126,11 @@ python3 app.py
 ```bash
 # 1. Deploy infrastructure first (see above)
 
-# 2. Start the app
+# 2. Create the persistence files that get bind-mounted (first run only).
+#    They must exist on the host or Docker creates a directory in their place.
+touch app/server_config.json app/discord_config.json
+
+# 3. Start the app
 docker compose up --build
 # Open http://localhost:5000
 ```

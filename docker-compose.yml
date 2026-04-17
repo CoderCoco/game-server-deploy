@@ -6,10 +6,21 @@ services:
     volumes:
       # Makes terraform.tfstate readable by the app
       - ./terraform:/app/terraform:ro
-      # Persists server_config.json across container restarts
-      - ./app/server_config.json:/app/server_config.json
-      # Persists discord_config.json across container restarts
-      - ./app/discord_config.json:/app/discord_config.json
+      # Persists server_config.json across container restarts.
+      # NOTE: the host file must exist before `docker compose up` — create it with
+      #       `touch app/server_config.json` on first run, otherwise Docker silently
+      #       creates a directory at this path and the app errors with EISDIR.
+      - type: bind
+        source: ./app/server_config.json
+        target: /app/server_config.json
+        bind:
+          create_host_path: false
+      # Persists discord_config.json across container restarts (same caveat as above).
+      - type: bind
+        source: ./app/discord_config.json
+        target: /app/discord_config.json
+        bind:
+          create_host_path: false
       # AWS credentials — remove if using env vars instead
       - ~/.aws:/root/.aws:ro
     environment:

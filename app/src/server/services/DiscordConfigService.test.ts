@@ -114,6 +114,12 @@ describe('DiscordConfigService', () => {
       mockExists.mockReturnValue(false);
       expect(service.getEffectiveToken()).toBe('');
     });
+
+    it('should let an explicitly-empty env var override the file token', () => {
+      writeState({ botToken: 'file-token' });
+      process.env['DISCORD_BOT_TOKEN'] = '';
+      expect(service.getEffectiveToken()).toBe('');
+    });
   });
 
   describe('getRedacted', () => {
@@ -203,6 +209,14 @@ describe('DiscordConfigService', () => {
       expect(written.gamePermissions['minecraft']?.actions).toEqual(['start', 'stop']);
     });
 
+    it('should refuse to write a permission under a prototype-pollution key', () => {
+      mockExists.mockReturnValue(false);
+      for (const bad of ['__proto__', 'constructor', 'prototype', '']) {
+        service.setGamePermission(bad, { userIds: ['u1'], roleIds: [], actions: ['start'] });
+      }
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
     it('should deduplicate user and role IDs per game', () => {
       mockExists.mockReturnValue(false);
       service.setGamePermission('minecraft', {
@@ -217,6 +231,16 @@ describe('DiscordConfigService', () => {
   });
 
   describe('deleteGamePermission', () => {
+    it('should refuse to delete under a prototype-pollution key', () => {
+      writeState({
+        gamePermissions: {
+          minecraft: { userIds: [], roleIds: [], actions: ['start'] },
+        },
+      });
+      service.deleteGamePermission('__proto__');
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
     it('should remove the entry for the given game', () => {
       writeState({
         gamePermissions: {

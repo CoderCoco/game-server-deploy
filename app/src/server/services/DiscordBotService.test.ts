@@ -68,6 +68,16 @@ vi.mock('discord.js', () => {
     setAutocomplete(_a: boolean) { return this; }
     toJSON() { return this.data; }
   }
+  // Stand-in for discord.js's `GuildMember`: the real class has a `roles.cache`
+  // Collection, but for the service's `instanceof` check we only need any
+  // constructible class we can use in `new GuildMemberStub(...)` to simulate
+  // "this member was resolved as a cached GuildMember".
+  class GuildMember {
+    public roles: { cache: Map<string, unknown> };
+    constructor(cacheEntries: Array<[string, unknown]> = []) {
+      this.roles = { cache: new Map(cacheEntries) };
+    }
+  }
   return {
     Client: ClientCtor,
     REST: RESTCtor,
@@ -76,6 +86,7 @@ vi.mock('discord.js', () => {
         `apps/${clientId}/guilds/${guildId}/commands`,
     },
     SlashCommandBuilder,
+    GuildMember,
     GatewayIntentBits: { Guilds: 1, GuildMembers: 2 },
     MessageFlags: { Ephemeral: 64 },
   };
@@ -319,7 +330,9 @@ describe('DiscordBotService', () => {
         isChatInputCommand: () => true,
         guildId: 'g1',
         user: { id: 'user-1' },
-        member: { roles: { cache: new Map([['role-1', {}]]) } },
+        // Use the APIInteractionGuildMember shape (plain array) so extractRoleIds
+        // doesn't need the mocked GuildMember class here.
+        member: { roles: ['role-1'] },
         commandName: 'server-start',
         options: {
           getString: (_name: string) => 'minecraft',
@@ -428,6 +441,60 @@ describe('DiscordBotService', () => {
         expect.stringMatching(/minecraft[\s\S]*factorio/),
       );
     });
+
+    it('should deny /server-list when the user has no status permission on any game', async () => {
+      const ecs = makeEcsService();
+      const svc = new DiscordBotService(
+        makeConfigService(['minecraft', 'factorio']),
+        ecs,
+        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: false }),
+      );
+      const interaction = makeInteraction({
+        commandName: 'server-list',
+        options: {
+          getString: () => null,
+          getFocused: () => ({ name: 'game', value: '' }),
+        },
+      });
+      await dispatch(svc, interaction);
+      expect(ecs.getStatus).not.toHaveBeenCalled();
+      expect(interaction.reply).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringMatching(/don't have permission/i) }),
+      );
+    });
+
+    it('should filter /server-list to only games the user can see', async () => {
+      const ecs = makeEcsService({
+        getStatus: vi.fn().mockImplementation((g: string) => Promise.resolve({ game: g, state: 'running' })),
+      } as Partial<EcsService>);
+      // Allow only "minecraft" through canRun.
+      const discord = {
+        getEffectiveToken: () => 'tok',
+        getConfig: () => ({
+          botToken: 'tok',
+          clientId: '',
+          allowedGuilds: ['g1'],
+          admins: { userIds: [], roleIds: [] },
+          gamePermissions: {},
+        }),
+        canRun: vi.fn().mockImplementation(({ game }: { game: string }) => game === 'minecraft'),
+      } as unknown as import('./DiscordConfigService.js').DiscordConfigService;
+      const svc = new DiscordBotService(
+        makeConfigService(['minecraft', 'factorio']),
+        ecs,
+        discord,
+      );
+      const interaction = makeInteraction({
+        commandName: 'server-list',
+        options: {
+          getString: () => null,
+          getFocused: () => ({ name: 'game', value: '' }),
+        },
+      });
+      await dispatch(svc, interaction);
+      expect(ecs.getStatus).toHaveBeenCalledTimes(1);
+      expect(ecs.getStatus).toHaveBeenCalledWith('minecraft');
+    });
   });
 
   describe('autocomplete', () => {
@@ -444,6 +511,7 @@ describe('DiscordBotService', () => {
       const interaction = {
         isAutocomplete: () => true,
         isChatInputCommand: () => false,
+        guildId: 'g1',
         options: { getFocused: () => ({ name: 'game', value: 'fact' }) },
         respond,
       };
@@ -464,7 +532,28 @@ describe('DiscordBotService', () => {
       await handler!({
         isAutocomplete: () => true,
         isChatInputCommand: () => false,
+        guildId: 'g1',
         options: { getFocused: () => ({ name: 'other', value: 'x' }) },
+        respond,
+      });
+      expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('should refuse autocomplete from a non-allowlisted guild', async () => {
+      const svc = new DiscordBotService(
+        makeConfigService(['minecraft']),
+        makeEcsService(),
+        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'] }),
+      );
+      await svc.start();
+      const client = latestClient();
+      const handler = client.listeners['interactionCreate']?.[0];
+      const respond = vi.fn().mockResolvedValue(undefined);
+      await handler!({
+        isAutocomplete: () => true,
+        isChatInputCommand: () => false,
+        guildId: 'other',
+        options: { getFocused: () => ({ name: 'game', value: '' }) },
         respond,
       });
       expect(respond).not.toHaveBeenCalled();

@@ -127,7 +127,16 @@ function CredentialsTab({
         type="password"
       />
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
-        <button className="btn-secondary btn-sm" disabled={busy} onClick={() => onSave({ clientId, ...(token ? { botToken: token } : {}) })}>
+        <button
+          className="btn-secondary btn-sm"
+          disabled={busy}
+          onClick={() => {
+            onSave({ clientId, ...(token ? { botToken: token } : {}) });
+            // Clear the token out of component state immediately after save so
+            // it's not sitting in the DOM / memory longer than necessary.
+            setToken('');
+          }}
+        >
           Save
         </button>
         <button className="btn-secondary btn-sm" disabled={busy} onClick={() => onRestart()}>
