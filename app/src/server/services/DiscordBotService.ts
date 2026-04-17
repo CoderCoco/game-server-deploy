@@ -416,6 +416,9 @@ export class DiscordBotService {
       await interaction.respond([]).catch(() => undefined);
       return;
     }
+    // Re-read Terraform state so new/removed games show up without a bot restart
+    // (matches how /api/status handles the same concern in routes/games.ts).
+    this.config.invalidateCache();
     const games = this.config.getTfOutputs()?.game_names ?? [];
     const query = focused.value.toLowerCase();
     const guildId = interaction.guildId;
@@ -446,6 +449,9 @@ export class DiscordBotService {
     guildId: string,
     roleIds: string[],
   ): Promise<void> {
+    // Re-read Terraform state so the list reflects recent deploys (matches
+    // /api/status behavior — see routes/games.ts).
+    this.config.invalidateCache();
     const games = this.config.getTfOutputs()?.game_names ?? [];
     if (!games.length) {
       await interaction.reply({ content: 'No games configured.', flags: MessageFlags.Ephemeral });

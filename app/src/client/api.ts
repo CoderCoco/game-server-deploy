@@ -134,10 +134,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const res = await fetch(url, { ...init, headers });
   if (res.status === 401) {
-    // Clear the stored token so the UI re-prompts instead of retrying in a loop.
+    // Clear the stored token so the modal re-prompts instead of retrying with it.
     setStoredApiToken('');
     unauthorizedHandler?.();
-    throw new UnauthorizedError();
+    // Return a never-resolving promise rather than rejecting: many call sites
+    // fire-and-forget (polling intervals, `void api.foo().then(...)`) without a
+    // `.catch()`, and rejecting here would surface as unhandled rejections and
+    // break those loops. The modal handles re-auth and reloads the page, so any
+    // hanging promises are short-lived.
+    return new Promise<T>(() => undefined);
   }
   return res.json() as Promise<T>;
 }

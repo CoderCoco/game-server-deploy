@@ -1,10 +1,20 @@
-import { Router, type RequestHandler } from 'express';
-import {
-  DiscordConfigService,
-  type DiscordAdmins,
-  type DiscordGamePermission,
-} from '../services/DiscordConfigService.js';
+import { Router, type RequestHandler, type Response } from 'express';
+import { DiscordConfigService, type DiscordAction } from '../services/DiscordConfigService.js';
 import { DiscordBotService } from '../services/DiscordBotService.js';
+
+/**
+ * Verify a body field is either missing or an array of strings. On failure
+ * writes a 400 with a specific error message and returns `null`. On success
+ * returns the validated array (empty if the field was omitted).
+ */
+function requireStringArray(res: Response, field: string, value: unknown): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
+    res.status(400).json({ success: false, error: `${field} must be an array of strings` });
+    return null;
+  }
+  return value as string[];
+}
 
 /**
  * Build the Discord router. Each route is a small named handler declared
@@ -96,13 +106,17 @@ export function createDiscordRouter(
     res.json(config.getConfig().admins);
   };
 
-  /** `PUT /discord/admins` — replace the admin user/role lists. */
+  /**
+   * `PUT /discord/admins` — replace the admin user/role lists.
+   * Returns 400 if either field is present but not an array of strings.
+   */
   const putAdmins: RequestHandler = (req, res) => {
-    const body = req.body as DiscordAdmins;
-    config.setAdmins({
-      userIds: body.userIds ?? [],
-      roleIds: body.roleIds ?? [],
-    });
+    const body = (req.body ?? {}) as { userIds?: unknown; roleIds?: unknown };
+    const userIds = requireStringArray(res, 'userIds', body.userIds);
+    if (userIds === null) return;
+    const roleIds = requireStringArray(res, 'roleIds', body.roleIds);
+    if (roleIds === null) return;
+    config.setAdmins({ userIds, roleIds });
     res.json({ success: true, admins: config.getConfig().admins });
   };
 
@@ -113,15 +127,26 @@ export function createDiscordRouter(
 
   /**
    * `PUT /discord/permissions/:game` — overwrite the permission entry for one game.
-   * Returns 400 if the `:game` key is rejected as unsafe (prototype-pollution guard).
+   * Returns 400 if the `:game` key is rejected as unsafe (prototype-pollution
+   * guard) or if any of `userIds` / `roleIds` / `actions` isn't an array of strings.
    */
   const putPermission: RequestHandler = (req, res) => {
-    const body = req.body as DiscordGamePermission;
+    const body = (req.body ?? {}) as {
+      userIds?: unknown;
+      roleIds?: unknown;
+      actions?: unknown;
+    };
+    const userIds = requireStringArray(res, 'userIds', body.userIds);
+    if (userIds === null) return;
+    const roleIds = requireStringArray(res, 'roleIds', body.roleIds);
+    if (roleIds === null) return;
+    const actions = requireStringArray(res, 'actions', body.actions);
+    if (actions === null) return;
     const game = req.params['game']!;
     const written = config.setGamePermission(game, {
-      userIds: body.userIds ?? [],
-      roleIds: body.roleIds ?? [],
-      actions: body.actions ?? [],
+      userIds,
+      roleIds,
+      actions: actions as DiscordAction[],
     });
     if (!written) {
       res.status(400).json({ success: false, error: `invalid game key: ${game}` });

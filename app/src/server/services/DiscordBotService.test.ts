@@ -103,10 +103,12 @@ import type { DiscordConfigService } from './DiscordConfigService.js';
 
 /** A ConfigService stub that returns the provided game_names from getTfOutputs. */
 function makeConfigService(games: string[] = ['minecraft', 'factorio']): ConfigService {
-  return {
+  const stub: Partial<ConfigService> = {
     getTfOutputs: () => ({ game_names: games } as never),
     getRegion: () => 'us-east-1',
-  } as unknown as ConfigService;
+    invalidateCache: vi.fn(),
+  };
+  return stub as ConfigService;
 }
 
 /** A DiscordConfigService stub with overridable token, allowlist, and canRun predicate. */
@@ -624,6 +626,29 @@ describe('DiscordBotService', () => {
         respond,
       });
       expect(respond).toHaveBeenCalledWith([{ name: 'minecraft', value: 'minecraft' }]);
+    });
+
+    it('should invalidate the Terraform cache before reading game names', async () => {
+      const config = makeConfigService(['minecraft']);
+      const svc = new DiscordBotService(
+        config,
+        makeEcsService(),
+        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      );
+      await svc.start();
+      const client = latestClient();
+      const handler = client.listeners['interactionCreate']?.[0];
+      await handler!({
+        isAutocomplete: () => true,
+        isChatInputCommand: () => false,
+        guildId: 'g1',
+        commandName: 'server-start',
+        user: { id: 'user-1' },
+        member: { roles: [] },
+        options: { getFocused: () => ({ name: 'game', value: '' }) },
+        respond: vi.fn().mockResolvedValue(undefined),
+      });
+      expect(config.invalidateCache).toHaveBeenCalled();
     });
   });
 });

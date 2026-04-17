@@ -165,13 +165,18 @@ export class DiscordConfigService {
     return this.load();
   }
 
+  /** Read the bot token override from the environment. Extracted for test-stubbing. */
+  readEnvBotToken(): string | undefined {
+    return process.env['DISCORD_BOT_TOKEN'];
+  }
+
   /**
    * The token `discord.js` should log in with. Env var `DISCORD_BOT_TOKEN`
    * always wins when set (including to an empty string — useful to intentionally
    * disable the bot from a deployment without editing the config file).
    */
   getEffectiveToken(): string {
-    return process.env['DISCORD_BOT_TOKEN'] ?? this.load().botToken;
+    return this.readEnvBotToken() ?? this.load().botToken;
   }
 
   /** Config shape safe to return over the wire — bot token is stripped. */
@@ -231,12 +236,16 @@ export class DiscordConfigService {
     this.save(cfg);
   }
 
-  /** Replace the server-wide admin user/role lists (deduped, empty strings dropped). */
-  setAdmins(admins: DiscordAdmins): void {
+  /**
+   * Replace the server-wide admin user/role lists (deduped, empty strings
+   * dropped, non-string entries discarded). Accepts `unknown` shapes defensively
+   * so a malformed API body (e.g. `userIds: "..."`) can't crash the handler.
+   */
+  setAdmins(admins: { userIds?: unknown; roleIds?: unknown }): void {
     const cfg = this.load();
     cfg.admins = {
-      userIds: [...new Set((admins.userIds ?? []).filter(Boolean))],
-      roleIds: [...new Set((admins.roleIds ?? []).filter(Boolean))],
+      userIds: [...new Set(asStringArray(admins.userIds).filter(Boolean))],
+      roleIds: [...new Set(asStringArray(admins.roleIds).filter(Boolean))],
     };
     this.save(cfg);
   }
@@ -245,22 +254,34 @@ export class DiscordConfigService {
    * Overwrite the permission entry for a single game. Unknown actions are
    * dropped silently. Rejects dangerous prototype keys (`__proto__`,
    * `constructor`, `prototype`) to avoid prototype pollution since `game` is
-   * caller-supplied.
+   * caller-supplied. Field types are sanitized (non-arrays become empty,
+   * non-string entries are dropped) so a malformed request body can't 500
+   * the handler — the caller gets a successful no-op instead, which matches
+   * how `load()` sanitizes data coming back off disk.
    *
    * @returns `true` if the permission was written; `false` if the `game` key
    *   was rejected (caller should surface this as a 4xx so the API client
    *   doesn't think the update succeeded).
    */
-  setGamePermission(game: string, perm: DiscordGamePermission): boolean {
+  setGamePermission(
+    game: string,
+    perm: { userIds?: unknown; roleIds?: unknown; actions?: unknown },
+  ): boolean {
     if (!isSafeGameKey(game)) {
       logger.warn('Rejected setGamePermission with unsafe key', { game });
       return false;
     }
     const cfg = this.load();
     cfg.gamePermissions[game] = {
-      userIds: [...new Set((perm.userIds ?? []).filter(Boolean))],
-      roleIds: [...new Set((perm.roleIds ?? []).filter(Boolean))],
-      actions: [...new Set((perm.actions ?? []).filter((a) => a === 'start' || a === 'stop' || a === 'status'))],
+      userIds: [...new Set(asStringArray(perm.userIds).filter(Boolean))],
+      roleIds: [...new Set(asStringArray(perm.roleIds).filter(Boolean))],
+      actions: [
+        ...new Set(
+          asStringArray(perm.actions).filter(
+            (a): a is DiscordAction => a === 'start' || a === 'stop' || a === 'status',
+          ),
+        ),
+      ],
     };
     this.save(cfg);
     return true;

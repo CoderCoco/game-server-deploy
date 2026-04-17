@@ -18,8 +18,14 @@ const mockExists = vi.mocked(existsSync);
 const mockRead = vi.mocked(readFileSync);
 const mockWrite = vi.mocked(writeFileSync);
 
-/** Serialize a partial DiscordConfig as the on-disk JSON blob. */
-function writeState(cfg: Partial<DiscordConfig>): void {
+/**
+ * Serialize an arbitrary JSON blob as the on-disk config. Typed as
+ * `Record<string, unknown>` (not `Partial<DiscordConfig>`) so the
+ * runtime-validation tests can feed in deliberately-malformed shapes
+ * (non-string `botToken`, non-array `allowedGuilds`, etc.) without
+ * needing casts at every call site.
+ */
+function writeState(cfg: Record<string, unknown>): void {
   mockExists.mockReturnValue(true);
   mockRead.mockReturnValue(JSON.stringify(cfg));
 }
@@ -33,17 +39,17 @@ function lastWrittenConfig(): DiscordConfig {
 
 describe('DiscordConfigService', () => {
   let service: DiscordConfigService;
-  const originalEnvToken = process.env['DISCORD_BOT_TOKEN'];
 
   beforeEach(() => {
     vi.clearAllMocks();
     service = new DiscordConfigService();
-    delete process.env['DISCORD_BOT_TOKEN'];
+    // Stub env-token reads through the service method so tests don't mutate
+    // `process.env` directly (CLAUDE.md forbids that — it leaks across tests).
+    vi.spyOn(service, 'readEnvBotToken').mockReturnValue(undefined);
   });
 
   afterEach(() => {
-    if (originalEnvToken === undefined) delete process.env['DISCORD_BOT_TOKEN'];
-    else process.env['DISCORD_BOT_TOKEN'] = originalEnvToken;
+    vi.restoreAllMocks();
   });
 
   describe('getConfig', () => {
@@ -101,7 +107,7 @@ describe('DiscordConfigService', () => {
   describe('getEffectiveToken', () => {
     it('should prefer DISCORD_BOT_TOKEN env var over file contents', () => {
       writeState({ botToken: 'file-token' });
-      process.env['DISCORD_BOT_TOKEN'] = 'env-token';
+      vi.spyOn(service, 'readEnvBotToken').mockReturnValue('env-token');
       expect(service.getEffectiveToken()).toBe('env-token');
     });
 
@@ -117,7 +123,7 @@ describe('DiscordConfigService', () => {
 
     it('should let an explicitly-empty env var override the file token', () => {
       writeState({ botToken: 'file-token' });
-      process.env['DISCORD_BOT_TOKEN'] = '';
+      vi.spyOn(service, 'readEnvBotToken').mockReturnValue('');
       expect(service.getEffectiveToken()).toBe('');
     });
   });
@@ -134,7 +140,7 @@ describe('DiscordConfigService', () => {
 
     it('should mark botTokenSet=true when only the env var is set', () => {
       writeState({});
-      process.env['DISCORD_BOT_TOKEN'] = 'env-token';
+      vi.spyOn(service, 'readEnvBotToken').mockReturnValue('env-token');
       expect(service.getRedacted().botTokenSet).toBe(true);
     });
 
@@ -162,14 +168,14 @@ describe('DiscordConfigService', () => {
 
     it('should return false and skip writing when botToken is not a string', () => {
       mockExists.mockReturnValue(false);
-      const ok = service.setCredentials({ botToken: 12345 as unknown as string });
+      const ok = service.setCredentials({ botToken: 12345 });
       expect(ok).toBe(false);
       expect(mockWrite).not.toHaveBeenCalled();
     });
 
     it('should return false and skip writing when clientId is not a string', () => {
       mockExists.mockReturnValue(false);
-      const ok = service.setCredentials({ clientId: null as unknown as string });
+      const ok = service.setCredentials({ clientId: null });
       expect(ok).toBe(false);
       expect(mockWrite).not.toHaveBeenCalled();
     });
@@ -183,10 +189,7 @@ describe('DiscordConfigService', () => {
 
   describe('load (runtime validation)', () => {
     it('should coerce non-string botToken/clientId to empty strings', () => {
-      writeState({
-        botToken: 42 as unknown as string,
-        clientId: null as unknown as string,
-      });
+      writeState({ botToken: 42, clientId: null });
       const cfg = service.getConfig();
       expect(cfg.botToken).toBe('');
       expect(cfg.clientId).toBe('');
@@ -256,6 +259,14 @@ describe('DiscordConfigService', () => {
       expect(written.admins.userIds).toEqual(['u1']);
       expect(written.admins.roleIds).toEqual(['r1', 'r2']);
     });
+
+    it('should sanitize non-array / non-string inputs instead of throwing', () => {
+      mockExists.mockReturnValue(false);
+      service.setAdmins({ userIds: 'not-an-array', roleIds: ['r1', 42, null] });
+      const written = lastWrittenConfig();
+      expect(written.admins.userIds).toEqual([]);
+      expect(written.admins.roleIds).toEqual(['r1']);
+    });
   });
 
   describe('setGamePermission', () => {
@@ -283,6 +294,22 @@ describe('DiscordConfigService', () => {
       mockExists.mockReturnValue(false);
       const ok = service.setGamePermission('minecraft', { userIds: ['u1'], roleIds: [], actions: ['start'] });
       expect(ok).toBe(true);
+    });
+
+    it('should sanitize non-array field inputs instead of throwing', () => {
+      mockExists.mockReturnValue(false);
+      const ok = service.setGamePermission('minecraft', {
+        userIds: 'not-an-array',
+        roleIds: ['r1', 99],
+        actions: 'start',
+      });
+      expect(ok).toBe(true);
+      const written = lastWrittenConfig();
+      expect(written.gamePermissions['minecraft']).toEqual({
+        userIds: [],
+        roleIds: ['r1'],
+        actions: [],
+      });
     });
 
     it('should deduplicate user and role IDs per game', () => {
