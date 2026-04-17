@@ -13,13 +13,20 @@ vi.mock('../logger.js', () => ({
 import { Ec2Service } from './Ec2Service.js';
 import type { ConfigService } from './ConfigService.js';
 
+/** Typed stand-in for the AWS EC2 SDK client. */
 const ec2Mock = mockClient(EC2Client);
 
+/**
+ * Build a minimal ConfigService stub exposing only the members Ec2Service
+ * actually reads at runtime.
+ */
 function makeConfig(): ConfigService {
-  return { getRegion: () => 'us-east-1' } as unknown as ConfigService;
+  const stub: Partial<ConfigService> = { getRegion: () => 'us-east-1' };
+  return stub as ConfigService;
 }
 
 describe('Ec2Service', () => {
+  /** Service under test, freshly constructed per test. */
   let service: Ec2Service;
 
   beforeEach(() => {
@@ -28,31 +35,31 @@ describe('Ec2Service', () => {
   });
 
   describe('getPublicIp', () => {
-    it('returns the public IP when attached', async () => {
+    it('should return the public IP when attached', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).resolves({
         NetworkInterfaces: [{ Association: { PublicIp: '54.1.2.3' } }],
       });
       expect(await service.getPublicIp('eni-abc')).toBe('54.1.2.3');
     });
 
-    it('returns null when no association/public IP', async () => {
+    it('should return null when there is no association or public IP', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).resolves({
         NetworkInterfaces: [{}],
       });
       expect(await service.getPublicIp('eni-abc')).toBeNull();
     });
 
-    it('returns null when no interfaces returned', async () => {
+    it('should return null when no interfaces are returned', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).resolves({ NetworkInterfaces: [] });
       expect(await service.getPublicIp('eni-abc')).toBeNull();
     });
 
-    it('returns null on API error', async () => {
+    it('should return null on API error', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).rejects(new Error('boom'));
       expect(await service.getPublicIp('eni-abc')).toBeNull();
     });
 
-    it('passes ENI id to the command', async () => {
+    it('should pass the ENI id through to the SDK command', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).resolves({ NetworkInterfaces: [] });
       await service.getPublicIp('eni-123');
       const input = ec2Mock.commandCalls(DescribeNetworkInterfacesCommand)[0]!.args[0].input;
@@ -61,19 +68,19 @@ describe('Ec2Service', () => {
   });
 
   describe('getPrivateIp', () => {
-    it('returns the private IP when present', async () => {
+    it('should return the private IP when present', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).resolves({
         NetworkInterfaces: [{ PrivateIpAddress: '10.0.1.5' }],
       });
       expect(await service.getPrivateIp('eni-abc')).toBe('10.0.1.5');
     });
 
-    it('returns null when absent', async () => {
+    it('should return null when the private IP is absent', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).resolves({ NetworkInterfaces: [{}] });
       expect(await service.getPrivateIp('eni-abc')).toBeNull();
     });
 
-    it('returns null on API error', async () => {
+    it('should return null on API error', async () => {
       ec2Mock.on(DescribeNetworkInterfacesCommand).rejects(new Error('nope'));
       expect(await service.getPrivateIp('eni-abc')).toBeNull();
     });

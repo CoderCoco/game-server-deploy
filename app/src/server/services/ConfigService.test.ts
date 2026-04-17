@@ -19,15 +19,21 @@ vi.mock('../logger.js', () => ({
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { ConfigService } from './ConfigService.js';
 
-const mockExists = existsSync as unknown as ReturnType<typeof vi.fn>;
-const mockRead = readFileSync as unknown as ReturnType<typeof vi.fn>;
-const mockWrite = writeFileSync as unknown as ReturnType<typeof vi.fn>;
+/** Strongly-typed mock handles for the `fs` module. */
+const mockExists = vi.mocked(existsSync);
+const mockRead = vi.mocked(readFileSync);
+const mockWrite = vi.mocked(writeFileSync);
 
+/**
+ * Build a Terraform state file payload from an `outputs` map.
+ * Mirrors the shape that `terraform.tfstate` uses on disk.
+ */
 function makeState(outputs: Record<string, { value: unknown }>): string {
   return JSON.stringify({ outputs });
 }
 
 describe('ConfigService', () => {
+  /** Fresh instance per test; each has its own in-memory tfstate cache. */
   let service: ConfigService;
 
   beforeEach(() => {
@@ -35,12 +41,12 @@ describe('ConfigService', () => {
   });
 
   describe('getTfOutputs', () => {
-    it('returns null and warns when state file does not exist', () => {
+    it('should return null and warn when the state file does not exist', () => {
       mockExists.mockReturnValue(false);
       expect(service.getTfOutputs()).toBeNull();
     });
 
-    it('parses outputs and fills defaults for missing keys', () => {
+    it('should parse outputs and fill defaults for missing keys', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue(
         makeState({
@@ -60,13 +66,13 @@ describe('ConfigService', () => {
       expect(outputs!.efs_access_points).toEqual({});
     });
 
-    it('applies fallback aws_region when outputs omit it', () => {
+    it('should apply the fallback aws_region when outputs omit it', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue(makeState({}));
       expect(service.getTfOutputs()!.aws_region).toBe('us-east-1');
     });
 
-    it('caches parsed outputs across calls', () => {
+    it('should cache parsed outputs across calls', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue(makeState({ aws_region: { value: 'eu-central-1' } }));
 
@@ -76,7 +82,7 @@ describe('ConfigService', () => {
       expect(mockRead).toHaveBeenCalledTimes(1);
     });
 
-    it('invalidateCache forces a re-read', () => {
+    it('should force a re-read after invalidateCache', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue(makeState({ aws_region: { value: 'a' } }));
 
@@ -88,7 +94,7 @@ describe('ConfigService', () => {
       expect(mockRead).toHaveBeenCalledTimes(2);
     });
 
-    it('returns null on invalid JSON', () => {
+    it('should return null when the state file contains invalid JSON', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue('not-json{');
       expect(service.getTfOutputs()).toBeNull();
@@ -96,38 +102,27 @@ describe('ConfigService', () => {
   });
 
   describe('getRegion', () => {
-    it('uses aws_region from outputs when available', () => {
+    it('should use aws_region from outputs when available', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue(makeState({ aws_region: { value: 'ap-south-1' } }));
       expect(service.getRegion()).toBe('ap-south-1');
     });
 
-    it('falls back to AWS_DEFAULT_REGION env var when outputs unavailable', () => {
+    it('should fall back to readEnvRegion when outputs unavailable', () => {
       mockExists.mockReturnValue(false);
-      const prev = process.env['AWS_DEFAULT_REGION'];
-      process.env['AWS_DEFAULT_REGION'] = 'eu-west-3';
-      try {
-        expect(service.getRegion()).toBe('eu-west-3');
-      } finally {
-        if (prev === undefined) delete process.env['AWS_DEFAULT_REGION'];
-        else process.env['AWS_DEFAULT_REGION'] = prev;
-      }
+      vi.spyOn(service, 'readEnvRegion').mockReturnValue('eu-west-3');
+      expect(service.getRegion()).toBe('eu-west-3');
     });
 
-    it('falls back to us-east-1 when no outputs and no env var', () => {
+    it('should fall back to us-east-1 when no outputs and no env region', () => {
       mockExists.mockReturnValue(false);
-      const prev = process.env['AWS_DEFAULT_REGION'];
-      delete process.env['AWS_DEFAULT_REGION'];
-      try {
-        expect(service.getRegion()).toBe('us-east-1');
-      } finally {
-        if (prev !== undefined) process.env['AWS_DEFAULT_REGION'] = prev;
-      }
+      vi.spyOn(service, 'readEnvRegion').mockReturnValue(undefined);
+      expect(service.getRegion()).toBe('us-east-1');
     });
   });
 
   describe('getConfig', () => {
-    it('returns defaults when config file missing', () => {
+    it('should return defaults when the config file is missing', () => {
       mockExists.mockReturnValue(false);
       expect(service.getConfig()).toEqual({
         watchdog_interval_minutes: 15,
@@ -136,7 +131,7 @@ describe('ConfigService', () => {
       });
     });
 
-    it('merges saved config over defaults', () => {
+    it('should merge saved config over defaults', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue(
         JSON.stringify({ watchdog_idle_checks: 10, watchdog_min_packets: 250 }),
@@ -148,7 +143,7 @@ describe('ConfigService', () => {
       });
     });
 
-    it('returns defaults if config file is malformed', () => {
+    it('should return defaults when the config file is malformed', () => {
       mockExists.mockReturnValue(true);
       mockRead.mockReturnValue('{bad json');
       const config = service.getConfig();
@@ -159,7 +154,7 @@ describe('ConfigService', () => {
   });
 
   describe('saveConfig', () => {
-    it('writes JSON-stringified config to disk', () => {
+    it('should write JSON-stringified config to disk', () => {
       const config = {
         watchdog_interval_minutes: 30,
         watchdog_idle_checks: 6,

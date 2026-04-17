@@ -11,6 +11,10 @@ import type { ConfigService, TfOutputs } from './ConfigService.js';
 import type { EcsService } from './EcsService.js';
 import type { Ec2Service } from './Ec2Service.js';
 
+/**
+ * A canonical set of Terraform outputs used by most tests. Individual tests
+ * spread over this to tweak specific fields (e.g. clearing EFS access points).
+ */
 const DEFAULT_OUTPUTS: TfOutputs = {
   aws_region: 'us-east-1',
   ecs_cluster_name: 'game-cluster',
@@ -26,24 +30,41 @@ const DEFAULT_OUTPUTS: TfOutputs = {
   acm_certificate_arn: null,
 };
 
-type EcsStub = {
-  listTasksByStartedBy: ReturnType<typeof vi.fn>;
-  extractEniId: ReturnType<typeof vi.fn>;
-  getTaskDefinition: ReturnType<typeof vi.fn>;
-  registerTaskDefinition: ReturnType<typeof vi.fn>;
-  runTask: ReturnType<typeof vi.fn>;
-  stopTask: ReturnType<typeof vi.fn>;
-};
+/**
+ * Subset of EcsService that FileManagerService actually calls. Tests create
+ * instances of this shape and cast once to `EcsService`, which keeps the
+ * `vi.fn()` return types intact for assertions like `.mock.calls[0]`.
+ */
+type EcsStub = Pick<
+  EcsService,
+  | 'listTasksByStartedBy'
+  | 'extractEniId'
+  | 'getTaskDefinition'
+  | 'registerTaskDefinition'
+  | 'runTask'
+  | 'stopTask'
+>;
 
+/**
+ * Build a minimal ConfigService stub. Pass `null` to simulate "terraform
+ * apply hasn't been run yet".
+ */
 function makeConfig(outputs: TfOutputs | null = DEFAULT_OUTPUTS): ConfigService {
-  return {
+  const stub: Partial<ConfigService> = {
     getTfOutputs: () => outputs,
     getRegion: () => 'us-east-1',
-  } as unknown as ConfigService;
+  };
+  return stub as ConfigService;
 }
 
-function makeEcs(overrides: Partial<EcsStub> = {}): EcsService & EcsStub {
-  return {
+/**
+ * Build an EcsService stub with sensible "happy path" defaults, plus the
+ * ability to override specific methods per test. Returns both the stub and
+ * an EcsService-typed alias so we can hand the alias to the SUT while still
+ * making assertions against the stub's `vi.fn()` handles.
+ */
+function makeEcs(overrides: Partial<EcsStub> = {}): { stub: EcsStub; service: EcsService } {
+  const stub: EcsStub = {
     listTasksByStartedBy: vi.fn().mockResolvedValue([]),
     extractEniId: vi.fn().mockReturnValue(null),
     getTaskDefinition: vi.fn().mockResolvedValue({
@@ -55,30 +76,38 @@ function makeEcs(overrides: Partial<EcsStub> = {}): EcsService & EcsStub {
     runTask: vi.fn().mockResolvedValue({ taskArn: 'arn-fm' }),
     stopTask: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as unknown as EcsService & EcsStub;
+  };
+  return { stub, service: stub as EcsService };
 }
 
+/**
+ * Build an Ec2Service stub whose `getPublicIp` resolves to the given value.
+ */
 function makeEc2(ip: string | null = '1.2.3.4'): Ec2Service {
-  return { getPublicIp: vi.fn().mockResolvedValue(ip) } as unknown as Ec2Service;
+  const stub: Partial<Ec2Service> = {
+    getPublicIp: vi.fn().mockResolvedValue(ip),
+  };
+  return stub as Ec2Service;
 }
 
 describe('FileManagerService', () => {
   describe('getStatus', () => {
-    it('returns not_deployed when terraform outputs missing', async () => {
-      const svc = new FileManagerService(makeConfig(null), makeEcs(), makeEc2());
+    it('should return not_deployed when terraform outputs are missing', async () => {
+      const { service: ecs } = makeEcs();
+      const svc = new FileManagerService(makeConfig(null), ecs, makeEc2());
       expect((await svc.getStatus('minecraft')).state).toBe('not_deployed');
     });
 
-    it('returns stopped when no tasks exist', async () => {
-      const ecs = makeEcs({ listTasksByStartedBy: vi.fn().mockResolvedValue([]) });
+    it('should return stopped when no tasks exist', async () => {
+      const { stub, service: ecs } = makeEcs({ listTasksByStartedBy: vi.fn().mockResolvedValue([]) });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
       expect((await svc.getStatus('minecraft')).state).toBe('stopped');
-      expect(ecs.listTasksByStartedBy).toHaveBeenCalledWith('game-cluster', 'filemgr-minecraft');
+      expect(stub.listTasksByStartedBy).toHaveBeenCalledWith('game-cluster', 'filemgr-minecraft');
     });
 
-    it('returns running with URL built from public IP on port 8080', async () => {
+    it('should return running with a URL built from the public IP on port 8080', async () => {
       const task: Task = { taskArn: 'arn-fm', lastStatus: 'RUNNING' };
-      const ecs = makeEcs({
+      const { service: ecs } = makeEcs({
         listTasksByStartedBy: vi.fn().mockResolvedValue([task]),
         extractEniId: vi.fn().mockReturnValue('eni-1'),
       });
@@ -89,8 +118,8 @@ describe('FileManagerService', () => {
       expect(status.taskArn).toBe('arn-fm');
     });
 
-    it('returns running without URL when public IP cannot be resolved', async () => {
-      const ecs = makeEcs({
+    it('should return running without a URL when the public IP cannot be resolved', async () => {
+      const { service: ecs } = makeEcs({
         listTasksByStartedBy: vi.fn().mockResolvedValue([{ lastStatus: 'RUNNING' }]),
         extractEniId: vi.fn().mockReturnValue('eni-1'),
       });
@@ -100,8 +129,8 @@ describe('FileManagerService', () => {
       expect(status.url).toBeUndefined();
     });
 
-    it('returns starting when task not yet running', async () => {
-      const ecs = makeEcs({
+    it('should return starting when the task is not yet running', async () => {
+      const { service: ecs } = makeEcs({
         listTasksByStartedBy: vi.fn().mockResolvedValue([{ taskArn: 'arn-fm', lastStatus: 'PROVISIONING' }]),
       });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
@@ -112,31 +141,34 @@ describe('FileManagerService', () => {
   });
 
   describe('start', () => {
-    it('fails if terraform outputs missing', async () => {
-      const svc = new FileManagerService(makeConfig(null), makeEcs(), makeEc2());
+    it('should fail if terraform outputs are missing', async () => {
+      const { service: ecs } = makeEcs();
+      const svc = new FileManagerService(makeConfig(null), ecs, makeEc2());
       const result = await svc.start('minecraft');
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/terraform apply/i);
     });
 
-    it('fails when game has no EFS access point', async () => {
+    it('should fail when the game has no EFS access point', async () => {
       const outputs: TfOutputs = { ...DEFAULT_OUTPUTS, efs_access_points: {} };
-      const svc = new FileManagerService(makeConfig(outputs), makeEcs(), makeEc2());
+      const { service: ecs } = makeEcs();
+      const svc = new FileManagerService(makeConfig(outputs), ecs, makeEc2());
       const result = await svc.start('minecraft');
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/no efs access point/i);
     });
 
-    it('fails when file_manager_security_group_id not set', async () => {
+    it('should fail when file_manager_security_group_id is not set', async () => {
       const outputs: TfOutputs = { ...DEFAULT_OUTPUTS, file_manager_security_group_id: '' };
-      const svc = new FileManagerService(makeConfig(outputs), makeEcs(), makeEc2());
+      const { service: ecs } = makeEcs();
+      const svc = new FileManagerService(makeConfig(outputs), ecs, makeEc2());
       const result = await svc.start('minecraft');
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/file_manager_security_group_id/);
     });
 
-    it('fails when file manager is already running', async () => {
-      const ecs = makeEcs({
+    it('should fail when the file manager is already running', async () => {
+      const { service: ecs } = makeEcs({
         listTasksByStartedBy: vi.fn().mockResolvedValue([{ taskArn: 'existing' }]),
       });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
@@ -145,8 +177,8 @@ describe('FileManagerService', () => {
       expect(result.message).toMatch(/already running/i);
     });
 
-    it('fails when the game task definition has no execution role', async () => {
-      const ecs = makeEcs({
+    it('should fail when the game task definition has no execution role', async () => {
+      const { service: ecs } = makeEcs({
         getTaskDefinition: vi.fn().mockResolvedValue(null),
       });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
@@ -155,15 +187,15 @@ describe('FileManagerService', () => {
       expect(result.message).toMatch(/execution role/i);
     });
 
-    it('registers a filebrowser task definition then runs it', async () => {
-      const ecs = makeEcs();
+    it('should register a filebrowser task definition and then run it', async () => {
+      const { stub, service: ecs } = makeEcs();
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
       const result = await svc.start('minecraft');
 
       expect(result.success).toBe(true);
       expect(result.taskArn).toBe('arn-fm');
 
-      const regArgs = ecs.registerTaskDefinition.mock.calls[0]![0];
+      const regArgs = vi.mocked(stub.registerTaskDefinition).mock.calls[0]![0];
       expect(regArgs.family).toBe('filebrowser-minecraft');
       expect(regArgs.networkMode).toBe('awsvpc');
       expect(regArgs.requiresCompatibilities).toEqual(['FARGATE']);
@@ -171,40 +203,40 @@ describe('FileManagerService', () => {
       expect(regArgs.memory).toBe('512');
       expect(regArgs.executionRoleArn).toBe('arn:aws:iam::123:role/exec');
 
-      const volume = regArgs.volumes[0];
-      expect(volume.efsVolumeConfiguration.fileSystemId).toBe('fs-1');
-      expect(volume.efsVolumeConfiguration.authorizationConfig.accessPointId).toBe('fsap-mc');
-      expect(volume.efsVolumeConfiguration.transitEncryption).toBe('ENABLED');
+      const volume = regArgs.volumes![0]!;
+      expect(volume.efsVolumeConfiguration!.fileSystemId).toBe('fs-1');
+      expect(volume.efsVolumeConfiguration!.authorizationConfig!.accessPointId).toBe('fsap-mc');
+      expect(volume.efsVolumeConfiguration!.transitEncryption).toBe('ENABLED');
 
-      const container = regArgs.containerDefinitions[0];
+      const container = regArgs.containerDefinitions![0]!;
       expect(container.image).toContain('filebrowser');
-      expect(container.portMappings[0].containerPort).toBe(8080);
-      expect(container.mountPoints[0].containerPath).toBe('/srv');
+      expect(container.portMappings![0]!.containerPort).toBe(8080);
+      expect(container.mountPoints![0]!.containerPath).toBe('/srv');
       expect(container.command).toContain('--noauth');
-      expect(container.logConfiguration.options['awslogs-group']).toBe('/ecs/filebrowser-minecraft');
-      expect(container.logConfiguration.options['awslogs-region']).toBe('us-east-1');
+      expect(container.logConfiguration!.options!['awslogs-group']).toBe('/ecs/filebrowser-minecraft');
+      expect(container.logConfiguration!.options!['awslogs-region']).toBe('us-east-1');
 
-      const runArgs = ecs.runTask.mock.calls[0]![0];
+      const runArgs = vi.mocked(stub.runTask).mock.calls[0]![0];
       expect(runArgs.cluster).toBe('game-cluster');
       expect(runArgs.taskDefinition).toBe('filebrowser-minecraft');
       expect(runArgs.startedBy).toBe('filemgr-minecraft');
-      expect(runArgs.networkConfiguration.awsvpcConfiguration.subnets).toEqual(['subnet-a', 'subnet-b']);
-      expect(runArgs.networkConfiguration.awsvpcConfiguration.securityGroups).toEqual(['sg-files']);
-      expect(runArgs.networkConfiguration.awsvpcConfiguration.assignPublicIp).toBe('ENABLED');
+      expect(runArgs.networkConfiguration!.awsvpcConfiguration!.subnets).toEqual(['subnet-a', 'subnet-b']);
+      expect(runArgs.networkConfiguration!.awsvpcConfiguration!.securityGroups).toEqual(['sg-files']);
+      expect(runArgs.networkConfiguration!.awsvpcConfiguration!.assignPublicIp).toBe('ENABLED');
     });
 
-    it('fails when task-definition registration returns null', async () => {
-      const ecs = makeEcs({
+    it('should fail when task-definition registration returns null', async () => {
+      const { stub, service: ecs } = makeEcs({
         registerTaskDefinition: vi.fn().mockResolvedValue(null),
       });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
       const result = await svc.start('minecraft');
       expect(result.success).toBe(false);
-      expect(ecs.runTask).not.toHaveBeenCalled();
+      expect(stub.runTask).not.toHaveBeenCalled();
     });
 
-    it('fails when runTask returns null', async () => {
-      const ecs = makeEcs({
+    it('should fail when runTask returns null', async () => {
+      const { service: ecs } = makeEcs({
         runTask: vi.fn().mockResolvedValue(null),
       });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
@@ -214,31 +246,32 @@ describe('FileManagerService', () => {
   });
 
   describe('stop', () => {
-    it('fails when outputs missing', async () => {
-      const svc = new FileManagerService(makeConfig(null), makeEcs(), makeEc2());
+    it('should fail when outputs are missing', async () => {
+      const { service: ecs } = makeEcs();
+      const svc = new FileManagerService(makeConfig(null), ecs, makeEc2());
       expect((await svc.stop('minecraft')).success).toBe(false);
     });
 
-    it('fails when no file manager running', async () => {
-      const ecs = makeEcs({ listTasksByStartedBy: vi.fn().mockResolvedValue([]) });
+    it('should fail when no file manager is running', async () => {
+      const { service: ecs } = makeEcs({ listTasksByStartedBy: vi.fn().mockResolvedValue([]) });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
       const result = await svc.stop('minecraft');
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/no file manager running/i);
     });
 
-    it('stops the first task when running', async () => {
-      const ecs = makeEcs({
+    it('should stop the first task when running', async () => {
+      const { stub, service: ecs } = makeEcs({
         listTasksByStartedBy: vi.fn().mockResolvedValue([{ taskArn: 'arn-1' }]),
       });
       const svc = new FileManagerService(makeConfig(), ecs, makeEc2());
       const result = await svc.stop('minecraft');
       expect(result.success).toBe(true);
-      expect(ecs.stopTask).toHaveBeenCalledWith('game-cluster', 'arn-1', expect.any(String));
+      expect(stub.stopTask).toHaveBeenCalledWith('game-cluster', 'arn-1', expect.any(String));
     });
 
-    it('returns failure when stopTask throws', async () => {
-      const ecs = makeEcs({
+    it('should return failure when stopTask throws', async () => {
+      const { service: ecs } = makeEcs({
         listTasksByStartedBy: vi.fn().mockResolvedValue([{ taskArn: 'arn-1' }]),
         stopTask: vi.fn().mockRejectedValue(new Error('nope')),
       });

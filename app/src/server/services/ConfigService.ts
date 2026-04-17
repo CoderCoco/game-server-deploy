@@ -82,10 +82,19 @@ export class ConfigService {
     }
   }
 
+  /**
+   * Read the AWS region hint from the process environment.
+   * Extracted so tests can stub env access via `vi.spyOn` instead of
+   * mutating `process.env` directly (which is flaky across tests).
+   */
+  readEnvRegion(): string | undefined {
+    return process.env['AWS_DEFAULT_REGION'];
+  }
+
   getRegion(): string {
     return (
       this.getTfOutputs()?.aws_region ??
-      process.env['AWS_DEFAULT_REGION'] ??
+      this.readEnvRegion() ??
       'us-east-1'
     );
   }
