@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Commands
 
-The management app is a TypeScript project (Express API + React/Vite UI) under `app/`. Dependencies are managed with **npm**.
+The management app is a TypeScript project (Nest.js API + React/Vite UI) under `app/`. Dependencies are managed with **npm**.
 
 ```bash
 # Install app deps
 cd app && npm install
 
-# Run the dev servers (Express on 3001, Vite on 5173 with /api proxy)
+# Run the dev servers (Nest on 3001, Vite on 5173 with /api proxy)
 cd app && npm run dev
 
 # Production build + run
@@ -41,7 +41,7 @@ No linter is configured in this repo.
 Two loosely-coupled halves communicate via the Terraform state file:
 
 1. **Terraform (`terraform/`)** provisions all AWS infrastructure.
-2. **Management app (`app/`)** — Express + TypeScript backend reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs, then drives AWS via the AWS SDK v3. React/Vite frontend talks to the Express API. Services use **tsyringe** for DI and **Winston** for structured logging.
+2. **Management app (`app/`)** — Nest.js (on `@nestjs/platform-express`) + TypeScript backend reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs, then drives AWS via the AWS SDK v3. React/Vite frontend talks to the Nest API. Services use **Nest's built-in DI** (`@Injectable()`) and **Winston** for structured logging. Feature modules under `app/src/server/modules/` (`AwsModule`, `DiscordModule`) group related providers; HTTP handlers live in `app/src/server/controllers/` as `@Controller`-decorated classes wired up through `AppModule`.
 
 There is **no persistent ECS Service**. Servers run only when the user clicks Start — the app calls `ecs.run_task()` / `ecs.stop_task()` against per-game task definitions named `{game}-server`. This is the core cost-saving design choice; don't introduce a long-running Service.
 
@@ -71,11 +71,11 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 
 ### API authentication
 
-Every `/api/*` route is gated behind a bearer token via middleware in `app/src/server/middleware/auth.ts`. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the middleware or bypass it on individual routes — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
+Every `/api/*` route is gated behind a bearer token via `ApiTokenGuard` in `app/src/server/guards/api-token.guard.ts`, registered globally in `AppModule` as an `APP_GUARD` provider so it applies to every controller automatically. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts in `main.ts` if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the guard or bypass it on individual controllers — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
 
 ### Discord bot lives inside the management app process
 
-There is no separate bot service — `DiscordBotService` (in `app/src/server/services/DiscordBotService.ts`) holds a single `discord.js` `Client` that is started from `index.ts` on app boot (only if a token is configured) and reuses `EcsService` for start/stop. Config is persisted to `app/discord_config.json`; `DISCORD_BOT_TOKEN` env var overrides the file value. Don't spin this out into its own container.
+There is no separate bot service — `DiscordBotService` (in `app/src/server/services/DiscordBotService.ts`) holds a single `discord.js` `Client` that is started from `main.ts` after `app.listen()` (only if a token is configured) and reuses `EcsService` for start/stop. Config is persisted to `app/discord_config.json`; `DISCORD_BOT_TOKEN` env var overrides the file value. Don't spin this out into its own container.
 
 Key design rules to preserve:
 
@@ -103,14 +103,26 @@ All resources inherit `default_tags` from `provider "aws"` (`Project = "game-ser
 - **Typing in tests**: avoid `as unknown as SomeType` casts. Prefer `vi.mocked(fn)` for mocked modules and `Partial<T>` + a single `as T` for service-shaped stubs.
 - **No raw `process.env` in business logic**: wrap environment access behind a service method so tests can stub it via `vi.spyOn` instead of mutating `process.env` (which is flaky and leaks across tests).
 
+## PR Conventions
+
+- **PR titles use Conventional Commits.** Every PR title must start with a conventional-commit type (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`), optionally with a scope in parentheses, then a colon and a short imperative summary — e.g. `refactor(app): migrate server from Express+tsyringe to Nest.js`, `docs: reflect Nest.js migration in CLAUDE.md`, `fix(watchdog): stop leaking tags on failed runs`. This matters because we squash-merge: the PR title becomes the merge commit subject on `main`, so a badly-formed title produces a badly-formed commit. Keep the subject under ~70 characters; put details in the PR body.
+
 ## PR Review Workflow
 
-**Be strict with Copilot review suggestions.** Do not rubber-stamp them. When a Copilot comment lands on a PR:
+**Be strict with Copilot review suggestions. Don't enter a fix-and-repush loop.** Copilot runs automatically on every push, so a cycle of "Copilot comments → fix → Copilot comments on the fix → fix again" can go on forever on nitpicks. Most Copilot suggestions on a given PR are **not actionable** — expect to apply maybe one in three, decline the rest on the thread, and keep moving.
 
-1. **Evaluate first.** Read the surrounding code and reason about whether the critique describes a real problem and whether the proposed fix actually addresses it. Copilot can hallucinate issues or suggest fixes that introduce worse problems.
-2. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
-3. **Ask the user if unsure.** If the suggestion is ambiguous, architecturally significant, or the trade-off isn't clear-cut, use `AskUserQuestion` before acting. Don't silently dismiss — surface the disagreement.
-4. **Reply on the thread** explaining either the fix applied, the deviation taken, or that you're checking with the user before acting. Reference the commit SHA.
-5. **Resolve the thread** with `mcp__github__resolve_review_thread` after the fix is committed and the reply is posted, so the PR's conversation tab shows a clean state. Only leave a thread unresolved when you're waiting on the user, you declined the suggestion and want visibility, or the issue genuinely isn't fixed yet.
+**The bar for acting on a Copilot comment:** the code is actually buggy, insecure, broken in production, or clearly wrong. Not "could be clearer", "consider renaming", "add a log line here", "extract a helper", "slight inconsistency with other files", "prefer X over Y". Those get declined with a one-line reply explaining why, and the thread stays unresolved only if you want visibility (resolve it otherwise).
 
-This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often.
+When a Copilot comment lands on a PR:
+
+1. **Evaluate first.** Read the surrounding code and reason about whether the critique describes a real problem and whether the proposed fix actually addresses it. Copilot hallucinates issues and suggests fixes that introduce worse problems. Assume the comment is wrong until you've convinced yourself otherwise.
+2. **Triage the category.**
+   - *Genuine bug, security issue, crash, or incorrect logic* → fix it.
+   - *Style, naming, readability, idiom preference, "consider", "might want to", missing-but-non-essential docstring/log/comment, minor duplication, test-organization nit* → **decline on the thread.** Do not rewrite the code. A short reply like "Declined — stylistic, not a correctness issue; leaving as-is." is enough.
+   - *Ambiguous or architecturally significant* → `AskUserQuestion` before acting. Don't silently dismiss.
+3. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
+4. **Reply on the thread** explaining either the fix applied, why you declined, or that you're checking with the user. Reference the commit SHA when a fix was committed.
+5. **Resolve the thread** with `mcp__github__resolve_review_thread` after a fix is committed and the reply is posted, or after you decline a clear nitpick, so the PR's conversation tab shows a clean state. Only leave a thread unresolved when you're waiting on the user or the issue genuinely isn't fixed yet.
+6. **Stop when the signal is noise.** If Copilot's latest round is only nitpicks, don't push another commit. Reply to each thread with a brief decline and move on — the PR is ready to merge.
+
+This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often. Copilot's system-level behavior is tuned via `.github/copilot-instructions.md` in this repo — keep that file and this section in sync.

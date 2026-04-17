@@ -1,4 +1,4 @@
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import { type Task } from '@aws-sdk/client-ecs';
 import { logger } from '../logger.js';
 import { ConfigService } from './ConfigService.js';
@@ -22,7 +22,7 @@ export interface FileMgrResult {
   taskArn?: string;
 }
 
-@injectable()
+@Injectable()
 export class FileManagerService {
   constructor(
     private readonly config: ConfigService,

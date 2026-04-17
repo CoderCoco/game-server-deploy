@@ -22,22 +22,3 @@ export const logger = winston.createLogger({
       ),
   transports: [new winston.transports.Console()],
 });
-
-/** Express request logger middleware */
-export function requestLogger(
-  req: import('express').Request,
-  res: import('express').Response,
-  next: import('express').NextFunction,
-): void {
-  const start = Date.now();
-  res.on('finish', () => {
-    const ms = Date.now() - start;
-    const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'http';
-    logger.log(level, `${req.method} ${req.path}`, {
-      status: res.statusCode,
-      ms,
-      query: Object.keys(req.query).length ? req.query : undefined,
-    });
-  });
-  next();
-}

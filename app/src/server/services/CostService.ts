@@ -1,4 +1,4 @@
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import {
   CostExplorerClient,
   GetCostAndUsageCommand,
@@ -29,7 +29,7 @@ export interface ActualCosts {
   error?: string;
 }
 
-@injectable()
+@Injectable()
 export class CostService {
   private client: CostExplorerClient | null = null;
 

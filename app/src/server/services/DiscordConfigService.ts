@@ -12,7 +12,7 @@
  * exposes `botTokenSet: boolean` instead. The env var `DISCORD_BOT_TOKEN`
  * overrides the file value at read time (see {@link DiscordConfigService.getEffectiveToken}).
  */
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../logger.js';
@@ -113,7 +113,7 @@ function emptyConfig(): DiscordConfig {
   };
 }
 
-@injectable()
+@Injectable()
 export class DiscordConfigService {
   /** Parsed config cached in-memory; refreshed on every `save()` after the new value is written to disk. */
   private cache: DiscordConfig | null = null;

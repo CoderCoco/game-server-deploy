@@ -1,9 +1,9 @@
-import { injectable } from 'tsyringe';
+import { Injectable } from '@nestjs/common';
 import { EC2Client, DescribeNetworkInterfacesCommand } from '@aws-sdk/client-ec2';
 import { logger } from '../logger.js';
 import { ConfigService } from './ConfigService.js';
 
-@injectable()
+@Injectable()
 export class Ec2Service {
   private client: EC2Client | null = null;
 
