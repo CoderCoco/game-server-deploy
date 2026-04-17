@@ -10,12 +10,15 @@ from server_manager import (
     get_actual_costs,
     get_all_statuses,
     get_config,
+    get_file_manager_status,
     get_game_names,
     get_recent_logs,
     get_server_status,
     invalidate_tf_cache,
     save_config,
+    start_file_manager,
     start_server,
+    stop_file_manager,
     stop_server,
 )
 
@@ -91,6 +94,23 @@ def api_cost_estimate():
 def api_actual_costs():
     days = request.args.get("days", 7, type=int)
     return jsonify(get_actual_costs(days))
+
+
+# ── API: file manager ─────────────────────────────────────────────────────────
+
+@app.route("/api/files/<game>")
+def api_file_manager_status(game):
+    return jsonify(get_file_manager_status(game))
+
+
+@app.route("/api/files/<game>/start", methods=["POST"])
+def api_file_manager_start(game):
+    return jsonify(start_file_manager(game))
+
+
+@app.route("/api/files/<game>/stop", methods=["POST"])
+def api_file_manager_stop(game):
+    return jsonify(stop_file_manager(game))
 
 
 # ── API: logs ─────────────────────────────────────────────────────────────────

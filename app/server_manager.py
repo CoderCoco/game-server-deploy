@@ -320,6 +320,184 @@ def get_actual_costs(days: int = 7) -> dict:
         return {"error": str(e)}
 
 
+# ── File Manager (FileBrowser on EFS) ────────────────────────────────────────
+
+FILEBROWSER_IMAGE = "filebrowser/filebrowser:s6"
+FILEBROWSER_PORT  = 8080
+
+def start_file_manager(game: str) -> dict:
+    """
+    Launch a temporary FileBrowser ECS task for a game's EFS access point.
+    The task mounts the game's EFS data directory at /srv and exposes port 8080.
+    """
+    outputs = get_tf_outputs()
+    if not outputs:
+        return {"success": False, "message": "Terraform not applied. Run 'terraform apply' first."}
+
+    access_points = outputs.get("efs_access_points", {})
+    if game not in access_points:
+        return {"success": False, "message": f"No EFS access point found for '{game}'."}
+
+    ecs_client, ec2_client, _, _, region = _clients()
+    cluster     = outputs["ecs_cluster_name"]
+    subnets     = outputs.get("subnet_ids", "").split(",")
+    filemgr_sg  = outputs.get("file_manager_security_group_id", "")
+    efs_id      = outputs.get("efs_file_system_id", "")
+    ap_id       = access_points[game]
+    exec_role   = _get_execution_role_arn(ecs_client, cluster, game)
+
+    # Check if a file manager is already running for this game
+    existing = _find_file_manager_task(ecs_client, cluster, game)
+    if existing:
+        return {"success": False, "message": f"File manager for '{game}' is already running."}
+
+    # Register an ephemeral task definition for FileBrowser
+    log_group = f"/ecs/filebrowser-{game}"
+    task_def_name = f"filebrowser-{game}"
+    try:
+        ecs_client.register_task_definition(
+            family=task_def_name,
+            networkMode="awsvpc",
+            requiresCompatibilities=["FARGATE"],
+            cpu="256",
+            memory="512",
+            executionRoleArn=exec_role,
+            volumes=[{
+                "name": "game-data",
+                "efsVolumeConfiguration": {
+                    "fileSystemId": efs_id,
+                    "transitEncryption": "ENABLED",
+                    "authorizationConfig": {"accessPointId": ap_id, "iam": "DISABLED"},
+                },
+            }],
+            containerDefinitions=[{
+                "name": "filebrowser",
+                "image": FILEBROWSER_IMAGE,
+                "essential": True,
+                "portMappings": [{"containerPort": FILEBROWSER_PORT, "hostPort": FILEBROWSER_PORT, "protocol": "tcp"}],
+                "environment": [
+                    {"name": "FB_NOAUTH", "value": "true"},
+                    {"name": "FB_ROOT",   "value": "/srv"},
+                    {"name": "FB_PORT",   "value": str(FILEBROWSER_PORT)},
+                    {"name": "FB_DATABASE", "value": "/tmp/filebrowser.db"},
+                ],
+                "mountPoints": [{"sourceVolume": "game-data", "containerPath": "/srv", "readOnly": False}],
+                "logConfiguration": {
+                    "logDriver": "awslogs",
+                    "options": {
+                        "awslogs-group":         log_group,
+                        "awslogs-region":        region,
+                        "awslogs-stream-prefix": "ecs",
+                        "awslogs-create-group":  "true",
+                    },
+                },
+            }],
+        )
+    except ClientError as e:
+        return {"success": False, "message": f"Could not register task definition: {e}"}
+
+    try:
+        resp = ecs_client.run_task(
+            cluster=cluster,
+            taskDefinition=task_def_name,
+            count=1,
+            launchType="FARGATE",
+            startedBy=f"filemgr-{game}",
+            networkConfiguration={
+                "awsvpcConfiguration": {
+                    "subnets":        [s.strip() for s in subnets if s.strip()],
+                    "securityGroups": [filemgr_sg],
+                    "assignPublicIp": "ENABLED",
+                }
+            },
+        )
+        if resp.get("tasks"):
+            return {
+                "success":  True,
+                "message":  f"File manager for '{game}' is starting. It will be ready in ~30 seconds.",
+                "task_arn": resp["tasks"][0]["taskArn"],
+            }
+        failures = resp.get("failures", [])
+        reason = failures[0]["reason"] if failures else "unknown"
+        return {"success": False, "message": f"Failed to launch file manager: {reason}"}
+    except ClientError as e:
+        return {"success": False, "message": str(e)}
+
+
+def get_file_manager_status(game: str) -> dict:
+    """Return status and URL for the file manager task of a given game."""
+    outputs = get_tf_outputs()
+    if not outputs:
+        return {"game": game, "state": "not_deployed"}
+
+    ecs_client, ec2_client, *_ = _clients()
+    cluster = outputs["ecs_cluster_name"]
+
+    task = _find_file_manager_task(ecs_client, cluster, game)
+    if not task:
+        return {"game": game, "state": "stopped"}
+
+    status = task.get("lastStatus", "")
+    if status == "RUNNING":
+        public_ip = _get_task_public_ip(ec2_client, task)
+        url = f"http://{public_ip}:{FILEBROWSER_PORT}" if public_ip else None
+        return {"game": game, "state": "running", "url": url, "task_arn": task["taskArn"]}
+
+    return {"game": game, "state": "starting", "task_arn": task["taskArn"]}
+
+
+def stop_file_manager(game: str) -> dict:
+    """Stop the FileBrowser task for a given game."""
+    outputs = get_tf_outputs()
+    if not outputs:
+        return {"success": False, "message": "Terraform not applied."}
+
+    ecs_client, *_ = _clients()
+    cluster = outputs["ecs_cluster_name"]
+
+    task = _find_file_manager_task(ecs_client, cluster, game)
+    if not task:
+        return {"success": False, "message": f"No file manager running for '{game}'."}
+
+    try:
+        ecs_client.stop_task(
+            cluster=cluster,
+            task=task["taskArn"],
+            reason="Stopped via management app",
+        )
+        return {"success": True, "message": f"File manager for '{game}' is stopping."}
+    except ClientError as e:
+        return {"success": False, "message": str(e)}
+
+
+def _find_file_manager_task(ecs_client, cluster: str, game: str) -> dict | None:
+    """Find a running FileBrowser task for the given game."""
+    try:
+        resp = ecs_client.list_tasks(
+            cluster=cluster,
+            startedBy=f"filemgr-{game}",
+            desiredStatus="RUNNING",
+        )
+        if not resp.get("taskArns"):
+            return None
+        tasks = ecs_client.describe_tasks(cluster=cluster, tasks=resp["taskArns"])["tasks"]
+        for t in tasks:
+            if t["lastStatus"] not in ("STOPPED", "DEPROVISIONING"):
+                return t
+    except ClientError:
+        pass
+    return None
+
+
+def _get_execution_role_arn(ecs_client, cluster: str, game: str) -> str:
+    """Get the execution role ARN from an existing game task definition."""
+    try:
+        resp = ecs_client.describe_task_definition(taskDefinition=f"{game}-server")
+        return resp["taskDefinition"].get("executionRoleArn", "")
+    except ClientError:
+        return ""
+
+
 # ── Logs ──────────────────────────────────────────────────────────────────────
 
 def get_recent_logs(game: str, limit: int = 50) -> list[str]:

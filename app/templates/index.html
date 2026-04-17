@@ -88,6 +88,19 @@
     .config-hint { font-size: .72rem; color: var(--text-dim); margin-top: .6rem; }
     .config-actions { margin-top: .75rem; }
 
+    /* File manager modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.75rem; width: 400px; max-width: 90vw; }
+    .modal h3 { font-size: 1rem; font-weight: 600; margin-bottom: .25rem; }
+    .modal .modal-sub { font-size: .78rem; color: var(--text-dim); margin-bottom: 1.25rem; }
+    .modal-status { font-size: .82rem; color: var(--text-dim); min-height: 1.5rem; margin-bottom: 1rem; }
+    .modal-link { display: none; margin-bottom: 1rem; }
+    .modal-link a { color: var(--accent); font-size: .9rem; text-decoration: none; }
+    .modal-link a:hover { text-decoration: underline; }
+    .modal-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .modal-close { margin-left: auto; }
+
     /* Toast */
     .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: .65rem 1rem; font-size: .82rem; opacity: 0; transition: opacity .3s; z-index: 100; }
     .toast.show { opacity: 1; }
@@ -151,6 +164,23 @@
     <div class="log-box" id="logBox"><div class="log-line">Select a game above...</div></div>
     <div style="margin-top:.6rem;">
       <button class="btn-secondary btn-sm" onclick="fetchLogs()">Refresh Logs</button>
+    </div>
+  </div>
+</div>
+
+<!-- File manager modal -->
+<div class="modal-overlay" id="fileMgrOverlay" onclick="closeFileMgrOnOverlay(event)">
+  <div class="modal">
+    <h3 id="fileMgrTitle">File Manager</h3>
+    <div class="modal-sub">Mounts the game's save data — browse, upload, and download files.</div>
+    <div class="modal-status" id="fileMgrStatus">Loading...</div>
+    <div class="modal-link" id="fileMgrLink">
+      <a id="fileMgrUrl" href="#" target="_blank">Open FileBrowser ↗</a>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-start btn-sm" id="fileMgrStartBtn" onclick="startFileMgr()">Launch</button>
+      <button class="btn-stop btn-sm" id="fileMgrStopBtn" onclick="stopFileMgr()" disabled>Stop</button>
+      <button class="btn-secondary btn-sm modal-close" onclick="closeFileMgr()">Close</button>
     </div>
   </div>
 </div>
@@ -226,6 +256,7 @@ function renderGameCard(status) {
           onclick="startGame('${game}')" ${canStart ? '' : 'disabled'}>Start</button>
         <button class="btn-stop btn-sm" id="btn-stop-${game}"
           onclick="stopGame('${game}')" ${canStop ? '' : 'disabled'}>Stop</button>
+        <button class="btn-secondary btn-sm" onclick="openFileMgr('${game}')">Files</button>
         <button class="btn-secondary btn-sm" onclick="refreshGame('${game}')">↻</button>
       </div>
     </div>`;
@@ -350,6 +381,77 @@ async function fetchLogs() {
   } else {
     box.innerHTML = `<div class="log-line">No logs for ${esc(game)}.</div>`;
   }
+}
+
+// ── File manager ──────────────────────────────────────────────────────────
+let fileMgrGame = null;
+let fileMgrPollTimer = null;
+
+function openFileMgr(game) {
+  fileMgrGame = game;
+  document.getElementById('fileMgrTitle').textContent = `File Manager — ${game}`;
+  document.getElementById('fileMgrOverlay').classList.add('open');
+  pollFileMgrStatus();
+}
+
+function closeFileMgr() {
+  document.getElementById('fileMgrOverlay').classList.remove('open');
+  clearTimeout(fileMgrPollTimer);
+  fileMgrGame = null;
+}
+
+function closeFileMgrOnOverlay(e) {
+  if (e.target === document.getElementById('fileMgrOverlay')) closeFileMgr();
+}
+
+async function pollFileMgrStatus() {
+  if (!fileMgrGame) return;
+  const data = await api(`/api/files/${fileMgrGame}`);
+  const status    = document.getElementById('fileMgrStatus');
+  const linkDiv   = document.getElementById('fileMgrLink');
+  const linkAnchor= document.getElementById('fileMgrUrl');
+  const startBtn  = document.getElementById('fileMgrStartBtn');
+  const stopBtn   = document.getElementById('fileMgrStopBtn');
+
+  if (data.state === 'running' && data.url) {
+    status.textContent = 'Running — click the link below to open FileBrowser.';
+    linkDiv.style.display = 'block';
+    linkAnchor.href = data.url;
+    linkAnchor.textContent = `Open FileBrowser at ${data.url} ↗`;
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+  } else if (data.state === 'starting') {
+    status.textContent = 'Starting… checking again in 5 seconds.';
+    linkDiv.style.display = 'none';
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    fileMgrPollTimer = setTimeout(pollFileMgrStatus, 5000);
+  } else {
+    status.textContent = 'Not running. Click Launch to start FileBrowser.';
+    linkDiv.style.display = 'none';
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+}
+
+async function startFileMgr() {
+  document.getElementById('fileMgrStartBtn').disabled = true;
+  document.getElementById('fileMgrStatus').textContent = 'Launching…';
+  const data = await api(`/api/files/${fileMgrGame}/start`, { method: 'POST' });
+  toast(data.message || 'File manager starting');
+  if (data.success) {
+    fileMgrPollTimer = setTimeout(pollFileMgrStatus, 5000);
+  } else {
+    document.getElementById('fileMgrStatus').textContent = data.message || 'Failed to start.';
+    document.getElementById('fileMgrStartBtn').disabled = false;
+  }
+}
+
+async function stopFileMgr() {
+  document.getElementById('fileMgrStopBtn').disabled = true;
+  const data = await api(`/api/files/${fileMgrGame}/stop`, { method: 'POST' });
+  toast(data.message || 'File manager stopping');
+  setTimeout(pollFileMgrStatus, 3000);
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

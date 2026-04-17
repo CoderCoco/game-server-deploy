@@ -1,0 +1,69 @@
+# Copy this file to terraform.tfvars and customize.
+# terraform.tfvars is gitignored — safe to put passwords here.
+
+aws_region   = "us-east-1"
+project_name = "game-servers"
+
+# Domain for server DNS records (must have a hosted zone in Route 53)
+# Creates: palworld.codercoco.com, satisfactory.codercoco.com, etc.
+hosted_zone_name = "codercoco.com"
+
+# Watchdog: auto-shuts down idle servers after (interval × idle_checks) minutes
+# Defaults: 15 min × 4 checks = 60 minutes of idle before shutdown
+# For testing, use: watchdog_interval_minutes=2, watchdog_idle_checks=2
+watchdog_interval_minutes = 15
+watchdog_idle_checks      = 4
+watchdog_min_packets      = 100
+
+# ACM certificate domain for HTTPS game servers (default: *.{hosted_zone_name})
+# acm_certificate_domain = "*.codercoco.com"
+
+# Override game server settings (optional — defaults are set in variables.tf)
+game_servers = {
+  palworld = {
+    image  = "thijsvanloef/palworld-server-docker:latest"
+    cpu    = 2048
+    memory = 8192
+    ports = [
+      { container = 8211,  protocol = "udp" },
+      { container = 27015, protocol = "udp" },
+    ]
+    environment = [
+      { name = "PLAYERS",        value = "8" },
+      { name = "MULTITHREADING", value = "true" },
+      { name = "RCON_ENABLED",   value = "true" },
+      { name = "RCON_PORT",      value = "25575" },
+      { name = "ADMIN_PASSWORD", value = "your_secure_password_here" },
+      { name = "SERVER_NAME",    value = "CoderCoco Palworld" },
+      { name = "UPDATE_ON_BOOT", value = "true" },
+      { name = "BACKUP_ENABLED", value = "true" },
+      { name = "BACKUP_CRON_EXPRESSION", value = "0 */6 * * *" },
+      { name = "DIFFICULTY",     value = "Normal" },
+    ]
+    efs_path = "/palworld"
+    https   = false
+  }
+
+  # FoundryVTT — web-based virtual tabletop (requires HTTPS)
+  # The felddy/foundryvtt image needs FOUNDRY_USERNAME + FOUNDRY_PASSWORD
+  # to download the licensed FoundryVTT software on first run.
+  foundryvtt = {
+    image  = "felddy/foundryvtt:release"
+    cpu    = 1024
+    memory = 2048
+    ports = [
+      { container = 30000, protocol = "tcp" },
+    ]
+    environment = [
+      { name = "FOUNDRY_USERNAME",    value = "your_foundry_username" },
+      { name = "FOUNDRY_PASSWORD",    value = "your_foundry_password" },
+      { name = "FOUNDRY_ADMIN_KEY",   value = "your_admin_key" },
+      { name = "FOUNDRY_PROXY_SSL",   value = "true" },
+      { name = "FOUNDRY_PROXY_PORT",  value = "443" },
+      { name = "CONTAINER_VERBOSE",   value = "true" },
+      { name = "FOUNDRY_WORLD",       value = "my-world" },
+    ]
+    efs_path = "/data"
+    https   = true
+  }
+}

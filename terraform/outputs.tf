@@ -53,6 +53,16 @@ output "aws_region" {
   value       = var.aws_region
 }
 
+output "file_manager_security_group_id" {
+  description = "Security group ID for FileBrowser file manager tasks"
+  value       = aws_security_group.file_manager.id
+}
+
+output "efs_access_points" {
+  description = "Map of game name → EFS access point ID"
+  value       = { for game, ap in aws_efs_access_point.game : game => ap.id }
+}
+
 output "alb_dns_name" {
   description = "ALB DNS name (only when HTTPS games exist)"
   value       = local.enable_alb ? aws_lb.game_servers[0].dns_name : null
