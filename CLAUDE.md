@@ -111,5 +111,6 @@ All resources inherit `default_tags` from `provider "aws"` (`Project = "game-ser
 2. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
 3. **Ask the user if unsure.** If the suggestion is ambiguous, architecturally significant, or the trade-off isn't clear-cut, use `AskUserQuestion` before acting. Don't silently dismiss — surface the disagreement.
 4. **Reply on the thread** explaining either the fix applied, the deviation taken, or that you're checking with the user before acting. Reference the commit SHA.
+5. **Resolve the thread** with `mcp__github__resolve_review_thread` after the fix is committed and the reply is posted, so the PR's conversation tab shows a clean state. Only leave a thread unresolved when you're waiting on the user, you declined the suggestion and want visibility, or the issue genuinely isn't fixed yet.
 
 This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often.
