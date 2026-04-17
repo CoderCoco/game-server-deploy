@@ -69,8 +69,8 @@ resource "aws_route_table_association" "public" {
 # Dynamic ingress rules — one per port across all configured game servers.
 
 locals {
-  # Flatten all game ports into a deduplicated map keyed by "port/protocol"
-  all_game_ports = {
+  # Ports for non-HTTPS games — open directly to the internet
+  direct_game_ports = {
     for pair in distinct(flatten([
       for name, cfg in var.game_servers : [
         for p in cfg.ports : {
@@ -78,7 +78,20 @@ locals {
           port     = p.container
           protocol = p.protocol
         }
-      ]
+      ] if !cfg.https
+    ])) : pair.key => pair
+  }
+
+  # Ports for HTTPS games — only allow traffic from the ALB
+  https_game_ports = {
+    for pair in distinct(flatten([
+      for name, cfg in var.game_servers : [
+        for p in cfg.ports : {
+          key      = "${p.container}-${p.protocol}"
+          port     = p.container
+          protocol = p.protocol
+        }
+      ] if cfg.https
     ])) : pair.key => pair
   }
 }
@@ -88,14 +101,27 @@ resource "aws_security_group" "game_servers" {
   description = "Game server tasks - allows all configured game ports inbound"
   vpc_id      = aws_vpc.main.id
 
+  # Non-HTTPS game ports — open to the internet
   dynamic "ingress" {
-    for_each = local.all_game_ports
+    for_each = local.direct_game_ports
     content {
       description = "Game port ${ingress.value.port}/${ingress.value.protocol}"
       from_port   = ingress.value.port
       to_port     = ingress.value.port
       protocol    = ingress.value.protocol
       cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  # HTTPS game ports — only allow traffic from the ALB
+  dynamic "ingress" {
+    for_each = local.enable_alb ? local.https_game_ports : {}
+    content {
+      description     = "ALB to game port ${ingress.value.port}/${ingress.value.protocol}"
+      from_port       = ingress.value.port
+      to_port         = ingress.value.port
+      protocol        = ingress.value.protocol
+      security_groups = [aws_security_group.alb[0].id]
     }
   }
 
@@ -274,6 +300,16 @@ resource "aws_iam_role_policy" "lambda" {
           "arn:aws:route53:::hostedzone/${data.aws_route53_zone.main.zone_id}",
           "arn:aws:route53:::change/*",
         ]
+      },
+      {
+        # ALB — register/deregister HTTPS game server targets
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:RegisterTargets",
+          "elasticloadbalancing:DeregisterTargets",
+          "elasticloadbalancing:DescribeTargetHealth",
+        ]
+        Resource = "*"
       },
     ]
   })

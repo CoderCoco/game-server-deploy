@@ -29,6 +29,7 @@ variable "game_servers" {
     ports       = list(object({ container = number, protocol = string }))
     environment = optional(list(object({ name = string, value = string })), [])
     efs_path    = string  # Mount path inside the container
+    https       = optional(bool, false) # If true, traffic is routed through ALB with TLS termination
   }))
 
   default = {
@@ -53,6 +54,7 @@ variable "game_servers" {
         { name = "DIFFICULTY",        value = "Normal" },
       ]
       efs_path = "/palworld"
+      https   = false
     }
 
     satisfactory = {
@@ -70,8 +72,33 @@ variable "game_servers" {
         { name = "PUID",       value = "1000" },
       ]
       efs_path = "/config"
+      https   = false
+    }
+
+    foundryvtt = {
+      image  = "felddy/foundryvtt:release"
+      cpu    = 1024
+      memory = 2048
+      ports = [
+        { container = 30000, protocol = "tcp" },
+      ]
+      environment = [
+        { name = "FOUNDRY_PROXY_SSL",  value = "true" },
+        { name = "FOUNDRY_PROXY_PORT", value = "443" },
+        { name = "CONTAINER_VERBOSE",  value = "true" },
+      ]
+      efs_path = "/data"
+      https   = true
     }
   }
+}
+
+# ── HTTPS / ALB ─────────────────────────────────────────────────────────────
+
+variable "acm_certificate_domain" {
+  description = "Domain for the ACM TLS certificate used by the ALB (e.g. *.codercoco.com)"
+  type        = string
+  default     = null # When null, defaults to *.{hosted_zone_name}
 }
 
 # ── Watchdog tuning ──────────────────────────────────────────────────────────

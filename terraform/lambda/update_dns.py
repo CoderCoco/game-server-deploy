@@ -2,13 +2,20 @@
 DNS Updater Lambda.
 
 Triggered by EventBridge on ECS Task State Change events.
-- RUNNING → resolve ENI public IP → upsert Route 53 A record for {game}.{domain}
-- STOPPED → delete Route 53 A record
 
-Supports multiple games. Game name is derived from the task's group field,
-which for RunTask is "family:{game}-server".
+For non-HTTPS games (direct connection):
+  - RUNNING → resolve ENI public IP → upsert Route 53 A record
+  - STOPPED → delete Route 53 A record
+
+For HTTPS games (ALB-fronted):
+  - RUNNING → resolve ENI private IP → register with ALB target group
+  - STOPPED → deregister from ALB target group
+  (DNS for HTTPS games is a static alias to the ALB, managed by Terraform)
+
+Game name is derived from the task's group field ("family:{game}-server").
 """
 
+import json
 import os
 import time
 import logging
@@ -24,11 +31,16 @@ GAME_NAMES     = os.environ.get("GAME_NAMES", "").split(",")
 DNS_TTL        = int(os.environ.get("DNS_TTL", "30"))
 AWS_REGION     = os.environ.get("AWS_REGION_", "us-east-1")
 
+# HTTPS / ALB support
+HTTPS_GAMES       = set(filter(None, os.environ.get("HTTPS_GAMES", "").split(",")))
+ALB_TARGET_GROUPS = json.loads(os.environ.get("ALB_TARGET_GROUPS", "{}"))
+
 # Map task family → game name  e.g. "palworld-server" → "palworld"
 FAMILY_TO_GAME = {f"{g}-server": g for g in GAME_NAMES if g}
 
-ec2     = boto3.client("ec2",     region_name=AWS_REGION)
-ecs     = boto3.client("ecs",     region_name=AWS_REGION)
+ec2     = boto3.client("ec2",                          region_name=AWS_REGION)
+ecs     = boto3.client("ecs",                          region_name=AWS_REGION)
+elbv2   = boto3.client("elbv2",                        region_name=AWS_REGION)
 route53 = boto3.client("route53")
 
 
@@ -50,8 +62,19 @@ def handler(event, context):
         return {"status": "skipped", "reason": f"unknown family: {family}"}
 
     dns_name = f"{game}.{DOMAIN_NAME}"
-    logger.info("Game: %s | DNS: %s | Status: %s", game, dns_name, last_status)
+    is_https = game in HTTPS_GAMES
+    logger.info("Game: %s | DNS: %s | Status: %s | HTTPS: %s",
+                game, dns_name, last_status, is_https)
 
+    if is_https:
+        return _handle_https_game(game, task_arn, cluster_arn, last_status)
+    else:
+        return _handle_direct_game(game, dns_name, task_arn, cluster_arn, last_status)
+
+
+# ── Direct (non-HTTPS) game handler ──────────────────────────────────────────
+
+def _handle_direct_game(game, dns_name, task_arn, cluster_arn, last_status):
     if last_status == "RUNNING":
         public_ip = _resolve_public_ip(task_arn, cluster_arn)
         if public_ip:
@@ -66,6 +89,53 @@ def handler(event, context):
         return {"status": "deleted", "game": game}
 
     return {"status": "no_action", "lastStatus": last_status}
+
+
+# ── HTTPS (ALB-fronted) game handler ────────────────────────────────────────
+
+def _handle_https_game(game, task_arn, cluster_arn, last_status):
+    tg_arn = ALB_TARGET_GROUPS.get(game)
+    if not tg_arn:
+        logger.error("No ALB target group configured for HTTPS game %s", game)
+        return {"status": "error", "reason": "no_target_group"}
+
+    if last_status == "RUNNING":
+        private_ip = _resolve_private_ip(task_arn, cluster_arn)
+        if private_ip:
+            _register_alb_target(tg_arn, private_ip)
+            return {"status": "registered", "game": game, "ip": private_ip}
+        else:
+            logger.warning("Could not resolve private IP for %s", task_arn)
+            return {"status": "error", "reason": "no_ip"}
+
+    elif last_status == "STOPPED":
+        private_ip = _resolve_private_ip(task_arn, cluster_arn)
+        if private_ip:
+            _deregister_alb_target(tg_arn, private_ip)
+        return {"status": "deregistered", "game": game}
+
+    return {"status": "no_action", "lastStatus": last_status}
+
+
+# ── ALB target helpers ───────────────────────────────────────────────────────
+
+def _register_alb_target(target_group_arn: str, ip: str):
+    logger.info("Registering target %s with %s", ip, target_group_arn)
+    elbv2.register_targets(
+        TargetGroupArn=target_group_arn,
+        Targets=[{"Id": ip}],
+    )
+
+
+def _deregister_alb_target(target_group_arn: str, ip: str):
+    logger.info("Deregistering target %s from %s", ip, target_group_arn)
+    try:
+        elbv2.deregister_targets(
+            TargetGroupArn=target_group_arn,
+            Targets=[{"Id": ip}],
+        )
+    except Exception as e:
+        logger.warning("Could not deregister target %s: %s", ip, e)
 
 
 # ── IP resolution ─────────────────────────────────────────────────────────────
@@ -98,6 +168,34 @@ def _resolve_public_ip(task_arn: str, cluster_arn: str) -> str | None:
     return None
 
 
+def _resolve_private_ip(task_arn: str, cluster_arn: str) -> str | None:
+    """Resolve the private IP of a task's ENI (used for ALB target registration)."""
+    for attempt in range(5):
+        try:
+            resp  = ecs.describe_tasks(cluster=cluster_arn, tasks=[task_arn])
+            tasks = resp.get("tasks", [])
+            if not tasks:
+                logger.warning("No task details returned (attempt %d)", attempt + 1)
+                time.sleep(3)
+                continue
+
+            eni_id = _extract_eni_id(tasks[0])
+            if not eni_id:
+                logger.info("ENI not yet attached (attempt %d)", attempt + 1)
+                time.sleep(3)
+                continue
+
+            ip = _get_eni_private_ip(eni_id)
+            if ip:
+                logger.info("Resolved private IP: %s via ENI %s", ip, eni_id)
+                return ip
+        except Exception as e:
+            logger.error("Private IP resolution error on attempt %d: %s", attempt + 1, e)
+        time.sleep(3)
+
+    return None
+
+
 def _extract_eni_id(task: dict) -> str | None:
     for attachment in task.get("attachments", []):
         if attachment.get("type") != "ElasticNetworkInterface":
@@ -114,6 +212,14 @@ def _get_eni_public_ip(eni_id: str) -> str | None:
     if not ifaces:
         return None
     return ifaces[0].get("Association", {}).get("PublicIp")
+
+
+def _get_eni_private_ip(eni_id: str) -> str | None:
+    resp   = ec2.describe_network_interfaces(NetworkInterfaceIds=[eni_id])
+    ifaces = resp.get("NetworkInterfaces", [])
+    if not ifaces:
+        return None
+    return ifaces[0].get("PrivateIpAddress")
 
 
 # ── Route 53 helpers ──────────────────────────────────────────────────────────

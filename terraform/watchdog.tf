@@ -39,6 +39,8 @@ resource "aws_lambda_function" "watchdog" {
       MIN_PACKETS           = tostring(var.watchdog_min_packets)
       CHECK_WINDOW_MINUTES  = tostring(var.watchdog_interval_minutes)
       AWS_REGION_           = var.aws_region
+      HTTPS_GAMES           = join(",", keys(local.https_games))
+      ALB_TARGET_GROUPS     = jsonencode({ for name, _ in local.https_games : name => aws_lb_target_group.game[name].arn })
     }
   }
 

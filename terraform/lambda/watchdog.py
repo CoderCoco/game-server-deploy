@@ -4,13 +4,18 @@ Game Server Watchdog Lambda.
 Runs on a schedule (EventBridge). For each running game server task:
   - Checks CloudWatch NetworkPacketsIn on the task's ENI
   - If packets < MIN_PACKETS → increments idle counter (stored as ECS task tag)
-  - After IDLE_CHECKS consecutive idle checks → stops the task + removes DNS
+  - After IDLE_CHECKS consecutive idle checks → stops the task + cleans up
   - If active → resets idle counter
+
+For non-HTTPS games, cleanup = delete Route 53 A record.
+For HTTPS games, cleanup = deregister from ALB target group
+(DNS for HTTPS games is a static alias to the ALB, managed by Terraform).
 
 Total idle grace period = CHECK_WINDOW_MINUTES × IDLE_CHECKS
 Default: 15 × 4 = 60 minutes
 """
 
+import json
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -25,12 +30,17 @@ MIN_PACKETS           = int(os.environ.get("MIN_PACKETS", "100"))
 CHECK_WINDOW_MINUTES  = int(os.environ.get("CHECK_WINDOW_MINUTES", "15"))
 AWS_REGION            = os.environ.get("AWS_REGION_", "us-east-1")
 
+# HTTPS / ALB support
+HTTPS_GAMES       = set(filter(None, os.environ.get("HTTPS_GAMES", "").split(",")))
+ALB_TARGET_GROUPS = json.loads(os.environ.get("ALB_TARGET_GROUPS", "{}"))
+
 # Reverse-lookup: task family → game name
 # Task families are named "{game}-server" (e.g. "palworld-server")
 FAMILY_TO_GAME = {f"{g}-server": g for g in GAME_NAMES if g}
 
 ecs        = boto3.client("ecs",        region_name=AWS_REGION)
 ec2        = boto3.client("ec2",        region_name=AWS_REGION)
+elbv2      = boto3.client("elbv2",      region_name=AWS_REGION)
 cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
 route53    = boto3.client("route53")
 
@@ -126,6 +136,35 @@ def delete_dns(game: str):
         print(f"  DNS cleanup failed for {game}: {e}")
 
 
+# ── ALB target cleanup ───────────────────────────────────────────────────────
+
+def deregister_alb_target(game: str, task: dict):
+    """Deregister a task's private IP from its ALB target group."""
+    tg_arn = ALB_TARGET_GROUPS.get(game)
+    if not tg_arn:
+        print(f"  No ALB target group configured for {game}")
+        return
+    eni_id = get_eni_id(task)
+    if not eni_id:
+        print(f"  No ENI found for {game} — cannot deregister ALB target")
+        return
+    try:
+        resp = ec2.describe_network_interfaces(NetworkInterfaceIds=[eni_id])
+        ifaces = resp.get("NetworkInterfaces", [])
+        if not ifaces:
+            print(f"  ENI {eni_id} not found — cannot deregister ALB target")
+            return
+        private_ip = ifaces[0].get("PrivateIpAddress")
+        if private_ip:
+            elbv2.deregister_targets(
+                TargetGroupArn=tg_arn,
+                Targets=[{"Id": private_ip}],
+            )
+            print(f"  Deregistered ALB target {private_ip} for {game}")
+    except Exception as e:
+        print(f"  ALB deregistration failed for {game}: {e}")
+
+
 # ── Main handler ──────────────────────────────────────────────────────────────
 
 def handler(event, context):
@@ -177,7 +216,10 @@ def handler(event, context):
             if idle_count >= IDLE_CHECKS:
                 print(f"{game}: shutting down after {idle_count} idle checks "
                       f"({idle_count * CHECK_WINDOW_MINUTES} minutes idle).")
-                delete_dns(game)
+                if game in HTTPS_GAMES:
+                    deregister_alb_target(game, task)
+                else:
+                    delete_dns(game)
                 ecs.stop_task(
                     cluster=ECS_CLUSTER,
                     task=task_arn,
