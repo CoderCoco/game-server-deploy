@@ -14,13 +14,20 @@ vi.mock('../logger.js', () => ({
 import { LogsService } from './LogsService.js';
 import type { ConfigService } from './ConfigService.js';
 
+/** Typed stand-in for the AWS CloudWatch Logs SDK client. */
 const cwMock = mockClient(CloudWatchLogsClient);
 
+/**
+ * Build a minimal ConfigService stub exposing only the members LogsService
+ * actually reads at runtime.
+ */
 function makeConfig(): ConfigService {
-  return { getRegion: () => 'us-east-1' } as unknown as ConfigService;
+  const stub: Partial<ConfigService> = { getRegion: () => 'us-east-1' };
+  return stub as ConfigService;
 }
 
 describe('LogsService', () => {
+  /** Service under test, freshly constructed per test. */
   let service: LogsService;
 
   beforeEach(() => {
@@ -28,14 +35,14 @@ describe('LogsService', () => {
     service = new LogsService(makeConfig());
   });
 
-  it('returns "no streams" message when log group has no streams', async () => {
+  it('should return a "no streams" message when the log group has no streams', async () => {
     cwMock.on(DescribeLogStreamsCommand).resolves({ logStreams: [] });
     const lines = await service.getRecentLogs('minecraft');
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/no log streams/i);
   });
 
-  it('uses /ecs/{game}-server log group and fetches newest stream', async () => {
+  it('should query the /ecs/{game}-server log group and fetch the newest stream', async () => {
     cwMock.on(DescribeLogStreamsCommand).resolves({
       logStreams: [{ logStreamName: 'ecs/stream1' }],
     });
@@ -59,7 +66,7 @@ describe('LogsService', () => {
     expect(getInput.startFromHead).toBe(false);
   });
 
-  it('defaults event limit to 50', async () => {
+  it('should default the event limit to 50', async () => {
     cwMock.on(DescribeLogStreamsCommand).resolves({
       logStreams: [{ logStreamName: 's' }],
     });
@@ -69,7 +76,7 @@ describe('LogsService', () => {
     expect(input.limit).toBe(50);
   });
 
-  it('returns empty array when events undefined', async () => {
+  it('should return an empty array when events are undefined', async () => {
     cwMock.on(DescribeLogStreamsCommand).resolves({
       logStreams: [{ logStreamName: 's' }],
     });
@@ -78,7 +85,7 @@ describe('LogsService', () => {
     expect(lines).toEqual([]);
   });
 
-  it('maps missing event.message to empty string', async () => {
+  it('should map a missing event.message to an empty string', async () => {
     cwMock.on(DescribeLogStreamsCommand).resolves({
       logStreams: [{ logStreamName: 's' }],
     });
@@ -89,7 +96,7 @@ describe('LogsService', () => {
     expect(lines).toEqual(['a', '']);
   });
 
-  it('returns an error message when the API throws', async () => {
+  it('should return an error message when the API throws', async () => {
     cwMock.on(DescribeLogStreamsCommand).rejects(new Error('denied'));
     const lines = await service.getRecentLogs('minecraft');
     expect(lines).toHaveLength(1);

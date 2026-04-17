@@ -12,9 +12,11 @@ vi.mock('../logger.js', () => ({
 
 import { CostService } from './CostService.js';
 
+/** Typed stand-in for the AWS Cost Explorer SDK client. */
 const ceMock = mockClient(CostExplorerClient);
 
 describe('CostService', () => {
+  /** Fresh service instance per test to avoid cached SDK clients leaking. */
   let service: CostService;
 
   beforeEach(() => {
@@ -23,7 +25,7 @@ describe('CostService', () => {
   });
 
   describe('estimateForSpec', () => {
-    it('computes Fargate hourly / daily / monthly costs for 1 vCPU + 2 GiB', () => {
+    it('should compute Fargate hourly, daily, and monthly costs for 1 vCPU + 2 GiB', () => {
       const est = service.estimateForSpec(1024, 2048);
       expect(est.vcpu).toBe(1);
       expect(est.memoryGb).toBe(2);
@@ -35,23 +37,22 @@ describe('CostService', () => {
       expect(est.costPerMonth4hpd).toBeCloseTo(5.92, 2);
     });
 
-    it('scales linearly with CPU and memory', () => {
+    it('should scale cost linearly with CPU and memory', () => {
       const half = service.estimateForSpec(512, 1024);
       const full = service.estimateForSpec(1024, 2048);
       expect(half.costPerHour).toBeCloseTo(full.costPerHour / 2, 6);
     });
 
-    it('rounds hourly cost to 4 decimals and daily/monthly to 2 decimals', () => {
+    it('should round hourly cost to at most 4 decimals', () => {
       const est = service.estimateForSpec(256, 512);
       expect(Number.isFinite(est.costPerHour)).toBe(true);
-      const hourStr = est.costPerHour.toString();
-      const decimals = hourStr.split('.')[1] ?? '';
+      const decimals = est.costPerHour.toString().split('.')[1] ?? '';
       expect(decimals.length).toBeLessThanOrEqual(4);
     });
   });
 
   describe('getActualCosts', () => {
-    it('aggregates daily costs and returns total', async () => {
+    it('should aggregate daily costs and return a total', async () => {
       ceMock.on(GetCostAndUsageCommand).resolves({
         ResultsByTime: [
           { TimePeriod: { Start: '2026-04-10', End: '2026-04-11' }, Total: { UnblendedCost: { Amount: '1.2345', Unit: 'USD' } } },
@@ -71,7 +72,7 @@ describe('CostService', () => {
       expect(result.error).toBeUndefined();
     });
 
-    it('filters by ECS and Fargate services', async () => {
+    it('should filter by ECS and Fargate services', async () => {
       ceMock.on(GetCostAndUsageCommand).resolves({ ResultsByTime: [] });
       await service.getActualCosts(7);
       const calls = ceMock.commandCalls(GetCostAndUsageCommand);
@@ -86,7 +87,7 @@ describe('CostService', () => {
       expect(input.Metrics).toEqual(['UnblendedCost']);
     });
 
-    it('returns error shape when Cost Explorer throws', async () => {
+    it('should return an error shape when Cost Explorer throws', async () => {
       ceMock.on(GetCostAndUsageCommand).rejects(new Error('AccessDenied'));
       const result = await service.getActualCosts(7);
       expect(result.total).toBe(0);
@@ -95,16 +96,16 @@ describe('CostService', () => {
       expect(result.error).toContain('AccessDenied');
     });
 
-    it('handles missing cost amount gracefully', async () => {
+    it('should handle a missing cost amount gracefully', async () => {
       ceMock.on(GetCostAndUsageCommand).resolves({
-        ResultsByTime: [{ TimePeriod: { Start: '2026-04-10' }, Total: {} }],
+        ResultsByTime: [{ TimePeriod: { Start: '2026-04-10', End: '2026-04-11' }, Total: {} }],
       });
       const result = await service.getActualCosts(1);
       expect(result.daily).toEqual([{ date: '2026-04-10', cost: 0 }]);
       expect(result.total).toBe(0);
     });
 
-    it('defaults to 7 days when called with no argument', async () => {
+    it('should default to 7 days when called with no argument', async () => {
       ceMock.on(GetCostAndUsageCommand).resolves({ ResultsByTime: [] });
       const result = await service.getActualCosts();
       expect(result.days).toBe(7);
