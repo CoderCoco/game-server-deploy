@@ -98,3 +98,14 @@ All resources inherit `default_tags` from `provider "aws"` (`Project = "game-ser
 - **TSDoc comments**: document non-trivial functions, helpers, and notable constants/variables with TSDoc (`/** ... */`) so their intent is clear later. This applies to test-file helpers (stub factories, fixtures) as well as production code.
 - **Typing in tests**: avoid `as unknown as SomeType` casts. Prefer `vi.mocked(fn)` for mocked modules and `Partial<T>` + a single `as T` for service-shaped stubs.
 - **No raw `process.env` in business logic**: wrap environment access behind a service method so tests can stub it via `vi.spyOn` instead of mutating `process.env` (which is flaky and leaks across tests).
+
+## PR Review Workflow
+
+**Be strict with Copilot review suggestions.** Do not rubber-stamp them. When a Copilot comment lands on a PR:
+
+1. **Evaluate first.** Read the surrounding code and reason about whether the critique describes a real problem and whether the proposed fix actually addresses it. Copilot can hallucinate issues or suggest fixes that introduce worse problems.
+2. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
+3. **Ask the user if unsure.** If the suggestion is ambiguous, architecturally significant, or the trade-off isn't clear-cut, use `AskUserQuestion` before acting. Don't silently dismiss — surface the disagreement.
+4. **Reply on the thread** explaining either the fix applied, the deviation taken, or that you're checking with the user before acting. Reference the commit SHA.
+
+This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often.
