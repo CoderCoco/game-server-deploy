@@ -68,6 +68,28 @@ function isSafeGameKey(game: string): boolean {
   return typeof game === 'string' && game.length > 0 && !UNSAFE_GAME_KEYS.has(game);
 }
 
+/** Return `v` only if it's a string; anything else (including null/number/object) becomes `undefined`. */
+function asString(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+
+/** Return a string[] built from only the string entries of `v`; non-arrays and non-string entries are dropped. */
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+/** Coerce a disk-loaded game permission object into a well-typed one; unknown fields / bad types are dropped. */
+function sanitizeGamePermission(v: unknown): DiscordGamePermission {
+  const obj = (v ?? {}) as Record<string, unknown>;
+  return {
+    userIds: asStringArray(obj['userIds']),
+    roleIds: asStringArray(obj['roleIds']),
+    actions: asStringArray(obj['actions']).filter(
+      (a): a is DiscordAction => a === 'start' || a === 'stop' || a === 'status',
+    ),
+  };
+}
+
 const EMPTY_CONFIG: DiscordConfig = {
   botToken: '',
   clientId: '',
@@ -81,7 +103,14 @@ export class DiscordConfigService {
   /** Parsed config cached in-memory; refreshed on every `save()` after the new value is written to disk. */
   private cache: DiscordConfig | null = null;
 
-  /** Read the config from disk (or return an empty one) and populate the in-memory cache. */
+  /**
+   * Read the config from disk (or return an empty one) and populate the in-memory cache.
+   *
+   * Each field is runtime-validated against its expected type and silently
+   * replaced with an empty default when the on-disk JSON has the wrong shape.
+   * This guards against hand-edited or corrupted config files crashing the
+   * bot when a non-string ends up where `discord.js` expects a token or ID.
+   */
   private load(): DiscordConfig {
     if (this.cache) return this.cache;
     if (!existsSync(CONFIG_PATH)) {
@@ -89,16 +118,22 @@ export class DiscordConfigService {
       return this.cache;
     }
     try {
-      const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as Partial<DiscordConfig>;
+      const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as Record<string, unknown>;
+      const rawAdmins = (raw['admins'] ?? {}) as Record<string, unknown>;
+      const rawGamePerms = (raw['gamePermissions'] ?? {}) as Record<string, unknown>;
+      const gamePermissions: Record<string, DiscordGamePermission> = {};
+      for (const [game, perm] of Object.entries(rawGamePerms)) {
+        if (isSafeGameKey(game)) gamePermissions[game] = sanitizeGamePermission(perm);
+      }
       this.cache = {
-        botToken: raw.botToken ?? '',
-        clientId: raw.clientId ?? '',
-        allowedGuilds: raw.allowedGuilds ?? [],
+        botToken: asString(raw['botToken']) ?? '',
+        clientId: asString(raw['clientId']) ?? '',
+        allowedGuilds: asStringArray(raw['allowedGuilds']),
         admins: {
-          userIds: raw.admins?.userIds ?? [],
-          roleIds: raw.admins?.roleIds ?? [],
+          userIds: asStringArray(rawAdmins['userIds']),
+          roleIds: asStringArray(rawAdmins['roleIds']),
         },
-        gamePermissions: raw.gamePermissions ?? {},
+        gamePermissions,
       };
       return this.cache;
     } catch (err) {
@@ -144,12 +179,26 @@ export class DiscordConfigService {
     };
   }
 
-  /** Update bot credentials; either field can be omitted to leave it untouched. */
-  setCredentials(params: { botToken?: string; clientId?: string }): void {
+  /**
+   * Update bot credentials; either field can be omitted to leave it untouched.
+   *
+   * Runtime-validates that any provided field is a string. Non-string values
+   * are rejected rather than written — returning `false` lets the route surface
+   * a 400 instead of quietly persisting garbage that would later break
+   * `client.login` or slash-command registration. TypeScript already narrows
+   * external input to `string | undefined` at the compile boundary, but the
+   * check also catches cases where untyped JSON made it past a cast.
+   *
+   * @returns `true` on success, `false` if either provided field wasn't a string.
+   */
+  setCredentials(params: { botToken?: unknown; clientId?: unknown }): boolean {
+    if (params.botToken !== undefined && typeof params.botToken !== 'string') return false;
+    if (params.clientId !== undefined && typeof params.clientId !== 'string') return false;
     const cfg = this.load();
-    if (params.botToken !== undefined) cfg.botToken = params.botToken;
-    if (params.clientId !== undefined) cfg.clientId = params.clientId;
+    if (typeof params.botToken === 'string') cfg.botToken = params.botToken;
+    if (typeof params.clientId === 'string') cfg.clientId = params.clientId;
     this.save(cfg);
+    return true;
   }
 
   /** Replace the entire guild allowlist (deduped, empty strings dropped). */

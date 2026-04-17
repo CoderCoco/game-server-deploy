@@ -436,10 +436,28 @@ export class DiscordBotService {
       });
       return;
     }
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const statuses = await Promise.all(visible.map((g) => this.ecs.getStatus(g)));
-    const lines = statuses.map((s) => this.formatStatus(s));
-    await interaction.editReply(lines.join('\n'));
+    try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const statuses = await Promise.all(visible.map((g) => this.ecs.getStatus(g)));
+      const lines = statuses.map((s) => this.formatStatus(s));
+      await interaction.editReply(lines.join('\n'));
+    } catch (err) {
+      logger.error('Failed to fetch Discord server statuses', {
+        err,
+        guildId,
+        userId: interaction.user.id,
+        command: interaction.commandName,
+        visibleGames: visible,
+      });
+      const content = '❌ Could not fetch server statuses right now. Check server logs.';
+      // deferReply may or may not have succeeded; pick the matching finisher
+      // so we don't throw "already replied" on top of the original failure.
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(content).catch(() => undefined);
+      } else {
+        await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
+      }
+    }
   }
 
   /** One-line status for a game: emoji + state + optional hostname/IP. */

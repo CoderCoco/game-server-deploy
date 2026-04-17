@@ -159,6 +159,67 @@ describe('DiscordConfigService', () => {
       expect(written.botToken).toBe('tok');
       expect(written.clientId).toBe('cid');
     });
+
+    it('should return false and skip writing when botToken is not a string', () => {
+      mockExists.mockReturnValue(false);
+      const ok = service.setCredentials({ botToken: 12345 as unknown as string });
+      expect(ok).toBe(false);
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it('should return false and skip writing when clientId is not a string', () => {
+      mockExists.mockReturnValue(false);
+      const ok = service.setCredentials({ clientId: null as unknown as string });
+      expect(ok).toBe(false);
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it('should return true on a valid update', () => {
+      mockExists.mockReturnValue(false);
+      const ok = service.setCredentials({ botToken: 'tok' });
+      expect(ok).toBe(true);
+    });
+  });
+
+  describe('load (runtime validation)', () => {
+    it('should coerce non-string botToken/clientId to empty strings', () => {
+      writeState({
+        botToken: 42 as unknown as string,
+        clientId: null as unknown as string,
+      });
+      const cfg = service.getConfig();
+      expect(cfg.botToken).toBe('');
+      expect(cfg.clientId).toBe('');
+    });
+
+    it('should drop non-string entries from allowedGuilds', () => {
+      mockExists.mockReturnValue(true);
+      mockRead.mockReturnValue(JSON.stringify({ allowedGuilds: ['good', 7, null, 'also-good'] }));
+      expect(service.getConfig().allowedGuilds).toEqual(['good', 'also-good']);
+    });
+
+    it('should sanitize admins and gamePermissions from mixed-type input', () => {
+      mockExists.mockReturnValue(true);
+      mockRead.mockReturnValue(
+        JSON.stringify({
+          admins: { userIds: ['u1', 99], roleIds: 'nope' },
+          gamePermissions: {
+            minecraft: { userIds: ['u2'], roleIds: ['r2', 5], actions: ['start', 'invalid'] },
+            __proto__: { userIds: ['hax'], roleIds: [], actions: ['start'] },
+          },
+        }),
+      );
+      const cfg = service.getConfig();
+      expect(cfg.admins.userIds).toEqual(['u1']);
+      expect(cfg.admins.roleIds).toEqual([]);
+      expect(cfg.gamePermissions['minecraft']).toEqual({
+        userIds: ['u2'],
+        roleIds: ['r2'],
+        actions: ['start'],
+      });
+      // Prototype-pollution key must never make it into the map, even on read.
+      expect(Object.prototype.hasOwnProperty.call(cfg.gamePermissions, '__proto__')).toBe(false);
+    });
   });
 
   describe('guild allowlist mutations', () => {

@@ -8,12 +8,14 @@ import { LogsPanel } from './components/LogsPanel.js';
 import { WatchdogPanel } from './components/WatchdogPanel.js';
 import { DiscordPanel } from './components/DiscordPanel.js';
 import { ApiTokenModal } from './components/ApiTokenModal.js';
-import { getStoredApiToken, setUnauthorizedHandler } from './api.js';
+import { setUnauthorizedHandler } from './api.js';
 
 export default function App() {
-  // Bearer-token gate. Show the modal when no token is stored yet, or whenever
-  // the API rejects our token with a 401 (setUnauthorizedHandler fires then).
-  const [needsToken, setNeedsToken] = useState(() => !getStoredApiToken());
+  // Open the token modal only once the API actually rejects us with a 401.
+  // In dev mode the server allows unauthenticated requests when no API_TOKEN
+  // is configured, so defaulting to "needs token" would block local iteration
+  // for no reason. The first failing /api request will flip this flag.
+  const [needsToken, setNeedsToken] = useState(false);
   useEffect(() => {
     setUnauthorizedHandler(() => setNeedsToken(true));
     return () => setUnauthorizedHandler(null);

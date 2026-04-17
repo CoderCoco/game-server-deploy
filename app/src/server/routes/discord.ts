@@ -22,13 +22,29 @@ export function createDiscordRouter(
     res.json({ ...config.getRedacted(), botStatus: bot.getStatus() });
   };
 
-  /** `PUT /discord/config` — update bot token and/or client ID (fields are individually optional). */
+  /**
+   * `PUT /discord/config` — update bot token and/or client ID (fields are individually optional).
+   * Returns 400 if either field is present but not a string — we don't want
+   * to persist garbage that would crash `client.login` on the next bot start.
+   */
   const putConfig: RequestHandler = (req, res) => {
-    const body = req.body as { botToken?: string; clientId?: string };
-    config.setCredentials({
+    const body = (req.body ?? {}) as { botToken?: unknown; clientId?: unknown };
+    if (body.botToken !== undefined && typeof body.botToken !== 'string') {
+      res.status(400).json({ success: false, error: 'botToken must be a string' });
+      return;
+    }
+    if (body.clientId !== undefined && typeof body.clientId !== 'string') {
+      res.status(400).json({ success: false, error: 'clientId must be a string' });
+      return;
+    }
+    const ok = config.setCredentials({
       ...(body.botToken !== undefined ? { botToken: body.botToken } : {}),
       ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
     });
+    if (!ok) {
+      res.status(400).json({ success: false, error: 'invalid credentials' });
+      return;
+    }
     res.json({
       success: true,
       config: { ...config.getRedacted(), botStatus: bot.getStatus() },

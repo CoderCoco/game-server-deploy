@@ -495,6 +495,29 @@ describe('DiscordBotService', () => {
       expect(ecs.getStatus).toHaveBeenCalledTimes(1);
       expect(ecs.getStatus).toHaveBeenCalledWith('minecraft');
     });
+
+    it('should edit-reply with an error when fetching statuses for /server-list fails', async () => {
+      const ecs = makeEcsService({
+        getStatus: vi.fn().mockRejectedValue(new Error('aws-fail')),
+      } as Partial<EcsService>);
+      const svc = new DiscordBotService(
+        makeConfigService(['minecraft']),
+        ecs,
+        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      );
+      // The `deferred`/`replied` flags aren't set on our plain mock interaction,
+      // so the catch branch falls through to `reply` — exercise both paths by
+      // first verifying the deferred-reply path via a shim, then the plain path.
+      const interaction = makeInteraction({
+        commandName: 'server-list',
+        deferred: true,
+        options: { getString: () => null, getFocused: () => ({ name: 'game', value: '' }) },
+      }) as ReturnType<typeof makeInteraction> & { deferred: boolean; replied: boolean };
+      await dispatch(svc, interaction);
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.stringMatching(/could not fetch server statuses/i),
+      );
+    });
   });
 
   describe('autocomplete', () => {
