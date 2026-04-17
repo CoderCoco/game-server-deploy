@@ -10,6 +10,7 @@ import { createCostsRouter } from './routes/costs.js';
 import { createLogsRouter } from './routes/logs.js';
 import { createFilesRouter } from './routes/files.js';
 import { createDiscordRouter } from './routes/discord.js';
+import { createApiTokenMiddleware } from './middleware/auth.js';
 import { ConfigService } from './services/ConfigService.js';
 import { EcsService } from './services/EcsService.js';
 import { Ec2Service } from './services/Ec2Service.js';
@@ -36,6 +37,18 @@ const costService = container.resolve(CostService);
 const fileManagerService = container.resolve(FileManagerService);
 const discordConfigService = container.resolve(DiscordConfigService);
 const discordBotService = container.resolve(DiscordBotService);
+
+// Gate every /api/* route behind a bearer token. In production, refuse to
+// start at all if no token is configured — that's the point where Copilot
+// (PR #4) flagged the un-authenticated exposure risk.
+if (!isDev && !configService.getApiToken()) {
+  logger.error(
+    'NODE_ENV=production but no API_TOKEN is configured (neither env nor server_config.json.api_token). Refusing to start. ' +
+      'Set API_TOKEN or api_token to a random secret before running in production.',
+  );
+  process.exit(1);
+}
+app.use('/api', createApiTokenMiddleware(() => configService.getApiToken()));
 
 // Mount API routes
 app.use('/api', createGamesRouter(configService, ecsService, ec2Service));

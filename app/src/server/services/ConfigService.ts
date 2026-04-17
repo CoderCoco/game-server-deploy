@@ -91,6 +91,37 @@ export class ConfigService {
     return process.env['AWS_DEFAULT_REGION'];
   }
 
+  /** Read the API bearer token from `API_TOKEN`. Extracted for test-stubbing. */
+  readEnvApiToken(): string | undefined {
+    return process.env['API_TOKEN'];
+  }
+
+  /**
+   * Token required on every `/api/*` request's `Authorization: Bearer <token>` header.
+   *
+   * Resolution order:
+   *  1. Env var `API_TOKEN` (wins when set, even if explicitly empty — explicit empty
+   *     is treated as "no token" so the env can disable it without editing the file).
+   *  2. `api_token` field in `server_config.json`.
+   *
+   * Returns `null` when no token is configured. The auth middleware decides what that
+   * means (refuse to start in production; warn and allow in dev).
+   */
+  getApiToken(): string | null {
+    const env = this.readEnvApiToken();
+    if (env !== undefined) {
+      return env.length > 0 ? env : null;
+    }
+    if (!existsSync(CONFIG_PATH)) return null;
+    try {
+      const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as { api_token?: unknown };
+      return typeof raw.api_token === 'string' && raw.api_token.length > 0 ? raw.api_token : null;
+    } catch (err) {
+      logger.warn('Could not read api_token from config file', { err });
+      return null;
+    }
+  }
+
   getRegion(): string {
     return (
       this.getTfOutputs()?.aws_region ??

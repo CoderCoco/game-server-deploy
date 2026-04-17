@@ -69,6 +69,10 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 
 `ConfigService.getTfOutputs()` (in `app/src/server/services/ConfigService.ts`) parses `terraform.tfstate` as JSON and caches it in-memory. `invalidateTfCache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes.
 
+### API authentication
+
+Every `/api/*` route is gated behind a bearer token via middleware in `app/src/server/middleware/auth.ts`. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the middleware or bypass it on individual routes — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
+
 ### Discord bot lives inside the management app process
 
 There is no separate bot service — `DiscordBotService` (in `app/src/server/services/DiscordBotService.ts`) holds a single `discord.js` `Client` that is started from `index.ts` on app boot (only if a token is configured) and reuses `EcsService` for start/stop. Config is persisted to `app/discord_config.json`; `DISCORD_BOT_TOKEN` env var overrides the file value. Don't spin this out into its own container.

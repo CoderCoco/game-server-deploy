@@ -88,8 +88,57 @@ export interface DiscordConfigRedacted {
   botStatus: DiscordBotStatus;
 }
 
+const TOKEN_STORAGE_KEY = 'apiToken';
+
+/** Read the stored API bearer token from localStorage (returns empty string if unset). */
+export function getStoredApiToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Persist the API bearer token for subsequent requests. Clear with `''`. */
+export function setStoredApiToken(token: string): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable (private mode, etc.); failures are non-fatal — user will just be re-prompted.
+  }
+}
+
+/**
+ * Error thrown when the server returns 401 for `/api/*`. Callers (the token
+ * modal in `App.tsx`) catch this to surface a "please re-enter your API
+ * token" prompt instead of crashing.
+ */
+export class UnauthorizedError extends Error {
+  constructor() { super('Unauthorized'); this.name = 'UnauthorizedError'; }
+}
+
+/**
+ * Module-level handler invoked whenever a `/api/*` call returns 401. The
+ * `App` component registers one on mount so it can open the "enter API
+ * token" modal; other call sites don't need to care.
+ */
+let unauthorizedHandler: (() => void) | null = null;
+export function setUnauthorizedHandler(h: (() => void) | null): void {
+  unauthorizedHandler = h;
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const token = getStoredApiToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(url, { ...init, headers });
+  if (res.status === 401) {
+    // Clear the stored token so the UI re-prompts instead of retrying in a loop.
+    setStoredApiToken('');
+    unauthorizedHandler?.();
+    throw new UnauthorizedError();
+  }
   return res.json() as Promise<T>;
 }
 

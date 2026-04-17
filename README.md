@@ -130,9 +130,14 @@ python3 app.py
 #    They must exist on the host or Docker creates a directory in their place.
 touch app/server_config.json app/discord_config.json
 
-# 3. Start the app
+# 3. Set an API token — REQUIRED in production mode (which Docker uses).
+#    Generate a random 32-byte hex string or anything long & hard to guess.
+export API_TOKEN="$(openssl rand -hex 32)"
+
+# 4. Start the app
 docker compose up --build
-# Open http://localhost:5000
+# Open http://localhost:5000 — the dashboard will prompt you for the token;
+# paste the value of $API_TOKEN and click "Save & reload".
 ```
 
 The Docker setup mounts `./terraform` (read-only for state), `./app/server_config.json`, `./app/discord_config.json` (if using the Discord bot), and `~/.aws` credentials.
@@ -183,6 +188,32 @@ game_servers = {
 - **Cost Monitoring** — per-game Fargate cost estimates and AWS Cost Explorer actuals
 - **Live Logs** — streams CloudWatch log events from the most recent task
 - **Discord Bot** — configure bot token, guild allowlist, admins, and per-game permissions (see next section)
+
+## API Authentication
+
+Every `/api/*` route on the management app is gated behind a bearer token, so the dashboard can't be driven by anyone who can reach the port. The token is read (in order of precedence) from:
+
+1. The `API_TOKEN` environment variable, or
+2. The `api_token` field in `app/server_config.json`.
+
+Set it to any long random secret, e.g.:
+
+```bash
+# POSIX
+export API_TOKEN="$(openssl rand -hex 32)"
+```
+
+Or add the following to `app/server_config.json`:
+
+```json
+{
+  "api_token": "your-long-random-secret-here"
+}
+```
+
+When the dashboard loads in a browser it will prompt for the token once; it's stored in `localStorage` and attached to every subsequent API call as `Authorization: Bearer <token>`. Clear the stored value by clearing your browser data.
+
+**Production startup safety.** When `NODE_ENV=production` (the default for Docker), the app **refuses to start** if no token is configured. In dev (`npm run dev`) it logs a warning and allows unauthenticated requests, so local iteration isn't blocked.
 
 ## Discord Bot
 

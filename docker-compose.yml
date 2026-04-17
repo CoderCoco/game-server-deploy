@@ -25,6 +25,10 @@ services:
       - ~/.aws:/root/.aws:ro
     environment:
       NODE_ENV: production
+      # REQUIRED in production: long random bearer token gating /api/*.
+      # Override via `API_TOKEN=... docker compose up` or uncomment and set here.
+      # The app refuses to start in production if this is missing.
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN in your shell before running docker compose}
       # Uncomment and set these instead of mounting ~/.aws if you prefer:
       # AWS_ACCESS_KEY_ID: ""
       # AWS_SECRET_ACCESS_KEY: ""

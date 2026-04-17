@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useGameStatus } from './hooks/useGameStatus.js';
 import { useFileManager } from './hooks/useFileManager.js';
 import { GameCard } from './components/GameCard.js';
@@ -6,8 +7,24 @@ import { CostPanel } from './components/CostPanel.js';
 import { LogsPanel } from './components/LogsPanel.js';
 import { WatchdogPanel } from './components/WatchdogPanel.js';
 import { DiscordPanel } from './components/DiscordPanel.js';
+import { ApiTokenModal } from './components/ApiTokenModal.js';
+import { getStoredApiToken, setUnauthorizedHandler } from './api.js';
 
 export default function App() {
+  // Bearer-token gate. Show the modal when no token is stored yet, or whenever
+  // the API rejects our token with a 401 (setUnauthorizedHandler fires then).
+  const [needsToken, setNeedsToken] = useState(() => !getStoredApiToken());
+  useEffect(() => {
+    setUnauthorizedHandler(() => setNeedsToken(true));
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  if (needsToken) return <ApiTokenModal />;
+
+  return <Dashboard />;
+}
+
+function Dashboard() {
   const { statuses, estimates, loading, refreshGame } = useGameStatus();
   const fileMgr = useFileManager();
 
