@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import {
   DiscordConfigService,
   type DiscordAdmins,
@@ -6,30 +6,39 @@ import {
 } from '../services/DiscordConfigService.js';
 import { DiscordBotService } from '../services/DiscordBotService.js';
 
+/**
+ * Build the Discord router. Each route is a small named handler declared
+ * below so the responsibilities are easy to read and extend; services are
+ * captured via closure so handlers don't need to thread them through params.
+ */
 export function createDiscordRouter(
   config: DiscordConfigService,
   bot: DiscordBotService,
 ): Router {
   const router = Router();
 
-  router.get('/discord/config', (_req, res) => {
+  /** `GET /discord/config` — return the client-safe config (no token) and live bot status. */
+  const getConfig: RequestHandler = (_req, res) => {
     res.json({ ...config.getRedacted(), botStatus: bot.getStatus() });
-  });
+  };
 
-  router.put('/discord/config', (req, res) => {
+  /** `PUT /discord/config` — update bot token and/or client ID (fields are individually optional). */
+  const putConfig: RequestHandler = (req, res) => {
     const body = req.body as { botToken?: string; clientId?: string };
     config.setCredentials({
       ...(body.botToken !== undefined ? { botToken: body.botToken } : {}),
       ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
     });
     res.json({ success: true, config: config.getRedacted() });
-  });
+  };
 
-  router.get('/discord/guilds', (_req, res) => {
+  /** `GET /discord/guilds` — list guild IDs the bot is allowed to operate in. */
+  const listGuilds: RequestHandler = (_req, res) => {
     res.json({ guilds: config.getConfig().allowedGuilds });
-  });
+  };
 
-  router.post('/discord/guilds', (req, res) => {
+  /** `POST /discord/guilds` — add a guild to the allowlist; body: `{ guildId: string }`. */
+  const addGuild: RequestHandler = (req, res) => {
     const { guildId } = req.body as { guildId?: string };
     if (!guildId || typeof guildId !== 'string') {
       res.status(400).json({ error: 'guildId required' });
@@ -37,31 +46,36 @@ export function createDiscordRouter(
     }
     config.addAllowedGuild(guildId);
     res.json({ success: true, guilds: config.getConfig().allowedGuilds });
-  });
+  };
 
-  router.delete('/discord/guilds/:guildId', (req, res) => {
+  /** `DELETE /discord/guilds/:guildId` — remove a guild from the allowlist. */
+  const removeGuild: RequestHandler = (req, res) => {
     config.removeAllowedGuild(req.params['guildId']!);
     res.json({ success: true, guilds: config.getConfig().allowedGuilds });
-  });
+  };
 
-  router.get('/discord/admins', (_req, res) => {
+  /** `GET /discord/admins` — return the server-wide admin user/role lists. */
+  const getAdmins: RequestHandler = (_req, res) => {
     res.json(config.getConfig().admins);
-  });
+  };
 
-  router.put('/discord/admins', (req, res) => {
+  /** `PUT /discord/admins` — replace the admin user/role lists. */
+  const putAdmins: RequestHandler = (req, res) => {
     const body = req.body as DiscordAdmins;
     config.setAdmins({
       userIds: body.userIds ?? [],
       roleIds: body.roleIds ?? [],
     });
     res.json({ success: true, admins: config.getConfig().admins });
-  });
+  };
 
-  router.get('/discord/permissions', (_req, res) => {
+  /** `GET /discord/permissions` — return the full per-game permission map. */
+  const getPermissions: RequestHandler = (_req, res) => {
     res.json(config.getConfig().gamePermissions);
-  });
+  };
 
-  router.put('/discord/permissions/:game', (req, res) => {
+  /** `PUT /discord/permissions/:game` — overwrite the permission entry for one game. */
+  const putPermission: RequestHandler = (req, res) => {
     const body = req.body as DiscordGamePermission;
     config.setGamePermission(req.params['game']!, {
       userIds: body.userIds ?? [],
@@ -69,17 +83,31 @@ export function createDiscordRouter(
       actions: body.actions ?? [],
     });
     res.json({ success: true, permissions: config.getConfig().gamePermissions });
-  });
+  };
 
-  router.delete('/discord/permissions/:game', (req, res) => {
+  /** `DELETE /discord/permissions/:game` — remove the permission entry for one game. */
+  const deletePermission: RequestHandler = (req, res) => {
     config.deleteGamePermission(req.params['game']!);
     res.json({ success: true, permissions: config.getConfig().gamePermissions });
-  });
+  };
 
-  router.post('/discord/restart', async (_req, res) => {
+  /** `POST /discord/restart` — stop and re-start the bot (picks up new credentials/allowlist). */
+  const restartBot: RequestHandler = async (_req, res) => {
     const result = await bot.restart();
     res.json({ success: result.success, message: result.message, botStatus: bot.getStatus() });
-  });
+  };
+
+  router.get('/discord/config', getConfig);
+  router.put('/discord/config', putConfig);
+  router.get('/discord/guilds', listGuilds);
+  router.post('/discord/guilds', addGuild);
+  router.delete('/discord/guilds/:guildId', removeGuild);
+  router.get('/discord/admins', getAdmins);
+  router.put('/discord/admins', putAdmins);
+  router.get('/discord/permissions', getPermissions);
+  router.put('/discord/permissions/:game', putPermission);
+  router.delete('/discord/permissions/:game', deletePermission);
+  router.post('/discord/restart', restartBot);
 
   return router;
 }
