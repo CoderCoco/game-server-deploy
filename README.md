@@ -40,8 +40,9 @@ A Lambda runs on a configurable schedule (default every 15 minutes). For each ru
    - `AWSCostExplorerReadOnlyAccess`
    - `ElasticLoadBalancingFullAccess` ← required for ALB (HTTPS game servers)
    - `AWSCertificateManagerFullAccess` ← required for ACM TLS certificates
-   - `AmazonDynamoDBFullAccess` ← required for the serverless Discord config table
-   - `SecretsManagerReadWrite` ← required for the Discord bot-token + public-key secrets
+
+> The DynamoDB + Secrets Manager permissions this project also needs are in the
+> inline policy below, not a separate managed policy, to stay under the 10-managed-policy-per-user quota.
 4. After creating the user, go to **Security credentials** → **Create access key**
 5. Choose **Command Line Interface (CLI)** as the use case
 6. Save the **Access Key ID** and **Secret Access Key** — you won't see the secret again
@@ -50,7 +51,10 @@ A Lambda runs on a configurable schedule (default every 15 minutes). For each ru
 
 #### Additional inline policy required
 
-The Terraform AWS provider tags EventBridge rules on creation, which requires `events:TagResource` — a permission not included in any of the managed policies above. Add it as an inline policy:
+Two things aren't covered by the managed policies above and need to go in an inline policy:
+
+1. **EventBridge tagging** — the Terraform AWS provider tags EventBridge rules on creation, which requires `events:TagResource`.
+2. **DynamoDB + Secrets Manager** — the serverless Discord bot provisions a DynamoDB table and two Secrets Manager secrets. Adding these as separate managed policies would push most accounts past the 10-managed-policy-per-user quota, so they live here instead.
 
 IAM → Users → your-user → **Add inline policy** → JSON tab:
 
@@ -59,6 +63,7 @@ IAM → Users → your-user → **Add inline policy** → JSON tab:
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "EventBridgeTagging",
       "Effect": "Allow",
       "Action": [
         "events:TagResource",
@@ -66,12 +71,51 @@ IAM → Users → your-user → **Add inline policy** → JSON tab:
         "events:ListTagsForResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "DiscordDynamoDb",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:DescribeTable",
+        "dynamodb:UpdateTable",
+        "dynamodb:TagResource",
+        "dynamodb:UntagResource",
+        "dynamodb:ListTagsOfResource",
+        "dynamodb:DescribeTimeToLive",
+        "dynamodb:UpdateTimeToLive",
+        "dynamodb:DescribeContinuousBackups",
+        "dynamodb:UpdateContinuousBackups",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DiscordSecretsManager",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:ListSecretVersionIds",
+        "secretsmanager:GetResourcePolicy"
+      ],
+      "Resource": "*"
     }
   ]
 }
 ```
 
-Name it something like `EventBridgeTagging` and save.
+Name it something like `GameServerDeployExtras` and save.
 
 ### 2. Configure AWS CLI
 
