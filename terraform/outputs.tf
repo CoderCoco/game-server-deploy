@@ -72,3 +72,20 @@ output "acm_certificate_arn" {
   description = "ACM certificate ARN (only when HTTPS games exist)"
   value       = local.enable_alb ? aws_acm_certificate.game_servers[0].arn : null
 }
+
+# ── Discord serverless outputs ───────────────────────────────────────────────
+
+output "discord_table_name" {
+  description = "DynamoDB table holding DiscordConfig + pending interactions"
+  value       = aws_dynamodb_table.discord.name
+}
+
+output "discord_bot_token_secret_arn" {
+  description = "Secrets Manager ARN for the Discord bot token"
+  value       = aws_secretsmanager_secret.discord_bot_token.arn
+}
+
+output "discord_public_key_secret_arn" {
+  description = "Secrets Manager ARN for the Discord application Ed25519 public key"
+  value       = aws_secretsmanager_secret.discord_public_key.arn
+}

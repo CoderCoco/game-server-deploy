@@ -1,0 +1,24 @@
+{
+  "name": "@gsd/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./ddb/configStore": "./dist/ddb/configStore.js",
+    "./ddb/pendingStore": "./dist/ddb/pendingStore.js",
+    "./ddb/client": "./dist/ddb/client.js",
+    "./secrets/secretsStore": "./dist/secrets/secretsStore.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}

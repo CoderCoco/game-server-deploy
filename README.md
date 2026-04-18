@@ -9,8 +9,8 @@ A cost-efficient multi-game dedicated server platform on **AWS Fargate** with a 
 - **Route 53** — auto-updates `{game}.yourdomain.com` DNS records when tasks start/stop via a Lambda
 - **Watchdog Lambda** — automatically shuts down idle servers based on network traffic
 - **Terraform** — provisions all AWS infrastructure
-- **Express + React management app** — local dashboard to start/stop servers, edit config, monitor costs, stream logs, and manage the optional Discord bot
-- **Discord bot (optional)** — runs inside the management app; permitted Discord users/roles can `/server-start`, `/server-stop`, `/server-status`, and `/server-list` from chat
+- **Nest.js + React management app** — local dashboard to start/stop servers, edit config, monitor costs, stream logs, and manage Discord credentials
+- **Discord bot (serverless)** — two Node.js Lambdas + DynamoDB + Secrets Manager serve Discord HTTP interactions; permitted Discord users/roles can `/server-start`, `/server-stop`, `/server-status`, and `/server-list` from chat without any 24/7 process running
 
 ### Auto-DNS
 
@@ -126,9 +126,10 @@ python3 app.py
 ```bash
 # 1. Deploy infrastructure first (see above)
 
-# 2. Create the persistence files that get bind-mounted (first run only).
-#    They must exist on the host or Docker creates a directory in their place.
-touch app/server_config.json app/discord_config.json
+# 2. Create the persistence file that gets bind-mounted (first run only).
+#    It must exist on the host or Docker creates a directory in its place.
+#    (Discord credentials now live in AWS Secrets Manager, not a local file.)
+touch app/server_config.json
 
 # 3. Set an API token — REQUIRED in production mode (which Docker uses).
 #    Generate a random 32-byte hex string or anything long & hard to guess.
@@ -140,7 +141,7 @@ docker compose up --build
 # paste the value of $API_TOKEN and click "Save & reload".
 ```
 
-The Docker setup mounts `./terraform` (read-only for state), `./app/server_config.json`, `./app/discord_config.json` (if using the Discord bot), and `~/.aws` credentials.
+The Docker setup mounts `./terraform` (read-only for state), `./app/server_config.json`, and `~/.aws` credentials. The Discord bot reads its config from the DynamoDB table provisioned by Terraform, so no `discord_config.json` bind mount is needed.
 
 ## Configuration
 
@@ -217,7 +218,7 @@ When the dashboard loads in a browser it will prompt for the token once; it's st
 
 ## Discord Bot
 
-The management app runs an optional Discord bot so permitted users can start/stop servers from chat with slash commands. The bot **only joins guilds you explicitly allowlist** — if it's ever added to a guild that isn't on the list, it auto-leaves.
+The Discord bot is fully serverless — it runs as two AWS Lambdas (plus a DynamoDB table for config and pending interactions, and two Secrets Manager secrets for credentials), all provisioned by Terraform. The management app no longer needs to run 24/7 for the bot to work; it's only used to edit bot configuration. The bot **rejects commands from any guild that isn't on the allowlist** you configure in the web UI.
 
 ### Commands
 
@@ -243,23 +244,23 @@ Admins and per-game entries are kept separate, so you can give one group of Disc
 ### Setup
 
 1. **Create a Discord application.** Visit <https://discord.com/developers/applications> → **New Application** → add a **Bot**.
-   - Copy the **Application ID** (the "client ID") and the **Bot Token**. Treat the token like a password.
-   - You do **not** need to enable any *Privileged Gateway Intents* (e.g. Server Members Intent) for the slash commands and permission checks documented here — the bot reads the invoker's role IDs directly from the interaction payload.
-2. **Invite the bot to your Discord server.** In the app's **OAuth2 → URL Generator**, select scopes `bot` and `applications.commands` and bot permissions `Send Messages` + `Use Application Commands`. Open the generated URL and add the bot to your server.
-3. **Enable Developer Mode in Discord** (User Settings → Advanced → Developer Mode) so you can right-click a server/user/role and **Copy ID**.
-4. **Start the management app** (Option A or B under Quick Start).
-5. **Open the dashboard** → the **Discord Bot** panel has four tabs:
-   - **Credentials** — paste the client ID and bot token, Save, then **Restart Bot**. (You can also set `DISCORD_BOT_TOKEN` as an env var; env wins over the file.)
-   - **Guilds** — add the ID of each Discord server the bot should operate in. It will auto-leave any other server.
+   - Copy the **Application ID** (the "client ID"), the **Bot Token**, and the **Application Public Key** from the General Information page. Treat the token like a password; the public key is safe to share.
+   - You do **not** need to enable any *Privileged Gateway Intents* — the interactions model reads the invoker's role IDs directly from the request body.
+2. **Deploy the serverless Discord stack** by running `terraform apply`. This provisions the DynamoDB table, two Secrets Manager secrets (pre-filled with a placeholder), the interactions and followup Lambdas, and a Lambda Function URL that Discord can reach. The URL is surfaced as the `interactions_invoke_url` Terraform output.
+3. **Invite the bot to your Discord server.** In the app's **OAuth2 → URL Generator**, select scopes `bot` and `applications.commands` and bot permissions `Send Messages` + `Use Application Commands`. Open the generated URL and add the bot to your server.
+4. **Enable Developer Mode in Discord** (User Settings → Advanced → Developer Mode) so you can right-click a server/user/role and **Copy ID**.
+5. **Start the management app** (Option A or B under Quick Start) and **open the dashboard** → the **Discord Bot** panel has four tabs:
+   - **Credentials** — paste the Application (Client) ID, Bot Token, and Application Public Key, then Save. The token and public key are written to AWS Secrets Manager. Copy the Interactions Endpoint URL shown beneath the form into the same Discord Developer Portal page.
+   - **Guilds** — add the ID of each Discord server the bot should operate in, then click **Register commands** next to that guild to install the slash commands via Discord's REST API.
    - **Admins** — comma-separated user IDs and/or role IDs who can run every command on every game.
    - **Per-Game Permissions** — select a game, paste allowed user/role IDs, tick which actions (`start`/`stop`/`status`) they can invoke, Save.
 
-Config is persisted to `app/discord_config.json` (gitignored). In Docker Compose this file is volume-mounted so it survives container rebuilds; the token can alternatively be passed via the `DISCORD_BOT_TOKEN` environment variable.
-
 ### Troubleshooting
 
-- **Bot shows `error` in the status badge** — check the Credentials tab for the error message; most commonly an invalid token.
-- **Slash commands don't appear in Discord** — make sure the guild's ID is in the allowlist (commands are registered per-guild on startup and when joining) and that the bot was invited with the `applications.commands` scope. Click **Restart Bot** after allowlisting a new guild.
+- **Badge shows `awaiting credentials`** — the bot token or public key is still at the Terraform placeholder; open the Credentials tab and save the real values.
+- **Badge shows `terraform not applied`** — the `interactions_invoke_url` Terraform output is missing; run `cd app && npm run build:lambdas && cd ../terraform && terraform apply`.
+- **Slash commands don't appear in Discord** — click **Register commands** for that guild in the Guilds tab; the bot must also have been invited with the `applications.commands` scope.
+- **Discord returns "invalid interactions endpoint URL"** — the Application Public Key in Secrets Manager doesn't match Discord's when signatures are verified. Re-copy the public key from the Developer Portal and re-save in the Credentials tab.
 - **Command replies "You don't have permission…"** — confirm your Discord user ID or one of your role IDs is in the admin list or the per-game entry, *and* that the action you invoked is ticked.
 
 ## Cost Tracking
@@ -297,13 +298,16 @@ game-server-deploy/
 │   │   └── watchdog.py          # Shuts down idle servers
 │   └── terraform.example.tfvars
 ├── app/
-│   ├── src/
-│   │   ├── server/              # Express API (routes, services, DI container)
-│   │   │   ├── routes/          # Per-feature routers (games, costs, logs, files, discord)
-│   │   │   └── services/        # AWS + Discord logic (ConfigService, EcsService, DiscordBotService, …)
-│   │   └── client/              # React/Vite dashboard (components, hooks, api.ts)
+│   ├── packages/
+│   │   ├── shared/              # @gsd/shared — types, canRun, formatters, DynamoDB + Secrets helpers
+│   │   ├── server/              # @gsd/server — Nest.js API (controllers, services, guards)
+│   │   ├── web/                 # @gsd/web — React/Vite dashboard
+│   │   └── lambda/
+│   │       ├── interactions/    # Discord HTTP interactions (Ed25519 verify + deferred-ack)
+│   │       ├── followup/        # Async ECS RunTask/StopTask + Discord webhook PATCH
+│   │       ├── update-dns/      # Port of update_dns.py — Route 53 + Discord followup on RUNNING
+│   │       └── watchdog/        # Port of watchdog.py — idle-detect + auto-stop
 │   ├── server_config.json       # Watchdog config (persisted locally, gitignored)
-│   ├── discord_config.json      # Discord bot config (persisted locally, gitignored)
 │   └── vitest.config.ts         # Test runner config
 ├── Dockerfile
 ├── docker-compose.yml

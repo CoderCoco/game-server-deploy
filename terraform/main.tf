@@ -258,90 +258,10 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Shared Lambda IAM role — used by DNS updater and watchdog
-resource "aws_iam_role" "lambda" {
-  name = "${var.project_name}-lambda"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "lambda" {
-  name = "${var.project_name}-lambda-policy"
-  role = aws_iam_role.lambda.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        # CloudWatch Logs for Lambda execution
-        Effect   = "Allow"
-        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
-        Resource = "arn:aws:logs:*:*:*"
-      },
-      {
-        # ECS — start, stop, list, describe, tag tasks
-        Effect = "Allow"
-        Action = [
-          "ecs:RunTask",
-          "ecs:StopTask",
-          "ecs:ListTasks",
-          "ecs:DescribeTasks",
-          "ecs:TagResource",
-          "ecs:ListTagsForResource",
-        ]
-        Resource = "*"
-      },
-      {
-        # PassRole — required by RunTask to hand the execution role to new tasks
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = aws_iam_role.ecs_task_execution.arn
-      },
-      {
-        # EC2 — describe ENIs to resolve public IPs
-        Effect   = "Allow"
-        Action   = ["ec2:DescribeNetworkInterfaces"]
-        Resource = "*"
-      },
-      {
-        # CloudWatch Metrics — used by watchdog to detect idle servers
-        Effect   = "Allow"
-        Action   = ["cloudwatch:GetMetricStatistics"]
-        Resource = "*"
-      },
-      {
-        # Route 53 — update DNS records when servers start/stop
-        Effect = "Allow"
-        Action = [
-          "route53:ChangeResourceRecordSets",
-          "route53:ListResourceRecordSets",
-          "route53:GetChange",
-        ]
-        Resource = [
-          "arn:aws:route53:::hostedzone/${data.aws_route53_zone.main.zone_id}",
-          "arn:aws:route53:::change/*",
-        ]
-      },
-      {
-        # ALB — register/deregister HTTPS game server targets
-        Effect = "Allow"
-        Action = [
-          "elasticloadbalancing:RegisterTargets",
-          "elasticloadbalancing:DeregisterTargets",
-          "elasticloadbalancing:DescribeTargetHealth",
-        ]
-        Resource = "*"
-      },
-    ]
-  })
-}
+# Per-Lambda IAM roles live in route53.tf, watchdog.tf, interactions.tf, and
+# followup.tf. The original shared aws_iam_role.lambda was retired during the
+# serverless-Discord migration so each function carries only the actions it
+# actually needs (smaller blast radius if any one Lambda is compromised).
 
 # ── ECS Cluster ───────────────────────────────────────────────────────────────
 

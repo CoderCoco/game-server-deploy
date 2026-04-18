@@ -9,21 +9,15 @@ echo ""
 
 # 1. Check / install prerequisites
 
-# Python 3
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "📥  python3 not found — installing via apt..."
-  sudo apt-get update -qq && sudo apt-get install -y python3 python3-pip
+# Node.js 20+
+if ! command -v node >/dev/null 2>&1; then
+  echo "📥  Node.js not found — please install Node.js 20+ (e.g. via nvm) and re-run."
+  exit 1
 fi
-
-# pipenv (installed via pipx to avoid externally-managed-environment errors)
-if ! command -v pipenv >/dev/null 2>&1; then
-  echo "📥  pipenv not found — installing via pipx..."
-  if ! command -v pipx >/dev/null 2>&1; then
-    sudo apt-get update -qq && sudo apt-get install -y pipx
-    pipx ensurepath
-  fi
-  pipx install pipenv
-  export PATH="$HOME/.local/bin:$PATH"
+NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]")
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "❌  Node.js 20+ required (detected $NODE_MAJOR)."
+  exit 1
 fi
 
 # Terraform
@@ -45,20 +39,28 @@ if ! command -v aws >/dev/null 2>&1; then
   rm -rf /tmp/awscliv2.zip /tmp/aws
 fi
 
-echo "✅  Prerequisites found (python3, terraform, aws cli)"
+echo "✅  Prerequisites found (node, terraform, aws cli)"
 
-# 2. Python dependencies
+# 2. Install JS dependencies and build lambda bundles.
+#
+# Each Lambda is an esbuild-produced single-file bundle at
+# packages/lambda/<name>/dist/handler.cjs. Terraform's `archive_file` resources
+# zip that up at apply time, so the bundles must exist on disk BEFORE
+# `terraform apply` can run. `npm run build:lambdas` does exactly that.
 echo ""
-echo "📦  Installing Python dependencies via pipenv..."
-cd "$SCRIPT_DIR"
-pipenv install --quiet
+echo "📦  Installing Node dependencies..."
+cd "$SCRIPT_DIR/app"
+npm ci
+echo ""
+echo "🧱  Building Lambda bundles..."
+npm run build:lambdas
 
 # 3. Terraform init
 echo ""
 echo "🔧  Initializing Terraform..."
 cd "$SCRIPT_DIR/terraform"
 if [ ! -f terraform.tfvars ]; then
-  cp terraform.example.tfvars terraform.tfvars
+  cp terraform.tfvars.example terraform.tfvars
   echo "   Created terraform.tfvars from example — edit it with your settings."
 fi
 terraform init
@@ -71,7 +73,14 @@ echo "    1. Edit terraform/terraform.tfvars with your game servers and domain"
 echo "    2. Run: cd terraform && terraform plan"
 echo "    3. Run: cd terraform && terraform apply"
 echo "    4. Run the management app:"
-echo "         Direct:  cd app && pipenv run python app.py"
+echo "         Dev:     cd app && npm run dev"
 echo "         Docker:  docker compose up --build"
-echo "    5. Open http://localhost:5000"
+echo "    5. Open http://localhost:5173 (dev) or http://localhost:5000 (docker)"
+echo ""
+echo "  Discord bot setup (serverless):"
+echo "    - Open Credentials tab in the web UI and save the Application ID,"
+echo "      Bot Token, and Application Public Key from the Discord Developer Portal."
+echo "    - Copy the 'Interactions Endpoint URL' from the same tab and paste it"
+echo "      into the Discord Developer Portal under General Information."
+echo "    - Add a guild ID under the Guilds tab and click 'Register commands'."
 echo ""
