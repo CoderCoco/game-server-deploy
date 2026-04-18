@@ -40,6 +40,8 @@ A Lambda runs on a configurable schedule (default every 15 minutes). For each ru
    - `AWSCostExplorerReadOnlyAccess`
    - `ElasticLoadBalancingFullAccess` ← required for ALB (HTTPS game servers)
    - `AWSCertificateManagerFullAccess` ← required for ACM TLS certificates
+   - `AmazonDynamoDBFullAccess` ← required for the serverless Discord config table
+   - `SecretsManagerReadWrite` ← required for the Discord bot-token + public-key secrets
 4. After creating the user, go to **Security credentials** → **Create access key**
 5. Choose **Command Line Interface (CLI)** as the use case
 6. Save the **Access Key ID** and **Secret Access Key** — you won't see the secret again
