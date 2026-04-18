@@ -28,86 +28,37 @@ A Lambda runs on a configurable schedule (default every 15 minutes). For each ru
 
 1. Go to the [AWS IAM Console](https://console.aws.amazon.com/iam/) → **Users** → **Create user**
 2. Give it a name (e.g. `game-server-deploy`)
-3. On the permissions step, choose **Attach policies directly** and add:
-   - `AmazonECS_FullAccess`
-   - `AmazonElasticFileSystemFullAccess`
-   - `AmazonVPCFullAccess`
-   - `AWSLambda_FullAccess`
-   - `CloudWatchFullAccess`
-   - `AmazonEventBridgeFullAccess`
-   - `AmazonRoute53FullAccess`
-   - `IAMFullAccess`
-   - `AWSCostExplorerReadOnlyAccess`
-   - `ElasticLoadBalancingFullAccess` ← required for ALB (HTTPS game servers)
-   - `AWSCertificateManagerFullAccess` ← required for ACM TLS certificates
+3. On the permissions step, choose **Attach policies directly** → skip past the managed-policy picker without selecting anything, and create the user.
+4. After creating the user, open it → **Permissions** tab → **Add permissions** → **Create inline policy** → **JSON** tab, and paste the single policy below. Name it `GameServerDeployAll` (or anything).
+5. **Security credentials** → **Create access key** → choose **Command Line Interface (CLI)**.
+6. Save the **Access Key ID** and **Secret Access Key** — you won't see the secret again.
 
-> The DynamoDB + Secrets Manager permissions this project also needs are in the
-> inline policy below, not a separate managed policy, to stay under the 10-managed-policy-per-user quota.
-4. After creating the user, go to **Security credentials** → **Create access key**
-5. Choose **Command Line Interface (CLI)** as the use case
-6. Save the **Access Key ID** and **Secret Access Key** — you won't see the secret again
+> **Why one inline policy instead of stacking managed policies?** AWS caps each IAM user at 10 directly-attached managed policies by default, and this project needs permissions across ~14 services. Putting everything in one inline policy sidesteps that quota entirely and keeps the full list of what the deploy user can do visible in one place. Trade-off: you lose AWS's auto-maintenance of the managed policies' action lists — but since we're granting `{service}:*` for each, there's nothing to maintain.
 
-> **Tip**: For a tighter security boundary, use a custom IAM policy scoped to only the resources this project creates instead of the managed policies above.
-
-#### Additional inline policy required
-
-Two things aren't covered by the managed policies above and need to go in an inline policy:
-
-1. **EventBridge tagging** — the Terraform AWS provider tags EventBridge rules on creation, which requires `events:TagResource`.
-2. **DynamoDB + Secrets Manager** — the serverless Discord bot provisions a DynamoDB table and two Secrets Manager secrets. Adding these as separate managed policies would push most accounts past the 10-managed-policy-per-user quota, so they live here instead.
-
-IAM → Users → your-user → **Add inline policy** → JSON tab:
+#### The inline policy
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "EventBridgeTagging",
+      "Sid": "GameServerDeploy",
       "Effect": "Allow",
       "Action": [
-        "events:TagResource",
-        "events:UntagResource",
-        "events:ListTagsForResource"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "DiscordDynamoDb",
-      "Effect": "Allow",
-      "Action": [
-        "dynamodb:CreateTable",
-        "dynamodb:DeleteTable",
-        "dynamodb:DescribeTable",
-        "dynamodb:UpdateTable",
-        "dynamodb:TagResource",
-        "dynamodb:UntagResource",
-        "dynamodb:ListTagsOfResource",
-        "dynamodb:DescribeTimeToLive",
-        "dynamodb:UpdateTimeToLive",
-        "dynamodb:DescribeContinuousBackups",
-        "dynamodb:UpdateContinuousBackups",
-        "dynamodb:GetItem",
-        "dynamodb:PutItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:Query"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "DiscordSecretsManager",
-      "Effect": "Allow",
-      "Action": [
-        "secretsmanager:CreateSecret",
-        "secretsmanager:DeleteSecret",
-        "secretsmanager:DescribeSecret",
-        "secretsmanager:TagResource",
-        "secretsmanager:UntagResource",
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:PutSecretValue",
-        "secretsmanager:UpdateSecret",
-        "secretsmanager:ListSecretVersionIds",
-        "secretsmanager:GetResourcePolicy"
+        "ecs:*",
+        "elasticfilesystem:*",
+        "ec2:*",
+        "lambda:*",
+        "logs:*",
+        "cloudwatch:*",
+        "events:*",
+        "route53:*",
+        "iam:*",
+        "ce:*",
+        "elasticloadbalancing:*",
+        "acm:*",
+        "dynamodb:*",
+        "secretsmanager:*"
       ],
       "Resource": "*"
     }
@@ -115,7 +66,9 @@ IAM → Users → your-user → **Add inline policy** → JSON tab:
 }
 ```
 
-Name it something like `GameServerDeployExtras` and save.
+That's it — no additional managed policies, no additional inline policies. If you previously attached any of `AmazonECS_FullAccess`, `AmazonElasticFileSystemFullAccess`, `AmazonVPCFullAccess`, `AWSLambda_FullAccess`, `CloudWatchFullAccess`, `AmazonEventBridgeFullAccess`, `AmazonRoute53FullAccess`, `IAMFullAccess`, `AWSCostExplorerReadOnlyAccess`, `ElasticLoadBalancingFullAccess`, `AWSCertificateManagerFullAccess`, `AmazonDynamoDBFullAccess`, or `SecretsManagerReadWrite`, you can **detach them all** after attaching this inline policy.
+
+> **Tip**: For a tighter security boundary on a shared AWS account, replace this with a custom policy scoped to the specific resource ARNs Terraform creates — the list above is `{service}:*` for a personal-project deploy user.
 
 ### 2. Configure AWS CLI
 
