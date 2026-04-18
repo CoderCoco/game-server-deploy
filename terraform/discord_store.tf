@@ -8,9 +8,16 @@
 #   commands) and the Ed25519 application public key (used by the
 #   InteractionsLambda for request signature verification).
 #
-# Secret values are seeded with a placeholder so the secret has a version on
-# first apply; the web UI (or `aws secretsmanager put-secret-value`) writes the
-# real value later. Terraform ignores subsequent drift via lifecycle.
+# Secret values default to a "placeholder" string so the secret has a version
+# on first apply; operators can either (a) set `discord_bot_token` and
+# `discord_public_key` in tfvars to seed with real values up-front, or (b)
+# leave them empty and enter credentials through the Credentials tab in the
+# web UI. The shared secretsStore treats "placeholder" and empty strings as
+# "not configured", so either path is safe.
+#
+# `ignore_changes = [secret_string]` below means Terraform only writes the
+# secret on initial creation. Subsequent UI edits (or rotations done via
+# `aws secretsmanager put-secret-value`) aren't reverted on re-apply.
 # ──────────────────────────────────────────────────────────────────────────────
 
 resource "aws_dynamodb_table" "discord" {
@@ -47,7 +54,7 @@ resource "aws_secretsmanager_secret" "discord_bot_token" {
 
 resource "aws_secretsmanager_secret_version" "discord_bot_token" {
   secret_id     = aws_secretsmanager_secret.discord_bot_token.id
-  secret_string = "placeholder"
+  secret_string = var.discord_bot_token != "" ? var.discord_bot_token : "placeholder"
 
   lifecycle {
     ignore_changes = [secret_string]
@@ -61,7 +68,7 @@ resource "aws_secretsmanager_secret" "discord_public_key" {
 
 resource "aws_secretsmanager_secret_version" "discord_public_key" {
   secret_id     = aws_secretsmanager_secret.discord_public_key.id
-  secret_string = "placeholder"
+  secret_string = var.discord_public_key != "" ? var.discord_public_key : "placeholder"
 
   lifecycle {
     ignore_changes = [secret_string]

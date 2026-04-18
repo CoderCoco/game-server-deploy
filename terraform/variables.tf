@@ -135,6 +135,34 @@ variable "dns_ttl" {
   default     = 30
 }
 
+# ── Discord bot credentials (optional) ───────────────────────────────────────
+# If set, these seed the AWS Secrets Manager secrets on first `terraform apply`
+# so the bot is fully configured without touching the web UI. Leave empty to
+# seed the secrets with a placeholder value and enter credentials via the
+# Credentials tab in the management app instead.
+#
+# After the first apply, Terraform no longer touches `secret_string`
+# (`ignore_changes = [secret_string]` in discord_store.tf) so edits made via
+# the web UI won't be overwritten on subsequent applies. To rotate a value
+# via Terraform after initial provisioning, update the variable and run
+# `terraform taint aws_secretsmanager_secret_version.<name>` first.
+#
+# terraform.tfvars is gitignored, so it's safe to put these values there.
+
+variable "discord_bot_token" {
+  description = "Discord bot token (from Developer Portal → your app → Bot). Optional; empty to configure via UI."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "discord_public_key" {
+  description = "Discord application Ed25519 public key (from General Information). Optional; empty to configure via UI."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # ── Tags ─────────────────────────────────────────────────────────────────────
 
 variable "tags" {
