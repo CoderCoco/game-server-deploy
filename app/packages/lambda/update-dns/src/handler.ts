@@ -36,8 +36,7 @@ import {
   ChangeResourceRecordSetsCommand,
   ListResourceRecordSetsCommand,
 } from '@aws-sdk/client-route-53';
-import { formatGameStatus } from '@gsd/shared';
-import { getPending, deletePending } from '@gsd/shared/ddb/pendingStore';
+import { deletePending, formatGameStatus, getPending } from '@gsd/shared';
 
 const HOSTED_ZONE_ID = requireEnv('HOSTED_ZONE_ID');
 const DOMAIN_NAME = requireEnv('DOMAIN_NAME');

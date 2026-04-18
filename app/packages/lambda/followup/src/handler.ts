@@ -24,9 +24,7 @@ import {
   EC2Client,
   DescribeNetworkInterfacesCommand,
 } from '@aws-sdk/client-ec2';
-import { canRun, formatGameStatus } from '@gsd/shared';
-import { getDiscordConfig } from '@gsd/shared/ddb/configStore';
-import { putPending } from '@gsd/shared/ddb/pendingStore';
+import { canRun, formatGameStatus, getDiscordConfig, putPending } from '@gsd/shared';
 import type { DiscordAction, DiscordConfig, GameStatus } from '@gsd/shared';
 
 interface FollowupEvent {

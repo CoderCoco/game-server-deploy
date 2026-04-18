@@ -3,3 +3,7 @@ export * from './sanitize.js';
 export * from './canRun.js';
 export * from './formatStatus.js';
 export * from './commands.js';
+export * from './ddb/client.js';
+export * from './ddb/configStore.js';
+export * from './ddb/pendingStore.js';
+export * from './secrets/secretsStore.js';

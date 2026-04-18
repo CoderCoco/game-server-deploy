@@ -13,6 +13,7 @@
     "@noble/ed25519": "^2.1.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-lambda": "^3.600.0",
     "@types/aws-lambda": "^8.10.138"
   }
 }

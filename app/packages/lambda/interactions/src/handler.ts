@@ -17,9 +17,7 @@
 import { verifyAsync } from '@noble/ed25519';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { canRun } from '@gsd/shared';
-import { getDiscordConfig } from '@gsd/shared/ddb/configStore';
-import { getPublicKey } from '@gsd/shared/secrets/secretsStore';
+import { canRun, getDiscordConfig, getPublicKey } from '@gsd/shared';
 import type { DiscordAction, DiscordConfig } from '@gsd/shared';
 
 /** Discord interaction types we care about. Full list in discord-api-types. */

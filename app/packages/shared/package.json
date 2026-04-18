@@ -6,15 +6,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./ddb/configStore": "./dist/ddb/configStore.js",
-    "./ddb/pendingStore": "./dist/ddb/pendingStore.js",
-    "./ddb/client": "./dist/ddb/client.js",
-    "./secrets/secretsStore": "./dist/secrets/secretsStore.js"
+    ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc -b",
-    "clean": "rm -rf dist"
+    "build": "tsc",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.600.0",

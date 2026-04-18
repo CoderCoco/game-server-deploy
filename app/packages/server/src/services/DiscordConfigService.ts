@@ -17,19 +17,18 @@ import { logger } from '../logger.js';
 import { ConfigService } from './ConfigService.js';
 import {
   asStringArray,
+  getBotToken,
+  getDiscordConfig,
+  getPublicKey,
+  invalidateSecretsCache,
   isSafeGameKey,
+  putBotToken,
+  putDiscordConfig,
+  putPublicKey,
   type DiscordAction,
   type DiscordConfig,
   type RedactedDiscordConfig,
 } from '@gsd/shared';
-import { getDiscordConfig, putDiscordConfig } from '@gsd/shared/ddb/configStore';
-import {
-  getBotToken,
-  getPublicKey,
-  putBotToken,
-  putPublicKey,
-  invalidateSecretsCache,
-} from '@gsd/shared/secrets/secretsStore';
 
 /** Slash-command action that can be gated via permissions. */
 export type { DiscordAction } from '@gsd/shared';
