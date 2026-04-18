@@ -1,5 +1,5 @@
 import { ConfigService } from '../services/ConfigService.js';
-import { DiscordConfigService } from '../services/DiscordConfigService.js';
+import { DiscordConfigService, type DiscordAction } from '../services/DiscordConfigService.js';
 import { SlashCommand, type AutocompleteContext } from './SlashCommand.js';
 
 /**
@@ -13,13 +13,22 @@ import { SlashCommand, type AutocompleteContext } from './SlashCommand.js';
  * commands drifting out of sync.
  */
 export abstract class GameOptionSlashCommand extends SlashCommand {
-  constructor(
+  /**
+   * @param name    Discord command name, forwarded to {@link SlashCommand}.
+   * @param action  Permission bucket, forwarded to {@link SlashCommand}.
+   * @param config  Terraform-state reader used to list configured games.
+   * @param discord Permission resolver (reached indirectly via {@link CommandInvoker}).
+   */
+  protected constructor(
+    name: string,
+    action: DiscordAction,
     protected readonly config: ConfigService,
     protected readonly discord: DiscordConfigService,
   ) {
-    super();
+    super(name, action);
   }
 
+  /** @inheritDoc */
   override async autocomplete(ctx: AutocompleteContext): Promise<void> {
     if (ctx.focused.name !== 'game') return;
     this.config.invalidateCache();

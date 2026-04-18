@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { ConfigService } from '../../services/ConfigService.js';
-import { DiscordConfigService, type DiscordAction } from '../../services/DiscordConfigService.js';
+import { DiscordConfigService } from '../../services/DiscordConfigService.js';
 import { EcsService } from '../../services/EcsService.js';
 import { logger } from '../../logger.js';
 import { GameOptionSlashCommand } from '../GameOptionSlashCommand.js';
@@ -10,18 +10,16 @@ import type { CommandContext } from '../SlashCommand.js';
 /** `/server-stop <game>` — stop a running game server via ECS `StopTask`. */
 @Injectable()
 export class ServerStopCommand extends GameOptionSlashCommand {
-  readonly name = 'server-stop';
-  readonly action: DiscordAction = 'stop';
-
   constructor(
     config: ConfigService,
     discord: DiscordConfigService,
     private readonly ecs: EcsService,
   ) {
-    super(config, discord);
+    super('server-stop', 'stop', config, discord);
   }
 
-  build() {
+  /** @inheritDoc */
+  override build() {
     return new SlashCommandBuilder()
       .setName(this.name)
       .setDescription('Stop a running game server')
@@ -31,7 +29,8 @@ export class ServerStopCommand extends GameOptionSlashCommand {
       .toJSON();
   }
 
-  async execute(ctx: CommandContext): Promise<void> {
+  /** @inheritDoc */
+  override async execute(ctx: CommandContext): Promise<void> {
     const game = ctx.interaction.options.getString('game') ?? undefined;
     if (!game) {
       await ctx.interaction.reply({ content: 'Game is required.', flags: MessageFlags.Ephemeral });

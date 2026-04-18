@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { ConfigService } from '../../services/ConfigService.js';
-import { DiscordConfigService, type DiscordAction } from '../../services/DiscordConfigService.js';
+import { DiscordConfigService } from '../../services/DiscordConfigService.js';
 import { EcsService } from '../../services/EcsService.js';
 import { logger } from '../../logger.js';
 import { GameOptionSlashCommand } from '../GameOptionSlashCommand.js';
@@ -16,19 +16,17 @@ import { ServerListCommand } from './ServerListCommand.js';
  */
 @Injectable()
 export class ServerStatusCommand extends GameOptionSlashCommand {
-  readonly name = 'server-status';
-  readonly action: DiscordAction = 'status';
-
   constructor(
     config: ConfigService,
     discord: DiscordConfigService,
     private readonly ecs: EcsService,
     private readonly list: ServerListCommand,
   ) {
-    super(config, discord);
+    super('server-status', 'status', config, discord);
   }
 
-  build() {
+  /** @inheritDoc */
+  override build() {
     return new SlashCommandBuilder()
       .setName(this.name)
       .setDescription('Show status of a game server (or all if omitted)')
@@ -38,7 +36,8 @@ export class ServerStatusCommand extends GameOptionSlashCommand {
       .toJSON();
   }
 
-  async execute(ctx: CommandContext): Promise<void> {
+  /** @inheritDoc */
+  override async execute(ctx: CommandContext): Promise<void> {
     const game = ctx.interaction.options.getString('game') ?? undefined;
     if (!game) {
       // `/server-status` with no arg behaves exactly like `/server-list`.

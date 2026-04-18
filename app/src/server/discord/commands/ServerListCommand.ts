@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { ConfigService } from '../../services/ConfigService.js';
-import { type DiscordAction } from '../../services/DiscordConfigService.js';
 import { EcsService } from '../../services/EcsService.js';
 import { logger } from '../../logger.js';
 import { SlashCommand, type CommandContext } from '../SlashCommand.js';
@@ -17,24 +16,23 @@ import { formatGameStatus } from '../formatStatus.js';
  */
 @Injectable()
 export class ServerListCommand extends SlashCommand {
-  readonly name = 'server-list';
-  readonly action: DiscordAction = 'status';
-
   constructor(
     private readonly config: ConfigService,
     private readonly ecs: EcsService,
   ) {
-    super();
+    super('server-list', 'status');
   }
 
-  build() {
+  /** @inheritDoc */
+  override build() {
     return new SlashCommandBuilder()
       .setName(this.name)
       .setDescription('List all configured game servers and their state')
       .toJSON();
   }
 
-  async execute(ctx: CommandContext): Promise<void> {
+  /** @inheritDoc */
+  override async execute(ctx: CommandContext): Promise<void> {
     // Re-read Terraform state so the list reflects recent deploys (matches
     // /api/status behavior — see routes/games.ts).
     this.config.invalidateCache();

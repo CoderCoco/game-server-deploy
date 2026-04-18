@@ -8,14 +8,19 @@ import type { CommandInvoker } from './CommandInvoker.js';
 
 /** Context passed to a command's `execute()` — the interaction plus resolved invoker. */
 export interface CommandContext {
+  /** The live discord.js slash-command interaction this command is handling. */
   interaction: ChatInputCommandInteraction;
+  /** Resolved identity + permission helper for whoever invoked the command. */
   invoker: CommandInvoker;
 }
 
 /** Context for an `autocomplete()` call — includes the focused option the user is typing into. */
 export interface AutocompleteContext {
+  /** The live discord.js autocomplete interaction being answered. */
   interaction: AutocompleteInteraction;
+  /** Resolved identity + permission helper for the user typing in the option. */
   invoker: CommandInvoker;
+  /** Name + partial value of the option the user is currently editing. */
   focused: { name: string; value: string };
 }
 
@@ -35,12 +40,21 @@ export interface AutocompleteContext {
  *   `start` action on.
  * - `autocomplete()` handles option-autocomplete; commands without options
  *   inherit the default no-op.
+ *
+ * `name` and `action` are supplied by subclasses through `super(name, action)`
+ * rather than being separately declared on each subclass — this keeps both
+ * identity fields in one place and avoids the `abstract readonly` + override
+ * pattern at every command.
  */
 export abstract class SlashCommand {
-  /** The Discord command name (without the leading slash). */
-  abstract readonly name: string;
-  /** Permission bucket for {@link DiscordConfigService.canRun} lookups. */
-  abstract readonly action: DiscordAction;
+  /**
+   * @param name   The Discord command name (without the leading slash).
+   * @param action Permission bucket for {@link DiscordConfigService.canRun} lookups.
+   */
+  protected constructor(
+    public readonly name: string,
+    public readonly action: DiscordAction,
+  ) {}
 
   /** Serialize the command's name/description/options into the Discord REST payload. */
   abstract build(): RESTPostAPIChatInputApplicationCommandsJSONBody;
