@@ -1,31 +1,30 @@
-import { Injectable } from '@nestjs/common';
-import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js';
-import { ServerStartCommand } from './commands/ServerStartCommand.js';
-import { ServerStopCommand } from './commands/ServerStopCommand.js';
-import { ServerStatusCommand } from './commands/ServerStatusCommand.js';
-import { ServerListCommand } from './commands/ServerListCommand.js';
-import type { SlashCommand } from './SlashCommand.js';
+import { Inject, Injectable } from '@nestjs/common';
+import type { SlashCommand, SlashCommandDescriptor } from './SlashCommand.js';
+
+/**
+ * Injection token for the `SlashCommand[]` array. Declared here so both the
+ * registry (consumer) and the Discord module (producer, via its factory
+ * provider) agree on one symbol. Using a symbol — not a string — avoids
+ * accidental collisions with other providers.
+ */
+export const SLASH_COMMANDS = Symbol('SLASH_COMMANDS');
 
 /**
  * Indexed collection of every registered {@link SlashCommand}.
  *
  * `DiscordBotService` looks up the command for an incoming interaction here
- * instead of switching on `commandName` inline. New commands are added by
- * constructing a class that extends `SlashCommand` (or `GameOptionSlashCommand`)
- * and wiring it into both `discord.module.ts` and this registry's constructor.
+ * instead of switching on `commandName` inline. The concrete command classes
+ * are not referenced from this file — they're gathered into a single array
+ * by the `SLASH_COMMANDS` factory provider in `discord.module.ts`, which is
+ * the one place that needs to be edited when a new command is added.
  */
 @Injectable()
 export class SlashCommandRegistry {
   private readonly commands: Map<string, SlashCommand>;
 
-  constructor(
-    start: ServerStartCommand,
-    stop: ServerStopCommand,
-    status: ServerStatusCommand,
-    list: ServerListCommand,
-  ) {
+  constructor(@Inject(SLASH_COMMANDS) commands: SlashCommand[]) {
     this.commands = new Map();
-    for (const cmd of [start, stop, status, list] as SlashCommand[]) {
+    for (const cmd of commands) {
       this.commands.set(cmd.name, cmd);
     }
   }
@@ -41,7 +40,7 @@ export class SlashCommandRegistry {
   }
 
   /** Serialize every command's descriptor for a Discord REST PUT. */
-  buildAll(): RESTPostAPIChatInputApplicationCommandsJSONBody[] {
+  buildAll(): SlashCommandDescriptor[] {
     return this.all().map((c) => c.build());
   }
 }

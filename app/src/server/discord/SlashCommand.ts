@@ -6,6 +6,13 @@ import type {
 import type { DiscordAction } from '../services/DiscordConfigService.js';
 import type { CommandInvoker } from './CommandInvoker.js';
 
+/**
+ * Serialized Discord REST payload for a single chat-input slash command —
+ * a thin alias around discord.js's `RESTPostAPIChatInputApplicationCommandsJSONBody`
+ * so call sites aren't cluttered with the long upstream name.
+ */
+export type SlashCommandDescriptor = RESTPostAPIChatInputApplicationCommandsJSONBody;
+
 /** Context passed to a command's `execute()` — the interaction plus resolved invoker. */
 export interface CommandContext {
   /** The live discord.js slash-command interaction this command is handling. */
@@ -57,7 +64,7 @@ export abstract class SlashCommand {
   ) {}
 
   /** Serialize the command's name/description/options into the Discord REST payload. */
-  abstract build(): RESTPostAPIChatInputApplicationCommandsJSONBody;
+  abstract build(): SlashCommandDescriptor;
 
   /** Handle a slash-command invocation. The dispatcher has already verified guild + allowlist. */
   abstract execute(ctx: CommandContext): Promise<void>;

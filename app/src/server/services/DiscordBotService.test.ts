@@ -160,12 +160,12 @@ function makeBot(params: {
   const config = params.config ?? makeConfigService();
   const ecs = params.ecs ?? makeEcsService();
   const list = new ServerListCommand(config, ecs);
-  const registry = new SlashCommandRegistry(
+  const registry = new SlashCommandRegistry([
     new ServerStartCommand(config, params.discord, ecs),
     new ServerStopCommand(config, params.discord, ecs),
     new ServerStatusCommand(config, params.discord, ecs, list),
     list,
-  );
+  ]);
   return new DiscordBotService(params.discord, registry);
 }
 
