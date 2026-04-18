@@ -242,16 +242,22 @@ Admins and per-game entries are kept separate, so you can give one group of Disc
 
 ### Setup
 
-1. **Create a Discord application.** Visit <https://discord.com/developers/applications> → **New Application** → add a **Bot**.
-   - Copy the **Application ID** (the "client ID"), the **Bot Token**, and the **Application Public Key** from the General Information page. Treat the token like a password; the public key is safe to share.
-   - You do **not** need to enable any *Privileged Gateway Intents* — the interactions model reads the invoker's role IDs directly from the request body.
+1. **Create a Discord application.** Visit <https://discord.com/developers/applications> → **New Application** → add a **Bot**. From the General Information page you'll copy three values; each has a specific job:
+
+   | Value | Where it goes | What the bot uses it for |
+   |---|---|---|
+   | **Application ID** (aka Client ID) | DynamoDB (`clientId` in the Discord config row) | Identifies your app when the management server calls Discord's REST API to install the four slash commands into a guild — the endpoint is `PUT /applications/{APPLICATION_ID}/guilds/{GUILD_ID}/commands`. Without it, the "Register commands" button in the UI errors with "clientId is not configured". Public value, not a secret. |
+   | **Bot Token** | AWS Secrets Manager (`${project_name}/discord/bot-token`) | Authenticates the same REST call as `Authorization: Bot <token>`. Treat like a password. |
+   | **Application Public Key** | AWS Secrets Manager (`${project_name}/discord/public-key`) | Ed25519 key the InteractionsLambda uses to verify that every incoming interaction was actually signed by Discord. Public value but sensitive to tampering, so it lives in Secrets Manager. |
+
+   You do **not** need to enable any *Privileged Gateway Intents* — the HTTP-interactions model reads the invoker's role IDs directly from the request body.
 2. **Deploy the serverless Discord stack** by running `terraform apply`. This provisions the DynamoDB table, two Secrets Manager secrets, the interactions and followup Lambdas, and a Lambda Function URL that Discord can reach. The URL is surfaced as the `interactions_invoke_url` Terraform output. You can seed the secret values two ways:
    - **Via tfvars (recommended if you're comfortable putting the token in `terraform.tfvars`).** Set `discord_bot_token` and `discord_public_key` in `terraform.tfvars` — `.tfvars` is gitignored. Terraform writes them to Secrets Manager on the first apply. Subsequent applies won't overwrite them (`ignore_changes = [secret_string]`) so you can still edit via the UI later.
    - **Via the web UI.** Leave `discord_bot_token` and `discord_public_key` unset. Terraform seeds the secrets with a placeholder; you paste the real values into the Credentials tab of the dashboard, which writes them to Secrets Manager at runtime.
 3. **Invite the bot to your Discord server.** In the app's **OAuth2 → URL Generator**, select scopes `bot` and `applications.commands` and bot permissions `Send Messages` + `Use Application Commands`. Open the generated URL and add the bot to your server.
 4. **Enable Developer Mode in Discord** (User Settings → Advanced → Developer Mode) so you can right-click a server/user/role and **Copy ID**.
 5. **Start the management app** (Option A or B under Quick Start) and **open the dashboard** → the **Discord Bot** panel has four tabs:
-   - **Credentials** — paste the Application (Client) ID, Bot Token, and Application Public Key, then Save. The token and public key are written to AWS Secrets Manager. Copy the Interactions Endpoint URL shown beneath the form into the same Discord Developer Portal page.
+   - **Credentials** — paste the Application (Client) ID, Bot Token, and Application Public Key, then Save. The Application ID goes to DynamoDB (the bot needs it to register slash commands); the bot token and public key go to AWS Secrets Manager. If you already seeded the token and public key via tfvars, you still need to enter the Application ID here — there's no tfvar for it since it's not sensitive. Copy the Interactions Endpoint URL shown beneath the form into the same Discord Developer Portal page.
    - **Guilds** — add the ID of each Discord server the bot should operate in, then click **Register commands** next to that guild to install the slash commands via Discord's REST API.
    - **Admins** — comma-separated user IDs and/or role IDs who can run every command on every game.
    - **Per-Game Permissions** — select a game, paste allowed user/role IDs, tick which actions (`start`/`stop`/`status`) they can invoke, Save.
