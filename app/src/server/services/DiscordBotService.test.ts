@@ -100,6 +100,11 @@ import { DiscordBotService } from './DiscordBotService.js';
 import type { ConfigService } from './ConfigService.js';
 import type { EcsService } from './EcsService.js';
 import type { DiscordConfigService } from './DiscordConfigService.js';
+import { SlashCommandRegistry } from '../discord/SlashCommandRegistry.js';
+import { ServerStartCommand } from '../discord/commands/ServerStartCommand.js';
+import { ServerStopCommand } from '../discord/commands/ServerStopCommand.js';
+import { ServerStatusCommand } from '../discord/commands/ServerStatusCommand.js';
+import { ServerListCommand } from '../discord/commands/ServerListCommand.js';
 
 /** A ConfigService stub that returns the provided game_names from getTfOutputs. */
 function makeConfigService(games: string[] = ['minecraft', 'factorio']): ConfigService {
@@ -140,6 +145,30 @@ function makeEcsService(overrides: Partial<EcsService> = {}): EcsService {
   } as unknown as EcsService;
 }
 
+/**
+ * Wire up the full DI graph the bot needs in production: every command class
+ * is real and shares the same ConfigService / DiscordConfigService / EcsService
+ * stubs. Tests exercise behavior end-to-end through `DiscordBotService` rather
+ * than mocking the registry — the dispatcher's contract is that it routes to
+ * the right command, so we want the real commands wired up.
+ */
+function makeBot(params: {
+  config?: ConfigService;
+  ecs?: EcsService;
+  discord: DiscordConfigService;
+}): DiscordBotService {
+  const config = params.config ?? makeConfigService();
+  const ecs = params.ecs ?? makeEcsService();
+  const list = new ServerListCommand(config, ecs);
+  const registry = new SlashCommandRegistry([
+    new ServerStartCommand(config, params.discord, ecs),
+    new ServerStopCommand(config, params.discord, ecs),
+    new ServerStatusCommand(config, params.discord, ecs, list),
+    list,
+  ]);
+  return new DiscordBotService(params.discord, registry);
+}
+
 function latestClient(): MockClient {
   const client = mockClientInstances.at(-1);
   if (!client) throw new Error('Client was not constructed');
@@ -155,11 +184,7 @@ beforeEach(() => {
 describe('DiscordBotService', () => {
   describe('getStatus', () => {
     it('should report stopped with no client when the bot has not been started', () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({}),
-      );
+      const svc = makeBot({ discord: makeDiscordConfig({}) });
       const status = svc.getStatus();
       expect(status.state).toBe('stopped');
       expect(status.clientId).toBeNull();
@@ -170,11 +195,7 @@ describe('DiscordBotService', () => {
 
   describe('start', () => {
     it('should fail when no token is configured (env or file)', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: '' }),
-      );
+      const svc = makeBot({ discord: makeDiscordConfig({ token: '' }) });
       const result = await svc.start();
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/no bot token/i);
@@ -182,11 +203,9 @@ describe('DiscordBotService', () => {
     });
 
     it('should log in with the effective token and transition to starting', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['g1'] }),
-      );
+      const svc = makeBot({
+        discord: makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['g1'] }),
+      });
       const result = await svc.start();
       expect(result.success).toBe(true);
       const client = latestClient();
@@ -195,11 +214,7 @@ describe('DiscordBotService', () => {
     });
 
     it('should refuse to start a second time while running', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok' }),
-      );
+      const svc = makeBot({ discord: makeDiscordConfig({ token: 'tok' }) });
       await svc.start();
       const second = await svc.start();
       expect(second.success).toBe(false);
@@ -208,11 +223,7 @@ describe('DiscordBotService', () => {
 
     it('should report error state and discard the client when login rejects', async () => {
       clientInitializer = (c) => c.loginMock.mockRejectedValueOnce(new Error('bad token'));
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok' }),
-      );
+      const svc = makeBot({ discord: makeDiscordConfig({ token: 'tok' }) });
       const result = await svc.start();
       expect(result.success).toBe(false);
       expect(svc.getStatus().state).toBe('error');
@@ -221,21 +232,13 @@ describe('DiscordBotService', () => {
 
   describe('stop', () => {
     it('should be a no-op when the bot was never started', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({}),
-      );
+      const svc = makeBot({ discord: makeDiscordConfig({}) });
       await svc.stop();
       expect(svc.getStatus().state).toBe('stopped');
     });
 
     it('should destroy the client and return to stopped state', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok' }),
-      );
+      const svc = makeBot({ discord: makeDiscordConfig({ token: 'tok' }) });
       await svc.start();
       const client = latestClient();
       await svc.stop();
@@ -246,11 +249,9 @@ describe('DiscordBotService', () => {
 
   describe('ready handler', () => {
     it('should leave guilds that are not on the allowlist at startup', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['keep'] }),
-      );
+      const svc = makeBot({
+        discord: makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['keep'] }),
+      });
       await svc.start();
       const client = latestClient();
       const leaveKeep = vi.fn().mockResolvedValue(undefined);
@@ -267,11 +268,9 @@ describe('DiscordBotService', () => {
     });
 
     it('should register slash commands for each allowed guild once ready', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['g1', 'g2'] }),
-      );
+      const svc = makeBot({
+        discord: makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['g1', 'g2'] }),
+      });
       await svc.start();
       const client = latestClient();
 
@@ -287,11 +286,9 @@ describe('DiscordBotService', () => {
 
   describe('guildCreate handler', () => {
     it('should leave a newly-joined guild that is not on the allowlist', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['allowed'] }),
-      );
+      const svc = makeBot({
+        discord: makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['allowed'] }),
+      });
       await svc.start();
       const client = latestClient();
       const handler = client.listeners['guildCreate']?.[0];
@@ -302,11 +299,9 @@ describe('DiscordBotService', () => {
     });
 
     it('should register commands when joining an allowed guild', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['allowed'] }),
-      );
+      const svc = makeBot({
+        discord: makeDiscordConfig({ token: 'tok', clientId: 'cid', allowedGuilds: ['allowed'] }),
+      });
       await svc.start();
       const client = latestClient();
       const handler = client.listeners['guildCreate']?.[0];
@@ -355,11 +350,9 @@ describe('DiscordBotService', () => {
     }
 
     it('should deny interactions from non-allowlisted guilds', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['other'], canRun: true }),
-      );
+      const svc = makeBot({
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['other'], canRun: true }),
+      });
       const interaction = makeInteraction({ guildId: 'g1' });
       await dispatch(svc, interaction);
       expect(interaction.reply).toHaveBeenCalledWith(
@@ -369,11 +362,10 @@ describe('DiscordBotService', () => {
 
     it('should deny when canRun returns false', async () => {
       const ecs = makeEcsService();
-      const svc = new DiscordBotService(
-        makeConfigService(),
+      const svc = makeBot({
         ecs,
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: false }),
-      );
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: false }),
+      });
       const interaction = makeInteraction();
       await dispatch(svc, interaction);
       expect(interaction.reply).toHaveBeenCalledWith(
@@ -384,11 +376,10 @@ describe('DiscordBotService', () => {
 
     it('should invoke EcsService.start for /server-start when permitted', async () => {
       const ecs = makeEcsService();
-      const svc = new DiscordBotService(
-        makeConfigService(),
+      const svc = makeBot({
         ecs,
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       const interaction = makeInteraction();
       await dispatch(svc, interaction);
       expect(ecs.start).toHaveBeenCalledWith('minecraft');
@@ -398,22 +389,19 @@ describe('DiscordBotService', () => {
 
     it('should invoke EcsService.stop for /server-stop when permitted', async () => {
       const ecs = makeEcsService();
-      const svc = new DiscordBotService(
-        makeConfigService(),
+      const svc = makeBot({
         ecs,
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       const interaction = makeInteraction({ commandName: 'server-stop' });
       await dispatch(svc, interaction);
       expect(ecs.stop).toHaveBeenCalledWith('minecraft');
     });
 
     it('should return an ephemeral error for interactions outside a guild', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+      const svc = makeBot({
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       const interaction = makeInteraction({ guildId: null });
       await dispatch(svc, interaction);
       expect(interaction.reply).toHaveBeenCalledWith(
@@ -425,11 +413,11 @@ describe('DiscordBotService', () => {
       const ecs = makeEcsService({
         getStatus: vi.fn().mockImplementation((g: string) => Promise.resolve({ game: g, state: 'running' })),
       } as Partial<EcsService>);
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft', 'factorio']),
+      const svc = makeBot({
+        config: makeConfigService(['minecraft', 'factorio']),
         ecs,
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       const interaction = makeInteraction({
         commandName: 'server-list',
         options: {
@@ -446,11 +434,11 @@ describe('DiscordBotService', () => {
 
     it('should deny /server-list when the user has no status permission on any game', async () => {
       const ecs = makeEcsService();
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft', 'factorio']),
+      const svc = makeBot({
+        config: makeConfigService(['minecraft', 'factorio']),
         ecs,
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: false }),
-      );
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: false }),
+      });
       const interaction = makeInteraction({
         commandName: 'server-list',
         options: {
@@ -481,11 +469,11 @@ describe('DiscordBotService', () => {
         }),
         canRun: vi.fn().mockImplementation(({ game }: { game: string }) => game === 'minecraft'),
       } as unknown as import('./DiscordConfigService.js').DiscordConfigService;
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft', 'factorio']),
+      const svc = makeBot({
+        config: makeConfigService(['minecraft', 'factorio']),
         ecs,
         discord,
-      );
+      });
       const interaction = makeInteraction({
         commandName: 'server-list',
         options: {
@@ -502,11 +490,11 @@ describe('DiscordBotService', () => {
       const ecs = makeEcsService({
         getStatus: vi.fn().mockRejectedValue(new Error('aws-fail')),
       } as Partial<EcsService>);
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft']),
+      const svc = makeBot({
+        config: makeConfigService(['minecraft']),
         ecs,
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       // The `deferred`/`replied` flags aren't set on our plain mock interaction,
       // so the catch branch falls through to `reply` — exercise both paths by
       // first verifying the deferred-reply path via a shim, then the plain path.
@@ -524,11 +512,10 @@ describe('DiscordBotService', () => {
 
   describe('autocomplete', () => {
     it('should offer game names filtered by the focused option value and canRun', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft', 'factorio', 'valheim']),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+      const svc = makeBot({
+        config: makeConfigService(['minecraft', 'factorio', 'valheim']),
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       await svc.start();
       const client = latestClient();
       const handler = client.listeners['interactionCreate']?.[0];
@@ -548,11 +535,10 @@ describe('DiscordBotService', () => {
     });
 
     it('should ignore autocomplete for unrelated option names', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft']),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+      const svc = makeBot({
+        config: makeConfigService(['minecraft']),
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       await svc.start();
       const client = latestClient();
       const handler = client.listeners['interactionCreate']?.[0];
@@ -571,11 +557,10 @@ describe('DiscordBotService', () => {
     });
 
     it('should refuse autocomplete from a non-allowlisted guild', async () => {
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft']),
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+      const svc = makeBot({
+        config: makeConfigService(['minecraft']),
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       await svc.start();
       const client = latestClient();
       const handler = client.listeners['interactionCreate']?.[0];
@@ -609,11 +594,10 @@ describe('DiscordBotService', () => {
         }),
         canRun: vi.fn().mockImplementation(({ game }: { game: string }) => game === 'minecraft'),
       } as unknown as import('./DiscordConfigService.js').DiscordConfigService;
-      const svc = new DiscordBotService(
-        makeConfigService(['minecraft', 'factorio']),
-        makeEcsService(),
+      const svc = makeBot({
+        config: makeConfigService(['minecraft', 'factorio']),
         discord,
-      );
+      });
       await svc.start();
       const client = latestClient();
       const handler = client.listeners['interactionCreate']?.[0];
@@ -633,11 +617,10 @@ describe('DiscordBotService', () => {
 
     it('should invalidate the Terraform cache before reading game names', async () => {
       const config = makeConfigService(['minecraft']);
-      const svc = new DiscordBotService(
+      const svc = makeBot({
         config,
-        makeEcsService(),
-        makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
-      );
+        discord: makeDiscordConfig({ token: 'tok', allowedGuilds: ['g1'], canRun: true }),
+      });
       await svc.start();
       const client = latestClient();
       const handler = client.listeners['interactionCreate']?.[0];
