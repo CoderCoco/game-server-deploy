@@ -64,7 +64,8 @@ describe('getPending', () => {
     expect(result).toBeNull();
   });
 
-  it('should return the stored pending interaction', async () => {
+  it('should return the stored pending interaction when it has not expired', async () => {
+    const futureEpoch = Math.floor(Date.now() / 1000) + 600;
     ddb.on(GetCommand).resolves({
       Item: {
         pk: `PENDING#${ARN}`,
@@ -77,7 +78,7 @@ describe('getPending', () => {
           guildId: 'G1',
           game: 'palworld',
           action: 'start',
-          expiresAt: 1234,
+          expiresAt: futureEpoch,
         },
       },
     });
@@ -87,6 +88,62 @@ describe('getPending', () => {
       game: 'palworld',
       action: 'start',
     });
+    // Clean reads should not delete the row.
+    expect(ddb.commandCalls(DeleteCommand)).toHaveLength(0);
+  });
+
+  it('should return null and best-effort delete the row when the pending interaction has expired', async () => {
+    // expiresAt in the past — Discord interaction tokens are valid for 15m,
+    // so anything stale here would be rejected by Discord if we PATCHed it.
+    const pastEpoch = Math.floor(Date.now() / 1000) - 10;
+    ddb.on(GetCommand).resolves({
+      Item: {
+        pk: `PENDING#${ARN}`,
+        sk: 'PENDING',
+        data: {
+          taskArn: ARN,
+          applicationId: 'app1',
+          interactionToken: 'tok1',
+          userId: 'U1',
+          guildId: 'G1',
+          game: 'palworld',
+          action: 'start',
+          expiresAt: pastEpoch,
+        },
+      },
+    });
+    ddb.on(DeleteCommand).resolves({});
+    const result = await getPending(TABLE, ARN);
+    expect(result).toBeNull();
+
+    // The cleanup is async and fire-and-forget — wait a tick for it to land.
+    await new Promise((r) => setImmediate(r));
+    const deletes = ddb.commandCalls(DeleteCommand);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.args[0]!.input.Key!['pk']).toBe(`PENDING#${ARN}`);
+  });
+
+  it('should not reject the call when the best-effort delete of an expired row fails', async () => {
+    const pastEpoch = Math.floor(Date.now() / 1000) - 10;
+    ddb.on(GetCommand).resolves({
+      Item: {
+        pk: `PENDING#${ARN}`,
+        sk: 'PENDING',
+        data: {
+          taskArn: ARN,
+          applicationId: 'app1',
+          interactionToken: 'tok1',
+          userId: 'U1',
+          guildId: 'G1',
+          game: 'palworld',
+          action: 'start',
+          expiresAt: pastEpoch,
+        },
+      },
+    });
+    ddb.on(DeleteCommand).rejects(new Error('DynamoDB throttled'));
+    // Even if the delete throws, the read still resolves to null (not rejects).
+    await expect(getPending(TABLE, ARN)).resolves.toBeNull();
   });
 
   it('should perform a strongly consistent read to avoid races with RunTask', async () => {

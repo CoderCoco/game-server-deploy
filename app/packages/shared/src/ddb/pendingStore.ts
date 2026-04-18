@@ -29,7 +29,16 @@ export async function putPending(
   );
 }
 
-/** Point-lookup by task ARN; returns `null` if absent or expired. */
+/**
+ * Point-lookup by task ARN; returns `null` if the row is absent or expired.
+ *
+ * The `expiresAt` check matters because DynamoDB's TTL sweeper can take up
+ * to 48 hours to physically delete an expired row. The caller (update-dns)
+ * would otherwise PATCH Discord with an interaction token that Discord has
+ * already rejected as expired (15 minute cap), producing noisy errors for
+ * no user benefit. Expired rows are best-effort deleted here so the next
+ * read short-circuits even if TTL hasn't fired yet.
+ */
 export async function getPending(tableName: string, taskArn: string): Promise<PendingInteraction | null> {
   const resp = await getDocClient().send(
     new GetCommand({
@@ -38,8 +47,17 @@ export async function getPending(tableName: string, taskArn: string): Promise<Pe
       ConsistentRead: true,
     }),
   );
-  const data = resp.Item?.['data'];
-  return (data as PendingInteraction | undefined) ?? null;
+  const data = resp.Item?.['data'] as PendingInteraction | undefined;
+  if (!data) return null;
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (typeof data.expiresAt === 'number' && data.expiresAt <= nowSeconds) {
+    // Fire-and-forget the cleanup; its failure mode is "row stays until TTL
+    // sweeps it", which is already the fallback for any row we never read.
+    void deletePending(tableName, taskArn).catch(() => undefined);
+    return null;
+  }
+  return data;
 }
 
 /** Remove a pending-interaction row. Idempotent. */
