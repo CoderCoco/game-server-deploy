@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(terraform plan *)"
+      "Bash(terraform plan *)",
+      "Bash(npm install *)"
     ]
   }
 }
