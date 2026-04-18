@@ -63,3 +63,18 @@ If a comment would fit into any of the categories above, **do not post it**. Sil
 ## When in doubt
 
 Skip the comment. A missed nitpick costs nothing. A noisy review burns author time and trust.
+
+## Commit Structure
+
+All commits will follow the conventional commit format. The commit message should be structured as follows:
+
+```<type>(<scope>): <subject>
+<body>
+```
+
+Where:
+- `<type>` is one of the following: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`.
+- `<scope>` is an optional component that provides additional context about the commit (e.g., `api`, `ui`, `terraform`).
+- `<subject>` is a brief description of the change.
+- `<body>` is an optional component that provides a more detailed description of the change, including the motivation and any relevant context.
+
