@@ -74,3 +74,50 @@ resource "aws_secretsmanager_secret_version" "discord_public_key" {
     ignore_changes = [secret_string]
   }
 }
+
+# ─ Discord config row (optional) ─────────────────────────────────────────────
+# Seeds the CONFIG#discord row in DynamoDB with the application ID if
+# `discord_application_id` is set in tfvars. The app ID isn't a secret so it
+# doesn't belong in Secrets Manager; it lives in the same row the UI edits to
+# store allowedGuilds / admins / gamePermissions.
+#
+# `ignore_changes = [item]` means Terraform only writes this row on the first
+# apply — subsequent UI edits (which overwrite the whole row via PutItem) are
+# invisible to Terraform and won't be reverted. To rotate via tfvars after
+# the initial provision, run `terraform taint aws_dynamodb_table_item.discord_config_seed`
+# first.
+#
+# When `discord_application_id` is empty the resource is skipped entirely so
+# the UI creates the row on first save — avoids a stray empty row on UI-only
+# deployments.
+
+resource "aws_dynamodb_table_item" "discord_config_seed" {
+  count = var.discord_application_id != "" ? 1 : 0
+
+  table_name = aws_dynamodb_table.discord.name
+  hash_key   = aws_dynamodb_table.discord.hash_key
+  range_key  = aws_dynamodb_table.discord.range_key
+
+  item = jsonencode({
+    pk = { S = "CONFIG#discord" }
+    sk = { S = "CONFIG" }
+    data = {
+      M = {
+        clientId      = { S = var.discord_application_id }
+        allowedGuilds = { L = [] }
+        admins = {
+          M = {
+            userIds = { L = [] }
+            roleIds = { L = [] }
+          }
+        }
+        gamePermissions = { M = {} }
+      }
+    }
+    updatedAt = { N = "0" }
+  })
+
+  lifecycle {
+    ignore_changes = [item]
+  }
+}

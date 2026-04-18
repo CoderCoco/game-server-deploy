@@ -19,13 +19,15 @@ watchdog_min_packets      = 100
 # acm_certificate_domain = "*.codercoco.com"
 
 # Discord bot credentials (optional — leave commented out to configure via the web UI).
-# If set here, they seed AWS Secrets Manager on the first `terraform apply`.
+# If set here, they seed the backing stores on the first `terraform apply`.
 # terraform.tfvars is gitignored, so it's safe to put real values here.
-# Get both values from https://discord.com/developers/applications → your app:
-#   - Bot token: Bot → Reset Token → copy once (treat like a password).
-#   - Public key: General Information → "Public Key".
-# discord_bot_token  = "MTIz...xyz"
-# discord_public_key = "0123abc..."
+# Get all three from https://discord.com/developers/applications → your app:
+#   - Application ID: General Information → "Application ID".         (goes to DynamoDB)
+#   - Bot token:      Bot → Reset Token → copy once (like a password). (goes to Secrets Manager)
+#   - Public key:     General Information → "Public Key".              (goes to Secrets Manager)
+# discord_application_id = "1234567890"
+# discord_bot_token      = "MTIz...xyz"
+# discord_public_key     = "0123abc..."
 
 # Override game server settings (optional — defaults are set in variables.tf)
 game_servers = {

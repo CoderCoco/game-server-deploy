@@ -149,6 +149,12 @@ variable "dns_ttl" {
 #
 # terraform.tfvars is gitignored, so it's safe to put these values there.
 
+variable "discord_application_id" {
+  description = "Discord application (client) ID — public value, goes to DynamoDB. Optional; empty to configure via UI."
+  type        = string
+  default     = ""
+}
+
 variable "discord_bot_token" {
   description = "Discord bot token (from Developer Portal → your app → Bot). Optional; empty to configure via UI."
   type        = string
