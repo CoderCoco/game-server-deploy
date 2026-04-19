@@ -18,25 +18,19 @@ services:
         target: /app/server_config.json
         bind:
           create_host_path: false
-      # Persists discord_config.json across container restarts. Same caveat as above:
-      # create `app/discord_config.json` before first run; `create_host_path: false`
-      # makes Compose fail fast if it's missing rather than silently creating a dir.
-      - type: bind
-        source: ./app/discord_config.json
-        target: /app/discord_config.json
-        bind:
-          create_host_path: false
       # AWS credentials — remove if using env vars instead
       - ~/.aws:/root/.aws:ro
     environment:
       NODE_ENV: production
       # REQUIRED in production: long random bearer token gating /api/*.
-      # Override via `API_TOKEN=... docker compose up` or uncomment and set here.
+      # Override via `API_TOKEN=... docker compose up` or set in the shell.
       # The app refuses to start in production if this is missing.
       API_TOKEN: ${API_TOKEN:?set API_TOKEN in your shell before running docker compose}
       # Uncomment and set these instead of mounting ~/.aws if you prefer:
       # AWS_ACCESS_KEY_ID: ""
       # AWS_SECRET_ACCESS_KEY: ""
       # AWS_DEFAULT_REGION: "us-east-1"
-      # Discord bot token (wins over app/discord_config.json if both set):
-      # DISCORD_BOT_TOKEN: ""
+      #
+      # Note: with the serverless Discord bot, the bot token is stored in AWS
+      # Secrets Manager (managed via the web UI), not as a container env var.
+      # The DISCORD_BOT_TOKEN env var was removed during that migration.

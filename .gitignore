@@ -5,25 +5,15 @@ terraform/*.tfstate.backup
 terraform/*.tfvars
 !terraform/*.tfvars.example
 terraform/.terraform.lock.hcl
-terraform/lambda/update_dns.zip
-
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-.venv/
-venv/
-env/
-*.egg-info/
 
 # App runtime
 app/server_config.json
-app/discord_config.json
 
 # Node.js
 node_modules/
-app/dist/
-app/*.tsbuildinfo
+app/packages/*/dist/
+app/packages/lambda/*/dist/
+app/**/*.tsbuildinfo
 
 # OS
 .DS_Store
@@ -32,3 +22,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Claude Code — developer-local tool permissions. The shared equivalent
+# lives at .claude/settings.json (commit that instead if you want the
+# allowlist shared across the team).
+.claude/settings.local.json

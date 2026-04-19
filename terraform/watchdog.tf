@@ -1,52 +1,119 @@
 # ──────────────────────────────────────────────────────────────────────────────
-# Watchdog Lambda — auto-shuts down idle game servers
+# Watchdog Lambda — auto-shuts down idle game servers (Node.js, packaged from
+# ../app/packages/lambda/watchdog).
 #
 # Runs on a configurable schedule (default every 15 minutes). For each running
 # task it:
-#   1. Gets the task's ENI and checks CloudWatch NetworkPacketsIn
-#   2. If packets < watchdog_min_packets → increments an idle counter (stored
-#      as an ECS task tag)
+#   1. Reads CloudWatch NetworkPacketsIn on the task's ENI.
+#   2. If packets < watchdog_min_packets → increments idle_checks ECS task tag.
 #   3. After watchdog_idle_checks consecutive idle checks → stops the task and
-#      removes the Route 53 DNS record
-#   4. If activity detected → resets the idle counter
+#      removes the Route 53 record (or deregisters from the ALB for HTTPS games).
 #
-# Total idle grace period = watchdog_interval_minutes × watchdog_idle_checks
-# Default: 15 min × 4 = 60 minutes before auto-shutdown
+# Total idle grace period = watchdog_interval_minutes × watchdog_idle_checks.
 # ──────────────────────────────────────────────────────────────────────────────
 
 data "archive_file" "watchdog" {
   type        = "zip"
-  source_file = "${path.module}/lambda/watchdog.py"
-  output_path = "${path.module}/lambda/watchdog.zip"
+  source_file = "${path.module}/../app/packages/lambda/watchdog/dist/handler.cjs"
+  output_path = "${path.module}/../app/packages/lambda/watchdog/dist/bundle.zip"
+}
+
+resource "aws_iam_role" "watchdog_lambda" {
+  name = "${var.project_name}-watchdog-lambda"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "watchdog_lambda" {
+  name = "${var.project_name}-watchdog-lambda-policy"
+  role = aws_iam_role.watchdog_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:ListTasks",
+          "ecs:DescribeTasks",
+          "ecs:StopTask",
+          "ecs:TagResource",
+          "ecs:ListTagsForResource",
+        ]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ec2:DescribeNetworkInterfaces"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricStatistics"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:ChangeResourceRecordSets",
+          "route53:ListResourceRecordSets",
+        ]
+        Resource = [
+          "arn:aws:route53:::hostedzone/${data.aws_route53_zone.main.zone_id}",
+          "arn:aws:route53:::change/*",
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DeregisterTargets",
+          "elasticloadbalancing:DescribeTargetHealth",
+        ]
+        Resource = "*"
+      },
+    ]
+  })
 }
 
 resource "aws_lambda_function" "watchdog" {
   function_name    = "${var.project_name}-watchdog"
-  role             = aws_iam_role.lambda.arn
-  handler          = "watchdog.handler"
-  runtime          = "python3.12"
+  role             = aws_iam_role.watchdog_lambda.arn
+  handler          = "handler.handler"
+  runtime          = "nodejs20.x"
   filename         = data.archive_file.watchdog.output_path
   source_code_hash = data.archive_file.watchdog.output_base64sha256
   timeout          = 60
 
   environment {
     variables = {
-      ECS_CLUSTER           = aws_ecs_cluster.main.name
-      HOSTED_ZONE_ID        = data.aws_route53_zone.main.zone_id
-      DOMAIN_NAME           = var.hosted_zone_name
-      GAME_NAMES            = join(",", keys(var.game_servers))
-      IDLE_CHECKS           = tostring(var.watchdog_idle_checks)
-      MIN_PACKETS           = tostring(var.watchdog_min_packets)
-      CHECK_WINDOW_MINUTES  = tostring(var.watchdog_interval_minutes)
-      AWS_REGION_           = var.aws_region
-      HTTPS_GAMES           = join(",", keys(local.https_games))
-      ALB_TARGET_GROUPS     = jsonencode({ for name, _ in local.https_games : name => aws_lb_target_group.game[name].arn })
+      ECS_CLUSTER          = aws_ecs_cluster.main.name
+      HOSTED_ZONE_ID       = data.aws_route53_zone.main.zone_id
+      DOMAIN_NAME          = var.hosted_zone_name
+      GAME_NAMES           = join(",", keys(var.game_servers))
+      IDLE_CHECKS          = tostring(var.watchdog_idle_checks)
+      MIN_PACKETS          = tostring(var.watchdog_min_packets)
+      CHECK_WINDOW_MINUTES = tostring(var.watchdog_interval_minutes)
+      AWS_REGION_          = var.aws_region
+      HTTPS_GAMES          = join(",", keys(local.https_games))
+      ALB_TARGET_GROUPS    = jsonencode({ for name, _ in local.https_games : name => aws_lb_target_group.game[name].arn })
     }
   }
 
   tags = { Name = "${var.project_name}-watchdog" }
 
-  depends_on = [aws_iam_role_policy.lambda]
+  depends_on = [aws_iam_role_policy.watchdog_lambda]
 }
 
 resource "aws_cloudwatch_log_group" "watchdog" {
