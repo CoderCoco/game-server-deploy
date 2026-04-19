@@ -22,3 +22,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Claude Code — developer-local tool permissions. The shared equivalent
+# lives at .claude/settings.json (commit that instead if you want the
+# allowlist shared across the team).
+.claude/settings.local.json
