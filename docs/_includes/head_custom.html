@@ -15,7 +15,7 @@
       div.textContent = el.textContent;
       el.parentElement.replaceWith(div);
     });
-    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
     mermaid.run();
   });
 </script>
