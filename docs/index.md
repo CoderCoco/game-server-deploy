@@ -56,70 +56,16 @@ Deep-dives on each piece, for when the guides hand-wave past something:
 
 ## High-level architecture
 
-```mermaid
-flowchart LR
-  subgraph Operator["Operator's laptop"]
-    UI["React dashboard<br/>(@gsd/web)"]
-    API["Nest.js API<br/>(@gsd/server)"]
-    UI -- "Bearer token" --> API
-  end
+![High-level architecture]({{ '/diagrams/context.svg' | relative_url }}){:.d2-diagram}
 
-  subgraph AWS["AWS account"]
-    subgraph Net["VPC / public subnets"]
-      ECS["ECS Fargate tasks<br/>(one per game, on-demand)"]
-      EFS["EFS<br/>(per-game access points)"]
-      ALB["ALB + ACM<br/>(only if https=true)"]
-      ECS --- EFS
-      ALB --> ECS
-    end
+Run Terraform from your laptop (or a CI runner); after that the control
+plane is the dashboard, the Discord bot, or EventBridge schedules. No
+persistent server process — only the Fargate tasks themselves cost money,
+and only while they're running.
 
-    subgraph Bot["Serverless Discord bot"]
-      IX["interactions Lambda<br/>(Function URL)"]
-      FU["followup Lambda"]
-      DDB[("DynamoDB<br/>config + pending")]
-      SM[("Secrets Manager<br/>bot token + public key")]
-    end
-
-    DNS["update-dns Lambda"]
-    WD["watchdog Lambda"]
-    R53[("Route 53 zone<br/>{game}.yourdomain.com")]
-    EB{{"EventBridge"}}
-    CW[("CloudWatch<br/>logs + metrics")]
-
-    API -- "RunTask / StopTask<br/>DescribeTasks" --> ECS
-    API -- "read tfstate<br/>write secrets" --> SM
-    API -- "read/write config" --> DDB
-    API -. "tail logs" .-> CW
-
-    IX -- "Ed25519 verify<br/>+ deferred ack" --> FU
-    FU -- "RunTask / StopTask" --> ECS
-    FU -- "PENDING#taskArn" --> DDB
-    FU -- "PATCH @original" --> Discord
-    IX -- "fetch public key" --> SM
-    IX -- "read config" --> DDB
-
-    ECS -- "state change" --> EB
-    EB --> DNS
-    DNS -- "UPSERT / DELETE A" --> R53
-    DNS -- "PATCH @original" --> Discord
-    DNS -- "register/deregister" --> ALB
-
-    EB -- "rate(N min)" --> WD
-    WD -- "NetworkPacketsIn" --> CW
-    WD -- "StopTask + tag" --> ECS
-    WD -- "DELETE / deregister" --> R53
-  end
-
-  Discord(["Discord<br/>slash commands"])
-  Discord -- "HTTP interaction" --> IX
-  Player(["Player"]) -- "UDP / TCP / HTTPS" --> ECS
-  Player -. "queries" .-> R53
-```
-
-> Run Terraform from your laptop (or a CI runner); after that the control
-> plane is the dashboard, the Discord bot, or EventBridge schedules. No
-> persistent server process — only the Fargate tasks themselves cost money,
-> and only while they're running.
+For the full breakdown (Discord bot internals, control-loop Lambdas, and
+the `/server-start` sequence) see the
+[architecture overview]({{ '/architecture/' | relative_url }}).
 
 ## Repository map
 
