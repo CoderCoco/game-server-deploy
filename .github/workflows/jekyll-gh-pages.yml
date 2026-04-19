@@ -32,6 +32,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Install D2
+        run: |
+          curl -fsSL https://d2lang.com/install.sh | sh -s -- --prefix="$HOME/.local"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Render D2 diagrams
+        run: docs/diagrams/render.sh
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Build with Jekyll

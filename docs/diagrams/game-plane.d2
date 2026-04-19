@@ -1,0 +1,43 @@
+direction: right
+
+operator: "Operator's laptop" {
+  dashboard: "React dashboard"
+  api: "Nest.js API"
+  dashboard -> api: "bearer token"
+}
+
+tfstate: "terraform.tfstate\n(local file, mounted ro)" {
+  shape: document
+}
+
+aws: "AWS account" {
+  ecs: "ECS Fargate tasks\n{game}-server"
+  efs: "EFS\nper-game access points" {
+    shape: cylinder
+  }
+  alb: "ALB + ACM\n(HTTPS games only)"
+  ddb: "DynamoDB" {
+    shape: cylinder
+  }
+  sm: "Secrets Manager" {
+    shape: cylinder
+  }
+  cw: "CloudWatch logs" {
+    shape: cylinder
+  }
+
+  ecs -> efs: "nfs"
+  alb -> ecs
+}
+
+player: "Player" {
+  shape: person
+}
+
+operator.api -> tfstate: "read"
+operator.api -> aws.ecs: "RunTask / StopTask / DescribeTasks"
+operator.api -> aws.ddb: "put CONFIG#discord"
+operator.api -> aws.sm: "put bot-token / public-key"
+operator.api -> aws.cw: "tail logs"
+player -> aws.alb: "HTTPS"
+player -> aws.ecs: "UDP / TCP"

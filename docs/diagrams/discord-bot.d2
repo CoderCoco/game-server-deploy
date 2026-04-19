@@ -1,0 +1,29 @@
+direction: right
+
+discord: "Discord" {
+  shape: cloud
+}
+
+bot: "Serverless Discord bot" {
+  interactions: "interactions Lambda\n(Function URL)"
+  followup: "followup Lambda"
+
+  secrets: "Secrets Manager\nbot token + public key" {
+    shape: cylinder
+  }
+  ddb: "DynamoDB\nCONFIG#discord + PENDING#arn" {
+    shape: cylinder
+  }
+
+  interactions -> secrets: "fetch public key"
+  interactions -> ddb: "read CONFIG"
+  interactions -> followup: "async invoke"
+  followup -> ddb: "put PENDING#arn"
+}
+
+ecs: "ECS Fargate tasks"
+
+discord -> bot.interactions: "HTTP interaction"
+bot.interactions -> discord: "type:5 deferred ack"
+bot.followup -> ecs: "RunTask / StopTask"
+bot.followup -> discord: "PATCH @original"

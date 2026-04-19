@@ -27,6 +27,11 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - vendor/
+  # D2 sources + helpers are build-time inputs only; the rendered *.svg
+  # outputs in the same directory are what get published.
+  - "diagrams/*.d2"
+  - "diagrams/render.sh"
+  - "diagrams/README.md"
 
 # Kramdown + GFM for tables and fenced code blocks.
 markdown: kramdown
