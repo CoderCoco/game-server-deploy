@@ -1,5 +1,7 @@
 ---
-title: Game Server Deploy
+title: Home
+nav_order: 1
+permalink: /
 ---
 
 # Game Server Deploy

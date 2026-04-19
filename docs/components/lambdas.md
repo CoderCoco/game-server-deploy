@@ -1,5 +1,7 @@
 ---
-title: Lambdas (interactions, followup, update-dns, watchdog)
+title: Lambdas
+parent: Components
+nav_order: 3
 ---
 
 # Lambdas

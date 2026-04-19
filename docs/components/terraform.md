@@ -1,5 +1,7 @@
 ---
 title: Terraform
+parent: Components
+nav_order: 1
 ---
 
 # Terraform

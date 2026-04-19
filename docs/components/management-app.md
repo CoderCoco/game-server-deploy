@@ -1,5 +1,7 @@
 ---
-title: Management app (server + web + shared)
+title: Management app
+parent: Components
+nav_order: 2
 ---
 
 # Management app

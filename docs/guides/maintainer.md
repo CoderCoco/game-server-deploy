@@ -1,5 +1,7 @@
 ---
-title: Maintainer guide
+title: Maintainer
+parent: Guides
+nav_order: 2
 ---
 
 # Maintainer guide
