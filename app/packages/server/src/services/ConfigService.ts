@@ -11,6 +11,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TF_STATE_PATH = join(__dirname, '../../../../../../terraform/terraform.tfstate');
 const CONFIG_PATH = join(__dirname, '../../../../../../app/server_config.json');
 
+/**
+ * Shape of the subset of Terraform root outputs the management app consumes.
+ * Mirrors the `output` blocks in `terraform/*.tf`; add fields here (and in
+ * `getTfOutputs()` below) when a new output becomes a dependency.
+ */
 export interface TfOutputs {
   aws_region: string;
   ecs_cluster_name: string;
@@ -30,6 +35,11 @@ export interface TfOutputs {
   interactions_invoke_url: string | null;
 }
 
+/**
+ * User-editable watchdog tuning knobs persisted to `server_config.json`.
+ * Consumed by the watchdog Lambda via Terraform variables; the UI only
+ * displays/edits them — changes require `terraform apply` to take effect.
+ */
 export interface WatchdogConfig {
   watchdog_interval_minutes: number;
   watchdog_idle_checks: number;
@@ -42,14 +52,37 @@ const DEFAULT_CONFIG: WatchdogConfig = {
   watchdog_min_packets: 100,
 };
 
+/**
+ * Owns every runtime configuration source the management app reads:
+ *  - `terraform.tfstate` (outputs of the last `terraform apply`) — parsed
+ *    lazily and cached in-memory until {@link ConfigService.invalidateCache}
+ *    is called.
+ *  - `server_config.json` — the user-editable file holding the watchdog
+ *    tunables and the optional API bearer token.
+ *  - A handful of process env vars (`AWS_DEFAULT_REGION`, `API_TOKEN`).
+ *
+ * Every other service injects this one instead of touching `process.env` or
+ * reading files directly, so tests can stub env/file access cleanly.
+ */
 @Injectable()
 export class ConfigService {
   private tfCache: TfOutputs | null = null;
 
+  /**
+   * Drop the cached tfstate parse. Called from the `/api/games` and
+   * `/api/status` handlers so a fresh `terraform apply` is picked up without
+   * a server restart; tests also call it between scenarios.
+   */
   invalidateCache(): void {
     this.tfCache = null;
   }
 
+  /**
+   * Parse `terraform/terraform.tfstate` (once, then memoised) and project the
+   * pieces the app cares about. Returns `null` when the state file is absent
+   * (pre-`terraform apply`) or unparseable — callers treat that as "infra
+   * not deployed yet" and degrade gracefully.
+   */
   getTfOutputs(): TfOutputs | null {
     if (this.tfCache) return this.tfCache;
 
@@ -138,6 +171,11 @@ export class ConfigService {
     }
   }
 
+  /**
+   * Resolve the AWS region for SDK clients. Prefers the region Terraform
+   * provisioned into (so the app always points at the real infra), falls
+   * back to `AWS_DEFAULT_REGION`, then to `us-east-1`.
+   */
   getRegion(): string {
     return (
       this.getTfOutputs()?.aws_region ??
@@ -146,6 +184,11 @@ export class ConfigService {
     );
   }
 
+  /**
+   * Load the watchdog tunables from `server_config.json`, merged over the
+   * built-in defaults so partially-populated files still work. Returns a
+   * fresh object on every call — safe for callers to mutate.
+   */
   getConfig(): WatchdogConfig {
     if (!existsSync(CONFIG_PATH)) return { ...DEFAULT_CONFIG };
     try {
@@ -157,6 +200,11 @@ export class ConfigService {
     }
   }
 
+  /**
+   * Persist the full watchdog config to `server_config.json`. Note: the
+   * watchdog Lambda only reads these values via Terraform variables, so a
+   * save here is not effective until the next `terraform apply`.
+   */
   saveConfig(config: WatchdogConfig): void {
     writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
     logger.info('Config saved', config);

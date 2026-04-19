@@ -10,6 +10,11 @@ import { DiscordPanel } from './components/DiscordPanel.js';
 import { ApiTokenModal } from './components/ApiTokenModal.js';
 import { setUnauthorizedHandler } from './api.js';
 
+/**
+ * Root component. Wires up the 401 handler on `api.ts` and renders either the
+ * token-prompt modal or the main dashboard. Deliberately tiny — all polling
+ * and data-fetch logic lives in hooks so this component stays declarative.
+ */
 export default function App() {
   // Open the token modal only once the API actually rejects us with a 401.
   // In dev mode the server allows unauthenticated requests when no API_TOKEN

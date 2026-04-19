@@ -36,6 +36,11 @@ class RequestLoggerMiddleware implements NestMiddleware {
   }
 }
 
+/**
+ * Root Nest module. Wires the feature modules (`AwsModule`, `DiscordModule`) to
+ * the HTTP controllers and installs `ApiTokenGuard` as an `APP_GUARD` so every
+ * `/api/*` route is bearer-token-gated without per-controller opt-in.
+ */
 @Module({
   imports: [AwsModule, DiscordModule],
   controllers: [
@@ -49,6 +54,7 @@ class RequestLoggerMiddleware implements NestMiddleware {
   providers: [{ provide: APP_GUARD, useClass: ApiTokenGuard }],
 })
 export class AppModule implements NestModule {
+  /** Attaches the request logger to every route so each HTTP call emits one structured line. */
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(RequestLoggerMiddleware).forRoutes('*');
   }

@@ -1,5 +1,6 @@
 // Typed API wrappers — all fetch calls go through here
 
+/** Live status for a single game, as returned by `GET /api/status` and `/api/status/:game`. */
 export interface GameStatus {
   game: string;
   state: 'running' | 'starting' | 'stopped' | 'not_deployed' | 'error';
@@ -9,18 +10,21 @@ export interface GameStatus {
   message?: string;
 }
 
+/** Result envelope for mutation endpoints (start/stop), with a user-facing message. */
 export interface ActionResult {
   success: boolean;
   message: string;
   taskArn?: string;
 }
 
+/** Watchdog tuning knobs persisted in `server_config.json` and read/written via `/api/config`. */
 export interface WatchdogConfig {
   watchdog_interval_minutes: number;
   watchdog_idle_checks: number;
   watchdog_min_packets: number;
 }
 
+/** Per-game Fargate cost breakdown used by `CostPanel` to render the hourly/monthly estimate. */
 export interface GameEstimate {
   vcpu: number;
   memoryGb: number;
@@ -29,11 +33,13 @@ export interface GameEstimate {
   costPerMonth4hpd: number;
 }
 
+/** Aggregate cost estimates returned by `GET /api/costs/estimate`. */
 export interface CostEstimates {
   games: Record<string, GameEstimate>;
   totalPerHourIfAllOn: number;
 }
 
+/** Actual daily AWS Cost Explorer spend returned by `GET /api/costs/actual`. */
 export interface ActualCosts {
   daily: { date: string; cost: number }[];
   total: number;
@@ -42,6 +48,7 @@ export interface ActualCosts {
   error?: string;
 }
 
+/** Status of the FileBrowser helper task per game, returned by `GET /api/files/:game`. */
 export interface FileMgrStatus {
   game: string;
   state: 'running' | 'starting' | 'stopped' | 'not_deployed';

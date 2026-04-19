@@ -16,6 +16,12 @@ const STATE_LABELS: Record<string, string> = {
   error: 'Error',
 };
 
+/**
+ * Card for a single game in the dashboard grid: status dot, connect string,
+ * cost estimate, and Start/Stop/Files/Refresh buttons. After a start/stop the
+ * card schedules a `onRefresh` call 3s later so the backend has time to pick
+ * up the ECS state change before we poll `/api/status/:game`.
+ */
 export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
   const { game, state } = status;
   const [busy, setBusy] = useState(false);

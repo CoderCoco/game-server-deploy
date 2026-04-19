@@ -12,6 +12,12 @@ import { logger } from '../logger.js';
 import { ConfigService } from './ConfigService.js';
 import { Ec2Service } from './Ec2Service.js';
 
+/**
+ * Snapshot of a game's current state as surfaced to the UI/Discord. The
+ * `state` distinguishes "running" (task `RUNNING`, IP resolved) from
+ * "starting" (task exists but still provisioning) so the UI can show a
+ * spinner rather than an unreachable hostname.
+ */
 export interface GameStatus {
   game: string;
   state: 'running' | 'starting' | 'stopped' | 'not_deployed' | 'error';
@@ -21,12 +27,24 @@ export interface GameStatus {
   message?: string;
 }
 
+/**
+ * Result shape for start/stop operations. Reused for both because the UI
+ * treats them symmetrically (success toast on happy path, error toast on the
+ * `message` otherwise).
+ */
 export interface StartResult {
   success: boolean;
   message: string;
   taskArn?: string;
 }
 
+/**
+ * ECS facade for the management app. Wraps `RunTask` / `StopTask` /
+ * `DescribeTasks` plus the FileBrowser-specific helpers used by
+ * {@link FileManagerService}. There is intentionally no long-running ECS
+ * Service here — the core cost-saving design is "run a one-off task only
+ * when the user clicks Start, stop it when the watchdog or user decides".
+ */
 @Injectable()
 export class EcsService {
   private client: ECSClient | null = null;
@@ -43,6 +61,12 @@ export class EcsService {
     return this.client;
   }
 
+  /**
+   * Dig the ENI ID out of a task's `attachments` array. Needed because the
+   * public IP isn't on the task itself — it has to be looked up via EC2
+   * using this ENI. Returns `null` if the task has no ENI attachment yet
+   * (common while a task is still provisioning).
+   */
   extractEniId(task: Task): string | null {
     for (const att of task.attachments ?? []) {
       if (att.type !== 'ElasticNetworkInterface') continue;
@@ -53,6 +77,12 @@ export class EcsService {
     return null;
   }
 
+  /**
+   * Locate the current non-stopped task for a game, keyed by the `{game}-server`
+   * task-definition family Terraform provisions. `ListTasks` is filtered to
+   * `desiredStatus: RUNNING` and STOPPED/DEPROVISIONING tasks are filtered
+   * out of the describe result — leaving the single active task, if any.
+   */
   async findRunningTask(cluster: string, game: string): Promise<Task | null> {
     try {
       const listResp = await this.getClient().send(
@@ -74,6 +104,11 @@ export class EcsService {
     }
   }
 
+  /**
+   * Assemble the full status (state + IP + hostname) for a single game.
+   * Consolidates the task lookup, ENI resolution and DNS-name construction
+   * so controllers can map directly to an API response.
+   */
   async getStatus(game: string): Promise<GameStatus> {
     const outputs = this.config.getTfOutputs();
     if (!outputs) return { game, state: 'not_deployed', message: 'Run terraform apply first.' };
@@ -104,6 +139,12 @@ export class EcsService {
     }
   }
 
+  /**
+   * Launch a one-off Fargate task from the game's `{game}-server` task
+   * definition. Refuses to start a second task when one is already running
+   * (ECS would happily run duplicates otherwise). The DNS record is created
+   * asynchronously by the update-dns Lambda when the task reaches RUNNING.
+   */
   async start(game: string): Promise<StartResult> {
     const outputs = this.config.getTfOutputs();
     if (!outputs)
@@ -142,6 +183,11 @@ export class EcsService {
     }
   }
 
+  /**
+   * Stop the active task for `game`. The STOPPED state-change event fires
+   * the update-dns Lambda which deletes the Route 53 record — no DNS
+   * cleanup needed here.
+   */
   async stop(game: string): Promise<StartResult> {
     const outputs = this.config.getTfOutputs();
     if (!outputs) return { success: false, message: 'Terraform not applied.' };
@@ -162,6 +208,11 @@ export class EcsService {
     }
   }
 
+  /**
+   * Fetch the latest revision of `{game}-server` to read its CPU/memory (for
+   * cost estimates) and execution role (reused when the FileBrowser task
+   * definition is registered on the fly).
+   */
   async getTaskDefinition(game: string): Promise<{ cpu: number; memory: number; executionRoleArn: string } | null> {
     try {
       const resp = await this.getClient().send(
@@ -180,6 +231,11 @@ export class EcsService {
     }
   }
 
+  /**
+   * Register a new task-definition revision on the fly. Used exclusively by
+   * {@link FileManagerService.start} to build the FileBrowser task def per
+   * game — game-server task definitions themselves are Terraform-managed.
+   */
   async registerTaskDefinition(params: Parameters<ECSClient['send']>[0] extends import('@aws-sdk/client-ecs').RegisterTaskDefinitionCommand ? never : import('@aws-sdk/client-ecs').RegisterTaskDefinitionCommandInput): Promise<string | null> {
     const { RegisterTaskDefinitionCommand } = await import('@aws-sdk/client-ecs');
     try {
@@ -193,6 +249,11 @@ export class EcsService {
     }
   }
 
+  /**
+   * Low-level `RunTask` passthrough for callers that need to set their own
+   * `startedBy` tag or networking (notably the FileBrowser launcher).
+   * {@link EcsService.start} is the preferred entry point for game servers.
+   */
   async runTask(params: import('@aws-sdk/client-ecs').RunTaskCommandInput): Promise<{ taskArn: string } | null> {
     try {
       const resp = await this.getClient().send(new RunTaskCommand(params));
@@ -210,6 +271,11 @@ export class EcsService {
     }
   }
 
+  /**
+   * Find active tasks tagged with a given `startedBy` value — the marker
+   * the FileBrowser launcher uses (`filemgr-{game}`) to locate its own
+   * tasks without relying on a bespoke task-definition family.
+   */
   async listTasksByStartedBy(cluster: string, startedBy: string): Promise<Task[]> {
     try {
       const listResp = await this.getClient().send(
@@ -230,6 +296,11 @@ export class EcsService {
     }
   }
 
+  /**
+   * Raw `StopTask` wrapper for callers that already hold an ARN (FileBrowser
+   * and similar) and don't want the family-based lookup {@link EcsService.stop}
+   * performs.
+   */
   async stopTask(cluster: string, taskArn: string, reason: string): Promise<void> {
     await this.getClient().send(new StopTaskCommand({ cluster, task: taskArn, reason }));
   }

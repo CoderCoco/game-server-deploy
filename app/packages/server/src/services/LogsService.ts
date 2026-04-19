@@ -7,6 +7,11 @@ import {
 import { logger } from '../logger.js';
 import { ConfigService } from './ConfigService.js';
 
+/**
+ * Fetches recent CloudWatch Logs lines for a game's ECS task so the UI can
+ * render a tail. Assumes the Terraform-provisioned log group naming
+ * convention `/ecs/{game}-server`.
+ */
 @Injectable()
 export class LogsService {
   private client: CloudWatchLogsClient | null = null;
@@ -20,6 +25,12 @@ export class LogsService {
     return this.client;
   }
 
+  /**
+   * Return up to `limit` recent messages from the most recently written log
+   * stream in `/ecs/{game}-server`. Errors are folded into a single-element
+   * array so the caller always renders *something* — failures in the logs
+   * tab shouldn't take the rest of the dashboard down.
+   */
   async getRecentLogs(game: string, limit = 50): Promise<string[]> {
     const logGroup = `/ecs/${game}-server`;
     try {

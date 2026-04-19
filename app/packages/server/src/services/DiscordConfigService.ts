@@ -42,6 +42,17 @@ function emptyConfig(): DiscordConfig {
   };
 }
 
+/**
+ * Management-side interface to the Discord DynamoDB row and the two Secrets
+ * Manager secrets. The interactions/followup Lambdas have their own read
+ * paths via `@gsd/shared`; this service backs the web UI's Credentials /
+ * Permissions tabs.
+ *
+ * Security invariant: the raw `botToken` and `publicKey` values are **never**
+ * returned from this service. Callers get booleans via `getRedacted()` —
+ * `getEffectiveToken()` is the one escape hatch and is only used by the
+ * command registrar which needs to authenticate to Discord.
+ */
 @Injectable()
 export class DiscordConfigService {
   private cache: DiscordConfig | null = null;

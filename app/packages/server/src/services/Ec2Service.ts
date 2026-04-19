@@ -3,6 +3,12 @@ import { EC2Client, DescribeNetworkInterfacesCommand } from '@aws-sdk/client-ec2
 import { logger } from '../logger.js';
 import { ConfigService } from './ConfigService.js';
 
+/**
+ * Thin EC2 wrapper used solely to turn an ECS task's Elastic Network
+ * Interface ID into the IP address we surface to users. ECS exposes the
+ * ENI attachment on the task, but not the IP — that lives on the ENI and
+ * has to be resolved via the EC2 API.
+ */
 @Injectable()
 export class Ec2Service {
   private client: EC2Client | null = null;
@@ -16,6 +22,11 @@ export class Ec2Service {
     return this.client;
   }
 
+  /**
+   * Resolve the public IPv4 of a task's ENI. Returns `null` when the ENI has
+   * no public association (e.g. `assignPublicIp: DISABLED`) or the describe
+   * call fails — callers then show "starting" / "no IP" instead of an error.
+   */
   async getPublicIp(eniId: string): Promise<string | null> {
     try {
       const resp = await this.getClient().send(
@@ -30,6 +41,11 @@ export class Ec2Service {
     }
   }
 
+  /**
+   * Resolve the VPC-private IPv4 of a task's ENI. Kept separate from
+   * {@link Ec2Service.getPublicIp} so callers can pick whichever addressing
+   * they need (e.g. for internal-only FileBrowser access).
+   */
   async getPrivateIp(eniId: string): Promise<string | null> {
     try {
       const resp = await this.getClient().send(

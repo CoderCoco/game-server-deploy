@@ -9,6 +9,11 @@ const FILEBROWSER_IMAGE = 'filebrowser/filebrowser:latest';
 const FILEBROWSER_PORT = 8080;
 const STARTED_BY_PREFIX = 'filemgr-';
 
+/**
+ * Snapshot of the FileBrowser helper's state for a single game.
+ * `url` is only set once the task is RUNNING and its ENI has resolved a
+ * public IP — otherwise the UI shows the provisioning message.
+ */
 export interface FileMgrStatus {
   game: string;
   state: 'running' | 'starting' | 'stopped' | 'not_deployed';
@@ -16,12 +21,20 @@ export interface FileMgrStatus {
   taskArn?: string;
 }
 
+/** Start/stop result shape — mirrors {@link EcsService}'s `StartResult`. */
 export interface FileMgrResult {
   success: boolean;
   message: string;
   taskArn?: string;
 }
 
+/**
+ * Launches an on-demand FileBrowser container per game so operators can
+ * browse/edit that game's save data over HTTP without SSH. Uses the game's
+ * own EFS access point (for isolation), registers a throwaway task
+ * definition each time, and tags tasks with `startedBy: filemgr-{game}` so
+ * we can find and stop them later.
+ */
 @Injectable()
 export class FileManagerService {
   constructor(
@@ -34,6 +47,10 @@ export class FileManagerService {
     return `${STARTED_BY_PREFIX}${game}`;
   }
 
+  /**
+   * Look up the FileBrowser task for `game` (via its `startedBy` tag) and
+   * resolve the public URL if it's running.
+   */
   async getStatus(game: string): Promise<FileMgrStatus> {
     const outputs = this.config.getTfOutputs();
     if (!outputs) return { game, state: 'not_deployed' };
@@ -57,6 +74,12 @@ export class FileManagerService {
     return { game, state: 'starting', taskArn: task.taskArn };
   }
 
+  /**
+   * Register a fresh FileBrowser task definition for `game`, mounting its
+   * EFS access point, then launch it in the file-manager security group
+   * (which exposes port 8080, whereas the game SG exposes game ports only).
+   * Refuses to start a second task if one is already running.
+   */
   async start(game: string): Promise<FileMgrResult> {
     const outputs = this.config.getTfOutputs();
     if (!outputs) {
@@ -175,6 +198,11 @@ export class FileManagerService {
     return { success: false, message: `Failed to launch file manager for '${game}'. Check server logs for details.` };
   }
 
+  /**
+   * Stop the FileBrowser task for `game`. Locates it by `startedBy` tag
+   * rather than task-def family since multiple revisions may have been
+   * registered across restarts.
+   */
   async stop(game: string): Promise<FileMgrResult> {
     const outputs = this.config.getTfOutputs();
     if (!outputs) return { success: false, message: 'Terraform not applied.' };

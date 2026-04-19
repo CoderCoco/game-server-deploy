@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, type FileMgrStatus } from '../api.js';
 
+/**
+ * Manages the FileBrowser helper-task lifecycle for the file-manager modal.
+ * Owns the currently-active game, the latest `FileMgrStatus`, and a user-facing
+ * message, plus start/stop/close actions that drive `/api/files/:game/*`.
+ *
+ * Polling is reactive rather than interval-based: while the task is `starting`
+ * we chain `setTimeout`s (5s) until it reaches `running` or the modal closes,
+ * so there's no background polling when nothing is in flight.
+ */
 export function useFileManager() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [status, setStatus] = useState<FileMgrStatus | null>(null);

@@ -32,6 +32,12 @@ function requireStringArray(field: string, value: unknown): string[] {
   return value as string[];
 }
 
+/**
+ * Operator-facing endpoints for the serverless Discord bot: credentials
+ * (Secrets Manager), per-guild allowlist, admins, per-game permissions, and
+ * command registration. All state lives in DynamoDB + Secrets Manager; this
+ * controller never talks to a gateway connection (there isn't one).
+ */
 @Controller('discord')
 export class DiscordController {
   constructor(
@@ -40,12 +46,24 @@ export class DiscordController {
     private readonly config: ConfigService,
   ) {}
 
+  /**
+   * Returns the `DiscordConfig` with secrets redacted to booleans
+   * (`botTokenSet` / `publicKeySet`) plus the interactions Lambda Function URL
+   * from tfstate — the value the operator copies into Discord's developer
+   * portal. The raw bot token and public key are never sent to the client.
+   */
   @Get('config')
   async getConfig() {
     const redacted = await this.discord.getRedacted();
     return { ...redacted, interactionsEndpointUrl: this.config.getTfOutputs()?.interactions_invoke_url ?? null };
   }
 
+  /**
+   * Writes the bot token and/or public key to Secrets Manager and the
+   * `clientId` to the DynamoDB config row. Requires
+   * `secretsmanager:PutSecretValue` on the IAM principal running the app.
+   * Any field omitted from the body is left untouched.
+   */
   @Put('config')
   async putConfig(
     @Body() body: { botToken?: unknown; clientId?: unknown; publicKey?: unknown } = {},
@@ -72,11 +90,13 @@ export class DiscordController {
     };
   }
 
+  /** Returns the list of allowlisted guild IDs. The interactions Lambda rejects any command from a guild not in this list. */
   @Get('guilds')
   async listGuilds() {
     return { guilds: (await this.discord.getConfig()).allowedGuilds };
   }
 
+  /** Adds a guild ID to the allowlist persisted in DynamoDB. Takes effect on the next interaction (Lambda re-reads per invocation). */
   @Post('guilds')
   async addGuild(@Body() body: { guildId?: unknown } = {}) {
     if (typeof body.guildId !== 'string') {
@@ -88,6 +108,7 @@ export class DiscordController {
     return { success: true, guilds: (await this.discord.getConfig()).allowedGuilds };
   }
 
+  /** Removes a guild ID from the allowlist. Already-registered slash commands remain in Discord until manually cleaned up. */
   @Delete('guilds/:guildId')
   async removeGuild(@Param('guildId') guildIdRaw: string) {
     const guildId = (guildIdRaw ?? '').trim();
@@ -96,6 +117,12 @@ export class DiscordController {
     return { success: true, guilds: (await this.discord.getConfig()).allowedGuilds };
   }
 
+  /**
+   * PUTs the slash-command descriptors to Discord for a single guild. Only
+   * per-guild registration is supported by design — global commands would
+   * leak to every server the bot is invited to. Operators run this after
+   * bumping `COMMAND_DESCRIPTORS` and redeploying the Lambdas.
+   */
   @Post('guilds/:guildId/register-commands')
   async registerCommands(@Param('guildId') guildIdRaw: string) {
     const guildId = (guildIdRaw ?? '').trim();
@@ -103,11 +130,13 @@ export class DiscordController {
     return this.registrar.registerForGuild(guildId);
   }
 
+  /** Returns the global admin user/role lists. Admins bypass per-game permission gates in `canRun()`. */
   @Get('admins')
   async getAdmins() {
     return (await this.discord.getConfig()).admins;
   }
 
+  /** Replaces the admin user/role lists atomically. Omitted fields are treated as empty arrays (not "leave alone"). */
   @Put('admins')
   async putAdmins(@Body() body: { userIds?: unknown; roleIds?: unknown } = {}) {
     const userIds = requireStringArray('userIds', body.userIds);
@@ -116,11 +145,17 @@ export class DiscordController {
     return { success: true, admins: (await this.discord.getConfig()).admins };
   }
 
+  /** Returns the per-game permission map (user/role IDs allowed to run specific actions on each game). */
   @Get('permissions')
   async getPermissions() {
     return (await this.discord.getConfig()).gamePermissions;
   }
 
+  /**
+   * Sets the allowed users/roles/actions for a single game. `game` must match
+   * a key in the Terraform `game_servers` map; unknown keys return 400. The
+   * `actions` array is the permission bucket `canRun()` checks against.
+   */
   @Put('permissions/:game')
   async putPermission(
     @Param('game') game: string,
@@ -140,6 +175,7 @@ export class DiscordController {
     return { success: true, permissions: (await this.discord.getConfig()).gamePermissions };
   }
 
+  /** Removes the permission entry for a game. Returns 400 if `game` isn't a known key from the Terraform `game_servers` map. */
   @Delete('permissions/:game')
   async deletePermission(@Param('game') game: string) {
     const deleted = await this.discord.deleteGamePermission(game);

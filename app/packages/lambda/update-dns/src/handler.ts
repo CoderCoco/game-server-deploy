@@ -320,6 +320,14 @@ async function handleHttps(
   return { status: 'no_action', lastStatus };
 }
 
+/**
+ * Fired by an EventBridge rule on `ECS Task State Change`. UPSERTs a Route 53 record
+ * for `{game}.{hosted_zone_name}` on RUNNING and DELETEs on STOPPED — DNS is owned by
+ * this Lambda rather than Terraform so records follow ephemeral task IPs without
+ * fighting state. HTTPS games route through an ALB target group instead, and on
+ * RUNNING this also PATCHes any `PENDING#{taskArn}` Discord interaction in DynamoDB
+ * so the user sees the resolved address in the same message they clicked on.
+ */
 export const handler = async (event: EcsStateChangeEvent): Promise<HandlerResult> => {
   console.log('DNS updater triggered', JSON.stringify(event));
   const detail = event.detail ?? {};

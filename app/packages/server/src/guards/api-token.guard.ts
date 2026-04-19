@@ -34,6 +34,12 @@ export class ApiTokenGuard implements CanActivate {
 
   constructor(private readonly config: ConfigService) {}
 
+  /**
+   * Nest invokes this for every `/api/*` request. Returns `true` to allow,
+   * throws `UnauthorizedException` to reject. Dev convenience: when no token
+   * is configured we log once and let the request through — production boot
+   * refuses to start in that state, so this branch is dev-only in practice.
+   */
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
     const configured = this.config.getApiToken();

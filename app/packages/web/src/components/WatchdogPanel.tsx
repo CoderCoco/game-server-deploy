@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { api, type WatchdogConfig } from '../api.js';
 
+/**
+ * Bottom-right dashboard panel that reads and writes the three watchdog knobs
+ * via `/api/config`. Note these settings tune the in-app behaviour only — the
+ * Lambda's EventBridge schedule is baked in at `terraform apply` time.
+ */
 export function WatchdogPanel() {
   const [cfg, setCfg] = useState<WatchdogConfig>({
     watchdog_interval_minutes: 15,

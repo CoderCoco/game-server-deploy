@@ -10,6 +10,12 @@ interface Props {
   onStop: () => void;
 }
 
+/**
+ * Modal dialog that launches the per-game FileBrowser helper task so the
+ * operator can browse/upload/download EFS save files. All ECS lifecycle + the
+ * polling loop live in `useFileManager` — this component is purely presentational,
+ * driven by the status/message props and invoking the start/stop/close callbacks.
+ */
 export function FileManagerModal({ game, status, message, onClose, onStart, onStop }: Props) {
   // Close on Escape
   useEffect(() => {

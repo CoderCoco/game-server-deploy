@@ -30,20 +30,31 @@ function isSnowflake(value: string): boolean {
   return SNOWFLAKE_REGEX.test(value);
 }
 
+/**
+ * Outcome of a `PUT .../guilds/{id}/commands` call, shaped for direct
+ * passthrough to the "Register commands" UI button.
+ */
 export interface RegisterResult {
   success: boolean;
   message: string;
 }
 
+/**
+ * Service-facing wrapper around Discord's bulk-overwrite-guild-commands
+ * endpoint. Always registers **per guild** (never globally) — the bot should
+ * only expose commands to servers in the allowlist, and global commands leak
+ * to every guild the bot is invited to.
+ */
 @Injectable()
 export class DiscordCommandRegistrar {
   constructor(private readonly discord: DiscordConfigService) {}
 
   /**
    * Install (or overwrite) the four game-server slash commands in a single
-   * Discord guild. The underlying endpoint is `PUT /applications/{app_id}/
-   * guilds/{guild_id}/commands` with the full command descriptor array as
-   * the body — Discord replaces everything for that guild in one call.
+   * Discord guild. The underlying endpoint is
+   * `PUT /applications/\{app_id\}/guilds/\{guild_id\}/commands` with the full
+   * command descriptor array as the body — Discord replaces everything for
+   * that guild in one call.
    *
    * Returns a `RegisterResult` the controller can surface verbatim:
    *  - Success: `{ success: true, message: 'Registered N commands in guild {id}.' }`
