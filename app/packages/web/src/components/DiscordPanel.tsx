@@ -221,7 +221,7 @@ function GuildsTab({
   return (
     <div style={{ display: 'grid', gap: '0.6rem' }}>
       <p style={helpStyle}>
-        The interactions Lambda rejects commands from any server whose ID isn't in this list.
+        The interactions Lambda rejects commands from any server whose ID isn&apos;t in this list.
         Enable Discord Developer Mode (Settings → Advanced) to copy server IDs. After adding a
         guild, click <em>Register commands</em> to install the slash commands there.
       </p>

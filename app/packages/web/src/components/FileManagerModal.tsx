@@ -11,18 +11,18 @@ interface Props {
 }
 
 export function FileManagerModal({ game, status, message, onClose, onStart, onStop }: Props) {
-  if (!game) return null;
-
-  const state = status?.state ?? 'stopped';
-  const isRunning = state === 'running' && !!status?.url;
-  const isStarting = state === 'starting';
-
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  if (!game) return null;
+
+  const state = status?.state ?? 'stopped';
+  const isRunning = state === 'running' && !!status?.url;
+  const isStarting = state === 'starting';
 
   return (
     <div style={overlayStyle} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
