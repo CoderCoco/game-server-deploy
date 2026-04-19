@@ -18,6 +18,13 @@
 # `ignore_changes = [secret_string]` below means Terraform only writes the
 # secret on initial creation. Subsequent UI edits (or rotations done via
 # `aws secretsmanager put-secret-value`) aren't reverted on re-apply.
+#
+# `recovery_window_in_days = 0` forces immediate deletion on `terraform
+# destroy`. Without this, AWS schedules secrets for deletion with a 30-day
+# recovery window, which blocks a subsequent `terraform apply` from recreating
+# a secret with the same name (InvalidRequestException: "already scheduled for
+# deletion"). These secrets only ever hold Discord credentials the operator
+# can re-enter via the UI, so the recovery window has no real value here.
 # ──────────────────────────────────────────────────────────────────────────────
 
 resource "aws_dynamodb_table" "discord" {
@@ -48,8 +55,9 @@ resource "aws_dynamodb_table" "discord" {
 }
 
 resource "aws_secretsmanager_secret" "discord_bot_token" {
-  name        = "${var.project_name}/discord/bot-token"
-  description = "Discord bot token — used by the management app to register guild slash commands"
+  name                    = "${var.project_name}/discord/bot-token"
+  description             = "Discord bot token — used by the management app to register guild slash commands"
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "discord_bot_token" {
@@ -62,8 +70,9 @@ resource "aws_secretsmanager_secret_version" "discord_bot_token" {
 }
 
 resource "aws_secretsmanager_secret" "discord_public_key" {
-  name        = "${var.project_name}/discord/public-key"
-  description = "Discord application Ed25519 public key — used by InteractionsLambda for signature verification"
+  name                    = "${var.project_name}/discord/public-key"
+  description             = "Discord application Ed25519 public key — used by InteractionsLambda for signature verification"
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "discord_public_key" {
