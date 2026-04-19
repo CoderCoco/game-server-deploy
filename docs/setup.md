@@ -1,0 +1,360 @@
+---
+title: Setup guide
+---
+
+# Setup guide
+
+This is the end-to-end walkthrough, from a blank AWS account to a running
+Fargate task you can connect to from your game client, plus the optional
+Discord bot. Allow ~30 minutes the first time; most of that is waiting for
+`terraform apply`.
+
+The [submodule guide]({{ '/guides/submodule/' | relative_url }}) covers the
+alternative workflow of vendoring this repo inside a private parent that
+holds `terraform.tfvars` and state. Come back here afterwards for the
+per-step detail.
+
+## Prerequisites
+
+On the machine that will run `terraform apply` and the management app:
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Node.js | 20+ | Enforced by `setup.sh` and the Nest server boot. |
+| npm | 10+ | Ships with Node 20. |
+| Terraform | 1.5+ | Installed automatically by `setup.sh` on Debian/Ubuntu. |
+| AWS CLI | v2 | Installed automatically by `setup.sh` on Linux. |
+| Docker | 24+ | Only if you plan to run the app via `docker compose`. |
+
+On the AWS side you need:
+
+- An AWS account you control (pure personal use is fine).
+- **A Route 53 hosted zone you already own** — e.g. `yourdomain.com`.
+  Terraform looks it up as a data source and will not create it for you.
+  If you use an external registrar, delegate the zone's NS records to
+  Route 53 before running Terraform or DNS updates will go nowhere.
+
+## 1. Create and authorise an IAM user
+
+1. In the **[AWS IAM console](https://console.aws.amazon.com/iam/)** →
+   **Users → Create user**, give it a name like `game-server-deploy`.
+2. On the permissions step, choose **Attach policies directly** and skip
+   through without selecting any managed policy. Create the user.
+3. Open the new user → **Permissions → Add permissions → Create inline
+   policy → JSON**. Paste the policy below, name it `GameServerDeployAll`,
+   and save.
+4. **Security credentials → Create access key → Command Line Interface (CLI)**.
+   Copy the Access Key ID and Secret Access Key. Treat the secret like a
+   password — AWS will not show it again.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GameServerDeploy",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:*",
+        "elasticfilesystem:*",
+        "ec2:*",
+        "lambda:*",
+        "logs:*",
+        "cloudwatch:*",
+        "events:*",
+        "route53:*",
+        "iam:*",
+        "ce:*",
+        "elasticloadbalancing:*",
+        "acm:*",
+        "dynamodb:*",
+        "secretsmanager:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+> **Why one inline policy instead of stacking managed policies?** AWS caps
+> each user at 10 directly-attached managed policies, and this stack touches
+> ~14 services. One inline policy also keeps the full blast radius visible
+> in one place. Trade-off: you lose AWS's auto-maintenance of action lists,
+> but since everything is `{service}:*` there is nothing to maintain.
+
+You also need a tiny extra permission that is **not** in any AWS-managed
+policy: the AWS provider tags EventBridge rules on creation, which requires
+`events:TagResource`, `events:UntagResource`, and `events:ListTagsForResource`.
+`events:*` above already grants these — if you tighten the policy later, keep
+those three actions in.
+
+## 2. Configure the AWS CLI
+
+```bash
+aws configure
+#   AWS Access Key ID:     AKIA...
+#   AWS Secret Access Key: ****
+#   Default region name:   us-east-1          # must match terraform.tfvars
+#   Default output format: json
+
+aws sts get-caller-identity                   # verify
+```
+
+Both Terraform and the management app read `~/.aws/credentials` and
+`~/.aws/config` automatically. If you prefer environment variables, export
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_DEFAULT_REGION`
+instead — the management app will pick them up too.
+
+## 3. Clone and bootstrap
+
+```bash
+git clone https://github.com/codercoco/game-server-deploy.git
+cd game-server-deploy
+chmod +x setup.sh
+./setup.sh
+```
+
+`setup.sh` is idempotent. It:
+
+1. Checks for Node 20+, and installs Terraform and the AWS CLI if missing
+   (Debian/Ubuntu only; macOS users should install those manually first).
+2. Runs `npm ci` from `app/` so all workspaces are installed.
+3. Runs `npm run build:lambdas` to produce `app/packages/lambda/*/dist/handler.cjs`
+   — Terraform's `archive_file` data sources zip these at apply time, so
+   the bundles **must** exist on disk before `terraform apply` or init will
+   fail.
+4. Copies `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars`
+   if the latter doesn't exist yet.
+5. Runs `terraform init` inside `terraform/`.
+
+## 4. Configure your servers
+
+Open `terraform/terraform.tfvars` in your editor and fill in:
+
+```hcl
+aws_region       = "us-east-1"
+project_name     = "game-servers"
+hosted_zone_name = "yourdomain.com"    # must already exist in Route 53
+
+# Watchdog knobs (defaults shown)
+watchdog_interval_minutes = 15
+watchdog_idle_checks      = 4          # 15 × 4 = 60 min grace before auto-stop
+watchdog_min_packets      = 100
+
+# One entry per game. Everything downstream iterates over this map.
+game_servers = {
+  palworld = {
+    image  = "thijsvanloef/palworld-server-docker:latest"
+    cpu    = 2048
+    memory = 8192
+    ports = [
+      { container = 8211,  protocol = "udp" },
+      { container = 27015, protocol = "udp" },
+    ]
+    environment = [
+      { name = "PLAYERS",        value = "8" },
+      { name = "SERVER_NAME",    value = "My Palworld Server" },
+      { name = "ADMIN_PASSWORD", value = "CHANGE_ME" },
+    ]
+    efs_path = "/palworld"
+    https    = false
+  }
+}
+```
+
+Rules worth knowing before you save:
+
+- **`efs_path`** maps to a dedicated EFS access point — each game is isolated
+  in its own directory with UID/GID 1000 ownership. Game images that run as
+  a different UID will fail to mount.
+- **`https = true`** routes the game through an ALB + ACM + Route 53 ALIAS.
+  Only set it on games that actually serve HTTP(S); UDP games (most game
+  servers) must stay `false`. The ALB is only created if at least one game
+  has `https = true`.
+- **CPU / memory** must be a valid Fargate pair (see the
+  [Fargate task size table](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size)).
+- **Do not write `aws_route53_record` resources** — the update-dns Lambda
+  owns that.
+
+Optionally seed Discord credentials here too. If you leave them out, you can
+paste them into the dashboard later:
+
+```hcl
+discord_application_id = "123456789012345678"
+discord_bot_token      = "xxxx.yyyy.zzzz"          # sensitive
+discord_public_key     = "abcd...ef01"             # sensitive
+```
+
+`terraform.tfvars` is gitignored, so these stay on your machine. Rotation
+after the first apply takes one `terraform taint`; see the
+[submodule guide]({{ '/guides/submodule/' | relative_url }}) for the pattern
+that puts this file in a private parent repo.
+
+## 5. Apply the infrastructure
+
+```bash
+cd terraform
+terraform plan
+terraform apply
+```
+
+`apply` takes 5–10 minutes end-to-end. It creates the VPC, two public
+subnets, an ECS cluster, one task definition + EFS access point +
+CloudWatch log group **per game**, the four Lambdas, a DynamoDB table, two
+Secrets Manager secrets, the EventBridge rule + schedule, and (if any game
+has `https = true`) an ALB with an ACM certificate.
+
+When it finishes, note two outputs:
+
+- `interactions_invoke_url` — the Lambda Function URL you'll paste into the
+  Discord Developer Portal for the bot.
+- `ecs_cluster_name` / `game_names` — used by the dashboard (it reads
+  `terraform.tfstate` directly, so you normally don't need to copy these
+  by hand).
+
+## 6. Run the management app
+
+Pick one.
+
+### Option A — dev mode
+
+```bash
+cd app
+npm run dev
+```
+
+Serves the Nest API on **:3001** and the Vite dev server on **:5173** (with
+`/api` proxied to :3001). Open `http://localhost:5173`. In dev mode, if no
+`API_TOKEN` is configured the app logs a warning and allows unauthenticated
+requests — fine for local iteration, not safe to expose.
+
+### Option B — Docker (production-equivalent)
+
+```bash
+# First run only: ensure the persisted config file exists on the host so
+# Compose can bind-mount it.  Without this the bind will error.
+touch app/server_config.json
+
+# REQUIRED: the app refuses to start in production without a bearer token.
+export API_TOKEN="$(openssl rand -hex 32)"
+
+docker compose up --build
+```
+
+Opens on `http://localhost:5000`. The dashboard will prompt you for the
+token on first load; paste the value of `$API_TOKEN` and click
+**Save & reload**.
+
+`docker-compose.yml` bind-mounts `./terraform` read-only (for
+`terraform.tfstate`), `./app/server_config.json` (persisted watchdog
+config), and `~/.aws` (credentials). If you prefer
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` env vars, uncomment the
+corresponding block in `docker-compose.yml`.
+
+## 7. (Optional) Wire up the Discord bot
+
+The serverless bot is two Lambdas, one DynamoDB table, and two Secrets
+Manager secrets — all created by `terraform apply` in step 5. You now
+connect it to a Discord application.
+
+1. **Create a Discord application** at
+   <https://discord.com/developers/applications> → **New Application** →
+   add a **Bot**. Copy three values from **General Information**:
+
+   | Value | Where it goes | Used for |
+   |---|---|---|
+   | **Application ID** (Client ID) | DynamoDB `CONFIG#discord` row | Needed when the server registers slash commands for a guild. Public, not a secret. |
+   | **Bot Token** | Secrets Manager `${project_name}/discord/bot-token` | `Authorization: Bot <token>` for the REST call that registers commands. Treat like a password. |
+   | **Application Public Key** | Secrets Manager `${project_name}/discord/public-key` | The interactions Lambda verifies every incoming interaction against this Ed25519 key. |
+
+   You do **not** need any Privileged Gateway Intents — HTTP interactions
+   deliver the invoker's role IDs directly in the request body.
+
+2. **Seed the credentials.** Either:
+   - Set `discord_application_id`, `discord_bot_token`, and
+     `discord_public_key` in `terraform.tfvars` and re-apply. Terraform
+     writes them once and then `ignore_changes` lets the dashboard edit
+     them without being overwritten on subsequent applies. To rotate via
+     tfvars later, `terraform taint` the relevant resource first.
+   - Or leave them empty and open the **Credentials** tab in the dashboard;
+     paste and Save. The dashboard writes directly to DynamoDB and Secrets
+     Manager.
+
+3. **Copy the interactions endpoint URL** (the `interactions_invoke_url`
+   Terraform output, also shown in the dashboard Credentials tab) into the
+   Discord Developer Portal under **General Information → Interactions
+   Endpoint URL → Save**. Discord sends a PING on save; the Lambda replies
+   PONG and Discord accepts the URL.
+
+4. **Invite the bot to your server.** In the Developer Portal:
+   - **Installation → Installation Contexts**: enable **Guild Install**,
+     disable **User Install**.
+   - **OAuth2 → URL Generator**: tick scopes `bot` and
+     `applications.commands`; under **Bot Permissions**, tick
+     **Send Messages** and **Use Slash Commands** (Discord's UI name for
+     the `USE_APPLICATION_COMMANDS` permission).
+   - Open the generated URL and add the bot to your server.
+
+5. **Enable Developer Mode in Discord** (User Settings → Advanced →
+   Developer Mode) so you can right-click servers/users/roles and
+   **Copy ID**.
+
+6. **In the dashboard's Discord Bot panel:**
+   - **Guilds tab**: add the guild ID and click **Register commands** so
+     Discord learns about `/server-start`, `/server-stop`, `/server-status`,
+     `/server-list`. This is a per-guild REST call; there are no global
+     commands.
+   - **Admins tab**: user IDs and/or role IDs that can run everything on
+     everything.
+   - **Per-Game Permissions tab**: for each game, which users/roles can
+     invoke which subset of `start` / `stop` / `status`.
+
+The [user guide]({{ '/guides/user/' | relative_url }}) has the day-to-day
+command reference; the
+[interactions/followup Lambda docs]({{ '/components/lambdas/' | relative_url }})
+have the wire-level detail.
+
+## 8. Smoke test
+
+With infra applied, the app running, and (optionally) a Discord guild
+configured:
+
+1. Open the dashboard → the game you configured should appear as
+   **stopped**.
+2. Click **Start**. Watch the card transition through `PROVISIONING` →
+   `PENDING` → `RUNNING`. DNS is updated by the update-dns Lambda as soon
+   as the task reaches RUNNING.
+3. `dig {game}.yourdomain.com` should return the task's public IP within
+   `dns_ttl` seconds (default 30). Connect your game client.
+4. Click **Stop**, or type `/server-stop {game}` in Discord, or do nothing
+   for `watchdog_interval_minutes × watchdog_idle_checks` minutes — any of
+   the three stops the task and removes the DNS record.
+
+## 9. Tear it down
+
+Stop every server from the dashboard first (so the DNS updater gets a clean
+STOPPED event and removes records), then:
+
+```bash
+cd terraform
+terraform destroy
+```
+
+The two Secrets Manager secrets use `recovery_window_in_days = 0`, so they
+are deleted immediately — you can `terraform apply` again tomorrow without
+hitting "already scheduled for deletion".
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `terraform apply` fails with "data source not found for zone" | `hosted_zone_name` doesn't exist in Route 53 | Create the hosted zone first (or delegate your registrar's NS records). |
+| `archive_file` fails during `terraform apply` | You didn't run `npm run build:lambdas` | `cd app && npm run build:lambdas`, then re-apply. |
+| App refuses to start under `NODE_ENV=production` | No bearer token configured | `export API_TOKEN=$(openssl rand -hex 32)` or set `api_token` in `app/server_config.json`. |
+| Dashboard says **terraform not applied** in the Discord panel | `interactions_invoke_url` output missing | Re-run `cd app && npm run build:lambdas && cd ../terraform && terraform apply`. |
+| Dashboard says **awaiting credentials** | Secrets still contain the Terraform `"placeholder"` seed | Paste the real bot token + public key in the Credentials tab and Save. |
+| Discord rejects the interactions URL with "invalid interactions endpoint URL" | Public key in Secrets Manager doesn't match Discord's | Re-copy the Application Public Key from the Developer Portal and Save. |
+| `/server-*` slash commands don't appear in Discord | Per-guild registration not done | Guilds tab → **Register commands** next to the guild ID. |
+| `/server-start` says "You don't have permission" | Your user/role isn't in admins or per-game permissions, or the `start` action isn't ticked | Admins tab or Per-Game Permissions tab, then retry. |
+| Task reaches RUNNING but DNS never updates | update-dns Lambda errored; EventBridge rule might be disabled | Check the Lambda's CloudWatch logs; verify the EventBridge rule is enabled. |
+| Watchdog stops tasks too aggressively | Low `watchdog_min_packets`, short `watchdog_interval_minutes`, or low `watchdog_idle_checks` | Tune the three knobs via the dashboard **Server Config** panel and re-apply. |

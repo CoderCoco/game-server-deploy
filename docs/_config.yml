@@ -1,0 +1,29 @@
+title: Game Server Deploy
+description: >-
+  Cost-efficient multi-game dedicated server platform on AWS Fargate with a
+  local management UI and a fully serverless Discord bot.
+theme: jekyll-theme-cayman
+
+# Jekyll only processes this docs/ folder. The repo README, LICENSE, CLAUDE.md,
+# CONTRIBUTING.md and all application/terraform source live outside of it and
+# are not published.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
+
+# Kramdown + GFM for tables and fenced code blocks.
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
+
+# Make every *.md file reachable as /foo/ rather than /foo.html.
+permalink: pretty
