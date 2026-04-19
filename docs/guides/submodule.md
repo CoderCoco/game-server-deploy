@@ -1,5 +1,7 @@
 ---
-title: Private parent repo + submodule
+title: Submodule layout
+parent: Guides
+nav_order: 3
 ---
 
 # Private parent repo + submodule

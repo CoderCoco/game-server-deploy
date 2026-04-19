@@ -2,7 +2,23 @@ title: Game Server Deploy
 description: >-
   Cost-efficient multi-game dedicated server platform on AWS Fargate with a
   local management UI and a fully serverless Discord bot.
-theme: jekyll-theme-cayman
+
+# Just the Docs — documentation theme with a left-hand nav sidebar, built-in
+# search, and native Mermaid support. Pulled via remote_theme because it's
+# not one of GitHub Pages' built-in themes; the jekyll-remote-theme plugin
+# below is whitelisted on Pages.
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+color_scheme: light
+search_enabled: true
+heading_anchors: true
+aux_links:
+  GitHub:
+    - https://github.com/codercoco/game-server-deploy
+
+# Just the Docs renders ```mermaid fenced code blocks when this key is set
+# (it injects the Mermaid ESM bundle from a CDN at the pinned version).
+mermaid:
+  version: "10.9.1"
 
 # Jekyll only processes this docs/ folder. The repo README, LICENSE, CLAUDE.md,
 # CONTRIBUTING.md and all application/terraform source live outside of it and
@@ -19,6 +35,7 @@ kramdown:
   syntax_highlighter: rouge
 
 plugins:
+  - jekyll-remote-theme
   - jekyll-relative-links
   - jekyll-optional-front-matter
   - jekyll-readme-index

@@ -1,5 +1,6 @@
 ---
 title: Setup guide
+nav_order: 3
 ---
 
 # Setup guide

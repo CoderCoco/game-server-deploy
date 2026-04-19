@@ -1,5 +1,7 @@
 ---
-title: User guide
+title: User
+parent: Guides
+nav_order: 1
 ---
 
 # User guide
