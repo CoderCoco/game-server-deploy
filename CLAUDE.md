@@ -45,7 +45,7 @@ cd app && npm test             # one-off run
 cd app && npm run test:watch   # watch mode
 ```
 
-No linter is configured in this repo.
+ESLint (flat config) lives at `app/eslint.config.js` using `@eslint/js` + `typescript-eslint` recommended presets, plus `eslint-plugin-react` and `eslint-plugin-react-hooks` recommended for the web package. Run `npm run lint` (or `npm run lint:fix`) from `app/`.
 
 ## Architecture
 
