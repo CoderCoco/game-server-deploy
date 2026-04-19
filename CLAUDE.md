@@ -47,6 +47,8 @@ cd app && npm run test:watch   # watch mode
 
 ESLint (flat config) lives at `app/eslint.config.js` using `@eslint/js` + `typescript-eslint` recommended presets, plus `eslint-plugin-react` and `eslint-plugin-react-hooks` recommended for the web package. Run `npm run lint` (or `npm run lint:fix`) from `app/`.
 
+Terraform linting uses [tflint](https://github.com/terraform-linters/tflint) with its `recommended` preset and the AWS ruleset plugin. Config lives at `terraform/.tflint.hcl`. Run `tflint --init` once to install the plugin, then `tflint` from `terraform/`. `terraform fmt -check -recursive` and `terraform validate` cover formatting and syntax.
+
 ## Architecture
 
 Three loosely-coupled pieces share code via `@gsd/shared`:
