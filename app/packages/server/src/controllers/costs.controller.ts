@@ -3,6 +3,7 @@ import { ConfigService } from '../services/ConfigService.js';
 import { CostService } from '../services/CostService.js';
 import { EcsService } from '../services/EcsService.js';
 
+/** Cost-related endpoints: forward-looking per-hour estimates and historical CE-based breakdowns. */
 @Controller('costs')
 export class CostsController {
   constructor(
@@ -11,6 +12,12 @@ export class CostsController {
     private readonly ecs: EcsService,
   ) {}
 
+  /**
+   * Estimates the hourly Fargate cost of each game from its task definition's
+   * CPU/memory, plus the sum-if-everything-were-running. Reads the game list
+   * from tfstate; falls back to `2048 cpu / 8192 MiB` if the task definition
+   * can't be resolved. Returns zeros when tfstate is missing.
+   */
   @Get('estimate')
   async estimate() {
     const outputs = this.config.getTfOutputs();
@@ -32,6 +39,11 @@ export class CostsController {
     };
   }
 
+  /**
+   * Returns actual costs over the trailing `days` window (default 7) via Cost
+   * Explorer, grouped by the `Project` cost-allocation tag. Requires the tag
+   * to have been activated in AWS Billing — see CLAUDE.md "Cost Tagging".
+   */
   @Get('actual')
   actual(@Query('days') daysRaw?: string) {
     const days = parseInt(String(daysRaw ?? '7'), 10);

@@ -18,8 +18,24 @@ Post a review comment **only** when one of the following is clearly true:
 - **Production misconfiguration**: anything that works in dev but would break in production — wrong path resolution post-build, env var assumed to exist, routing that shadows API endpoints, etc.
 - **Contract break**: a public API shape (HTTP response, exported type, CLI flag) changes in a way that callers aren't updated for.
 - **Data-loss or destructive operation** without guards.
+- **Non-conventional PR title** — see "PR title check" below; this is a real issue because we squash-merge, so flag it every time.
 
 When you post one of these, be specific: name the exact failure scenario, not "this could be problematic".
+
+## PR title check (always run this)
+
+Before reviewing the diff, **read the PR title**. We squash-merge, so the PR title becomes the commit subject on `main` verbatim. The title MUST:
+
+1. Start with a Conventional Commits type — one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`.
+2. Optionally include a scope in parentheses, e.g. `feat(server):`, `fix(watchdog):`.
+3. Be followed by a colon, a space, then a short imperative summary.
+4. Stay under ~70 characters total.
+
+Examples that PASS: `refactor(app): migrate server from Express+tsyringe to Nest.js`, `docs: reflect Nest.js migration in CLAUDE.md`, `fix(watchdog): stop leaking tags on failed runs`, `chore: add ESLint flat config`.
+
+Examples that FAIL: `Add ESLint configuration` (missing type), `feat: Adding ESLint config and a comprehensive set of JSDoc comments to the whole repo` (too long, gerund instead of imperative), `Update files` (missing type, vague).
+
+If the title fails any of those checks, **post one comment** that names the failure (missing type, wrong tense, too long, missing colon, etc.) and suggests a corrected title. This is one of the few things you should *always* comment on — it can't be fixed after merge.
 
 ## What NOT to comment on
 
@@ -50,11 +66,11 @@ If a comment would fit into any of the categories above, **do not post it**. Sil
 
 - **Framework**: Nest.js (on `@nestjs/platform-express`) + TypeScript backend, React/Vite frontend, Terraform + AWS.
 - **DI**: Nest's built-in `@Injectable()` providers. Do not suggest switching to tsyringe, InversifyJS, or manual wiring — we just migrated off tsyringe deliberately.
-- **No linter is configured.** Do not comment on "this would fail eslint" or style the linter would catch — we intentionally don't run one.
+- **ESLint + tflint run in CI.** Don't post style comments the linter would catch — those will surface in the lint job. Do flag genuine bugs the linter misses.
 - **Test naming**: `it('should …')`. Don't suggest `it('does …')` or the reverse — the repo convention is `should`.
 - **No `as unknown as T` casts in tests.** Prefer `vi.mocked(fn)` or `Partial<T>` + single `as T`.
 - **ESM-only.** The project is `"type": "module"`. Imports must use `.js` extensions. Don't suggest removing them.
-- **Squash-merge.** PR title becomes the commit subject on `main`, so the title must start with a Conventional Commits prefix (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`), optionally with a scope. If a PR title is missing this, that *is* worth commenting on — it's a real issue that surfaces on `main`.
+- **Squash-merge.** See "PR title check" above — title becomes the commit subject on `main`, so it must be a Conventional Commit. Always check it.
 - **The `game_servers` Terraform map is the single source of truth.** Don't suggest hand-writing per-game resources — they all `for_each` over this map.
 - **DNS is Lambda-managed, not Terraform-managed.** Don't suggest adding `aws_route53_record` resources.
 - **Watchdog state lives in ECS task tags.** Don't suggest adding DynamoDB / SSM / Redis for this.

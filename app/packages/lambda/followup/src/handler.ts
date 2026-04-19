@@ -242,6 +242,14 @@ function recheck(event: FollowupEvent, cfg: DiscordConfig, action: DiscordAction
   });
 }
 
+/**
+ * Async-invoked by the interactions Lambda after it has already deferred the reply
+ * (Discord's 3-second budget doesn't leave room for ECS calls). Does the slow work —
+ * `RunTask` / `StopTask` / `DescribeTasks` — then PATCHes the original interaction
+ * message via the webhook endpoint. For `start`, also writes a `PENDING#{taskArn}`
+ * row to DynamoDB so `@gsd/lambda-update-dns` can PATCH the same interaction once
+ * the task reaches RUNNING and an IP/hostname is resolved.
+ */
 export const handler = async (event: FollowupEvent): Promise<void> => {
   const tableName = requireEnv('TABLE_NAME');
   const cfg = await getDiscordConfig(tableName);

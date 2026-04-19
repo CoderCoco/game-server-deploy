@@ -5,6 +5,11 @@ interface Props {
   games: string[];
 }
 
+/**
+ * Bottom-of-dashboard panel that tails CloudWatch logs for the currently-selected
+ * game. Fetches a fixed number of recent lines from `/api/logs/:game` on game
+ * change and on explicit refresh; auto-scrolls to the newest entry.
+ */
 export function LogsPanel({ games }: Props) {
   const [selectedGame, setSelectedGame] = useState<string>('');
   const [lines, setLines] = useState<string[]>([]);

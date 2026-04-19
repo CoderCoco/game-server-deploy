@@ -263,6 +263,14 @@ async function invokeFollowup(payload: FollowupPayload): Promise<void> {
   );
 }
 
+/**
+ * Entry point for every Discord HTTP interaction, fronted by a Lambda Function URL.
+ * Verifies the Ed25519 signature against the public key in Secrets Manager (Discord
+ * rejects any unverified reply, so this gate is mandatory) and then either PONGs a
+ * PING, answers autocomplete synchronously from the baked-in `GAME_NAMES` env var,
+ * or deferred-acks a slash command (`type:5`) and async-invokes the followup Lambda
+ * to do the slow ECS work within Discord's 3-second reply budget.
+ */
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
   const signature = event.headers?.['x-signature-ed25519'];
   const timestamp = event.headers?.['x-signature-timestamp'];

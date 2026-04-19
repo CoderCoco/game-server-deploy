@@ -5,6 +5,11 @@ interface Props {
   estimates: CostEstimates | null;
 }
 
+/**
+ * Bottom-left dashboard panel. Renders the 7-day actual-spend bar chart from
+ * Cost Explorer (fetched once on mount) plus the per-game hourly estimates
+ * passed in as props from the parent dashboard.
+ */
 export function CostPanel({ estimates }: Props) {
   const [actual, setActual] = useState<ActualCosts | null>(null);
 

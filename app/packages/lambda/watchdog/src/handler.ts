@@ -4,7 +4,7 @@
  * Runs on a schedule (EventBridge rate). For each running game server task:
  *   - Reads CloudWatch `NetworkPacketsIn` on the task's ENI over the last
  *     `CHECK_WINDOW_MINUTES` window.
- *   - If packets < `MIN_PACKETS`, increments the per-task `idle_checks` ECS
+ *   - If packets &lt; `MIN_PACKETS`, increments the per-task `idle_checks` ECS
  *     resource tag. After `IDLE_CHECKS` consecutive idle windows, the task is
  *     stopped (which triggers the DNS/ALB cleanup via the update-dns Lambda).
  *   - For HTTPS games we also deregister the ALB target before stopping so
@@ -207,6 +207,14 @@ async function listAllRunningTaskArns(): Promise<string[]> {
   return arns;
 }
 
+/**
+ * Runs on an EventBridge schedule (`rate(${watchdog_interval_minutes} minutes)`) and
+ * stops idle game-server tasks to keep costs down. For each RUNNING task, reads
+ * `NetworkPacketsIn` on its ENI via CloudWatch and bumps a consecutive-idle counter
+ * stored as an ECS task tag (no DynamoDB/SSM state). After `watchdog_idle_checks`
+ * consecutive idle intervals, the task is stopped — which triggers the DNS-delete
+ * path in `@gsd/lambda-update-dns`.
+ */
 export const handler = async (): Promise<{ checked: number }> => {
   console.log(`Watchdog running — cluster: ${ECS_CLUSTER}, games: ${GAME_NAMES.join(',')}`);
 

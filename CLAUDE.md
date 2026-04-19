@@ -45,7 +45,9 @@ cd app && npm test             # one-off run
 cd app && npm run test:watch   # watch mode
 ```
 
-No linter is configured in this repo.
+ESLint (flat config) lives at `app/eslint.config.js` using `@eslint/js` + `typescript-eslint` recommended presets, plus `eslint-plugin-react` and `eslint-plugin-react-hooks` recommended for the web package. Run `npm run lint` (or `npm run lint:fix`) from `app/`.
+
+Terraform linting uses [tflint](https://github.com/terraform-linters/tflint) with its `recommended` preset and the AWS ruleset plugin. Config lives at `terraform/.tflint.hcl`. Run `tflint --init` once to install the plugin, then `tflint` from `terraform/`. `terraform fmt -check -recursive` and `terraform validate` cover formatting and syntax.
 
 ## Architecture
 
@@ -138,7 +140,7 @@ All resources inherit `default_tags` from `provider "aws"` (`Project = "game-ser
 
 ## PR Conventions
 
-- **PR titles use Conventional Commits.** Every PR title must start with a conventional-commit type (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`), optionally with a scope in parentheses, then a colon and a short imperative summary — e.g. `refactor(app): migrate server from Express+tsyringe to Nest.js`, `docs: reflect Nest.js migration in CLAUDE.md`, `fix(watchdog): stop leaking tags on failed runs`. This matters because we squash-merge: the PR title becomes the merge commit subject on `main`, so a badly-formed title produces a badly-formed commit. Keep the subject under ~70 characters; put details in the PR body.
+- **PR titles MUST use Conventional Commits.** We squash-merge, so the PR title becomes the commit subject on `main` verbatim — a badly-formed title produces a badly-formed commit that can't be fixed after merge. Format: `<type>(<optional-scope>): <imperative summary>`, where `<type>` is one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`. Keep the subject under ~70 characters; put details in the PR body. Examples: `refactor(app): migrate server from Express+tsyringe to Nest.js`, `docs: reflect Nest.js migration in CLAUDE.md`, `fix(watchdog): stop leaking tags on failed runs`, `chore: add ESLint flat config`. Verify the title before opening or merging the PR — `Add ESLint configuration` would fail this rule (no type).
 
 ## PR Review Workflow
 

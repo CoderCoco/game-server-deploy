@@ -25,10 +25,10 @@ export function ApiTokenModal() {
       <form onSubmit={save} style={modalStyle}>
         <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>API token required</h2>
         <p style={helpStyle}>
-          This dashboard's API is gated behind a bearer token. Paste the value of
+          This dashboard&apos;s API is gated behind a bearer token. Paste the value of
           <code> API_TOKEN </code> (or <code>api_token</code> from
-          <code> app/server_config.json</code>) to continue. It's stored in your
-          browser's local storage; clear the browser data to revoke.
+          <code> app/server_config.json</code>) to continue. It&apos;s stored in your
+          browser&apos;s local storage; clear the browser data to revoke.
         </p>
         <input
           type="password"
