@@ -24,12 +24,22 @@ const ALL_ACTIONS: DiscordAction[] = ['start', 'stop', 'status'];
  */
 export function DiscordPanel({ games }: { games: string[] }) {
   const [cfg, setCfg] = useState<DiscordConfigRedacted | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<'bot' | 'guilds' | 'admins' | 'perms'>('bot');
   const [busy, setBusy] = useState(false);
 
-  /** Re-fetch the (redacted) Discord config from the API after mutations. */
+  /**
+   * Re-fetch the (redacted) Discord config from the API after mutations.
+   * Any thrown error is captured in `loadError` so the panel renders a
+   * visible failure message rather than sitting on "Loading…" forever.
+   */
   async function refresh() {
-    setCfg(await api.discordConfig());
+    try {
+      setLoadError(null);
+      setCfg(await api.discordConfig());
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
   }
   useEffect(() => {
     void refresh();
@@ -39,7 +49,13 @@ export function DiscordPanel({ games }: { games: string[] }) {
     return (
       <div style={panelStyle}>
         <h2 style={headingStyle}>Discord Bot</h2>
-        <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Loading…</div>
+        {loadError ? (
+          <div style={{ color: 'var(--error, #f87171)', fontSize: '0.85rem' }}>
+            Failed to load Discord config: {loadError}. Check the management API logs.
+          </div>
+        ) : (
+          <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Loading…</div>
+        )}
       </div>
     );
   }
@@ -149,6 +165,11 @@ function CredentialsTab({
 
   return (
     <div style={{ display: 'grid', gap: '0.6rem' }}>
+      <p style={helpStyle}>
+        The bot is serverless — there is no process to start. It runs inside two Lambdas
+        provisioned by Terraform and is live as soon as credentials are saved here and the
+        Interactions Endpoint URL is pasted into the Discord developer portal.
+      </p>
       <p style={helpStyle}>
         Create an application at <code>discord.com/developers/applications</code>, add a bot,
         copy the Application ID, Bot Token, and the Application Public Key. Paste the

@@ -127,6 +127,19 @@ describe('DiscordConfigService.getRedacted', () => {
     expect(redacted.botTokenSet).toBe(false);
     expect(redacted.publicKeySet).toBe(false);
   });
+
+  it('should return an unset redacted view when Terraform outputs are missing rather than 500', async () => {
+    // Mirrors the `getConfig` tolerance above: before `terraform apply` the
+    // secret ARNs aren't in tfstate, so `botTokenSecretArn()`/`publicKeySecretArn()`
+    // throw. Without special handling that escapes `Promise.all` and the
+    // controller returns 500, leaving the web panel stuck on "Loading…".
+    const redacted = await makeService(null).getRedacted();
+    expect(redacted.botTokenSet).toBe(false);
+    expect(redacted.publicKeySet).toBe(false);
+    expect(redacted.allowedGuilds).toEqual([]);
+    expect(getBotTokenMock).not.toHaveBeenCalled();
+    expect(getPublicKeyMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DiscordConfigService.setCredentials', () => {

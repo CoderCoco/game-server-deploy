@@ -120,12 +120,32 @@ export class DiscordConfigService {
     return getBotToken(this.botTokenSecretArn());
   }
 
+  /**
+   * Read a secret by ARN, returning null both when the secret itself is
+   * unset and when the Terraform outputs don't yet expose the ARN (e.g. the
+   * operator is running the web UI before their first `terraform apply`).
+   * Without this tolerance the whole `/api/discord/config` request 500s and
+   * the Credentials tab can never surface the "needs terraform apply" hint.
+   */
+  private async safeGetSecret(
+    fetch: (arn: string) => Promise<string | null>,
+    getArn: () => string,
+    label: string,
+  ): Promise<string | null> {
+    try {
+      return await fetch(getArn());
+    } catch (err) {
+      logger.warn(`Failed to read ${label} from Secrets Manager`, { err });
+      return null;
+    }
+  }
+
   /** Redacted view safe to return to the web client. Includes `*Set` flags for both secrets. */
   async getRedacted(): Promise<RedactedDiscordConfig> {
     const cfg = await this.load();
     const [botToken, publicKey] = await Promise.all([
-      getBotToken(this.botTokenSecretArn()).catch(() => null),
-      getPublicKey(this.publicKeySecretArn()).catch(() => null),
+      this.safeGetSecret(getBotToken, () => this.botTokenSecretArn(), 'bot token'),
+      this.safeGetSecret(getPublicKey, () => this.publicKeySecretArn(), 'public key'),
     ]);
     return {
       clientId: cfg.clientId,
