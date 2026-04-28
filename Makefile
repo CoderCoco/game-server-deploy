@@ -94,6 +94,23 @@ tf-plan: $(LAMBDAS_STAMP) tf-init
 
 tf-apply: $(LAMBDAS_STAMP) tf-init
 	cd $(TF_DIR) && terraform apply
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  Post-deploy checklist"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@INVOKE_URL=$$(cd $(TF_DIR) && terraform output -raw interactions_invoke_url 2>/dev/null); \
+	  echo ""; \
+	  echo "  Interactions Endpoint URL (copy this):"; \
+	  echo "    $${INVOKE_URL:-(not available - did apply succeed?)}"; \
+	  echo ""; \
+	  echo "  1. Paste the URL above into the Discord Developer Portal:"; \
+	  echo "     App -> General Information -> Interactions Endpoint URL"; \
+	  echo ""; \
+	  echo "  2. Enter bot token + public key in the management app Credentials tab"; \
+	  echo "     (skip if already pre-seeded in terraform.tfvars)"; \
+	  echo ""; \
+	  echo "  3. Click 'Register commands' in the management app for each guild"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 tf-destroy: tf-init
 	cd $(TF_DIR) && terraform destroy
