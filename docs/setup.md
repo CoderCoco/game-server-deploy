@@ -64,14 +64,23 @@ On the AWS side you need:
         "cloudwatch:*",
         "events:*",
         "route53:*",
-        "iam:*",
         "ce:*",
         "elasticloadbalancing:*",
         "acm:*",
         "dynamodb:*",
-        "secretsmanager:*"
+        "secretsmanager:*",
+        "s3:*"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "GameServerIAM",
+      "Effect": "Allow",
+      "Action": "iam:*",
+      "Resource": [
+        "arn:aws:iam::*:role/game-servers-*",
+        "arn:aws:iam::*:policy/game-servers-*"
+      ]
     }
   ]
 }
@@ -82,6 +91,11 @@ On the AWS side you need:
 > ~14 services. One inline policy also keeps the full blast radius visible
 > in one place. Trade-off: you lose AWS's auto-maintenance of action lists,
 > but since everything is `{service}:*` there is nothing to maintain.
+
+> **`iam:*` is scoped to project-prefixed ARNs**, not `Resource: *`, to avoid
+> granting `iam:PassRole` on every role in the account. The `game-servers-*`
+> prefix matches the default `project_name`. If you change `project_name` in
+> `terraform.tfvars`, update the two ARN patterns in `GameServerIAM` to match.
 
 You also need a tiny extra permission that is **not** in any AWS-managed
 policy: the AWS provider tags EventBridge rules on creation, which requires
@@ -115,7 +129,7 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-`setup.sh` is idempotent. It:
+`setup.sh` is idempotent — safe to re-run at any time. It:
 
 1. Checks for Node 20+, and installs Terraform and the AWS CLI if missing
    (Debian/Ubuntu only; macOS users should install those manually first).
@@ -126,7 +140,17 @@ chmod +x setup.sh
    fail.
 4. Copies `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars`
    if the latter doesn't exist yet.
-5. Runs `terraform init` inside `terraform/`.
+5. Creates the S3 state bucket (`{project_name}-tf-state`) and DynamoDB lock
+   table (`{project_name}-tf-locks`) if they don't already exist. The bucket
+   gets versioning, public-access blocking, and AES-256 encryption enabled.
+   The script waits for the DynamoDB table to reach `ACTIVE` status before
+   continuing. Both names are derived from `project_name` in
+   `terraform.tfvars` (default: `game-servers`). This step requires the
+   `s3:*` permissions in the inline policy above.
+6. Runs `terraform init` inside `terraform/`, passing the bucket and table
+   as `-backend-config` flags. If a local `terraform.tfstate` is present
+   (migrating from a previous local-backend setup), it automatically
+   migrates state to S3 without prompting.
 
 ## 4. Configure your servers
 

@@ -6,10 +6,9 @@ nav_order: 1
 
 # Terraform
 
-All AWS infrastructure lives under `terraform/`. State is local by default
-(`terraform.tfstate` in the directory) — swap to an S3 backend if you're
-running this for real; see the
-[submodule guide]({{ '/guides/submodule/' | relative_url }}).
+All AWS infrastructure lives under `terraform/`. State is stored in an S3
+bucket with DynamoDB locking, bootstrapped automatically by `setup.sh` — see
+step 3 of the [setup guide]({{ '/setup/' | relative_url }}) for details.
 
 ## Files
 
@@ -97,6 +96,7 @@ running this for real; see the
 - **Removing a game from the map deletes its task definition** but does not
   stop running tasks. Stop the game from the dashboard first, then remove
   the key.
-- **Local `terraform.tfstate`** is fine for a single operator. Switch to
-  an S3 backend (with DynamoDB lock) if more than one person applies — see
-  the [submodule guide]({{ '/guides/submodule/' | relative_url }}).
+- **S3 backend + DynamoDB lock** are bootstrapped by `setup.sh` — state is
+  remote by default. If you need to run `terraform init` manually, pass the
+  same `-backend-config` flags that `setup.sh` uses (bucket, key, region,
+  dynamodb_table, encrypt).
