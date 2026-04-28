@@ -17,7 +17,11 @@ WEB_SRCS     := $(shell find $(APP_DIR)/packages/web/src     -name '*.ts' -o -na
                 $(APP_DIR)/packages/web/vite.config.ts
 LAMBDA_SRCS  := $(shell find $(APP_DIR)/packages/lambda      -name '*.ts' -o -name '*.mjs' 2>/dev/null)
 PKG_JSONS    := $(shell find $(APP_DIR)/packages             -name 'package.json' 2>/dev/null) \
-                $(APP_DIR)/package.json
+                $(APP_DIR)/package.json \
+                $(APP_DIR)/package-lock.json
+TS_CONFIGS   := $(APP_DIR)/tsconfig.json \
+                $(APP_DIR)/tsconfig.base.json \
+                $(shell find $(APP_DIR)/packages -name 'tsconfig*.json' 2>/dev/null)
 
 .PHONY: all build build-app build-lambdas install dev test lint
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-validate tf-fmt
@@ -37,22 +41,22 @@ $(INSTALL_STAMP): $(PKG_JSONS) | $(STAMP)
 install: $(INSTALL_STAMP)
 
 # ── Shared ───────────────────────────────────────────────────────────────────
-$(SHARED_STAMP): $(INSTALL_STAMP) $(SHARED_SRCS)
+$(SHARED_STAMP): $(INSTALL_STAMP) $(SHARED_SRCS) $(TS_CONFIGS)
 	cd $(APP_DIR) && npm run build -w @gsd/shared
 	touch $@
 
 # ── Server ───────────────────────────────────────────────────────────────────
-$(SERVER_STAMP): $(SHARED_STAMP) $(SERVER_SRCS)
+$(SERVER_STAMP): $(SHARED_STAMP) $(SERVER_SRCS) $(TS_CONFIGS)
 	cd $(APP_DIR) && npm run build -w @gsd/server
 	touch $@
 
 # ── Web ──────────────────────────────────────────────────────────────────────
-$(WEB_STAMP): $(SHARED_STAMP) $(WEB_SRCS)
+$(WEB_STAMP): $(SHARED_STAMP) $(WEB_SRCS) $(TS_CONFIGS)
 	cd $(APP_DIR) && npm run build -w @gsd/web
 	touch $@
 
 # ── Lambdas ──────────────────────────────────────────────────────────────────
-$(LAMBDAS_STAMP): $(SHARED_STAMP) $(LAMBDA_SRCS)
+$(LAMBDAS_STAMP): $(SHARED_STAMP) $(LAMBDA_SRCS) $(TS_CONFIGS)
 	cd $(APP_DIR) && npm run build -w @gsd/lambda-interactions \
 	                               -w @gsd/lambda-followup \
 	                               -w @gsd/lambda-update-dns \
