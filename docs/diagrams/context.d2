@@ -1,0 +1,35 @@
+direction: right
+
+operator: "Operator's laptop" {
+  ui: "React dashboard"
+  api: "Nest.js API"
+  ui -> api: "bearer token"
+}
+
+discord: "Discord" {
+  shape: cloud
+}
+
+player: "Player" {
+  shape: person
+}
+
+aws: "AWS account" {
+  ecs: "ECS Fargate tasks\n(on-demand, per-game)"
+  bot: "Serverless Discord bot\n(Lambdas + DDB + Secrets)"
+  loops: "update-dns + watchdog\nLambdas"
+  r53: "Route 53" {
+    shape: cylinder
+  }
+
+  bot -> ecs: "RunTask / StopTask"
+  ecs -> loops: "state / metrics"
+  loops -> r53: "UPSERT / DELETE A"
+}
+
+operator.api -> aws.ecs: "Start / Stop / Describe"
+operator.api -> aws.bot: "write config"
+discord -> aws.bot: "slash commands"
+aws.bot -> discord: "PATCH @original"
+player -> aws.ecs: "UDP / TCP / HTTPS"
+player -> aws.r53: "DNS"

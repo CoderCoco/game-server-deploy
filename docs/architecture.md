@@ -19,83 +19,44 @@ There is **no persistent ECS service**. Game servers only exist while a
 RunTask is in flight — Start triggers `ecs.runTask`, Stop triggers
 `ecs.stopTask`, and the Watchdog Lambda stops tasks that look idle.
 
-## Component diagram
+## Component diagrams
 
-```mermaid
-flowchart TB
-  classDef local fill:#eef,stroke:#66f
-  classDef aws fill:#fef6e4,stroke:#b58900
-  classDef ext fill:#efe,stroke:#393
+The system splits cleanly into three slices. Each is shown on its own
+rather than jammed into one overview — the cross-cluster arrows that
+arise when you draw all three together (Discord Lambdas talking to ECS,
+EventBridge talking to update-dns, the dashboard talking to everything)
+route through neighbouring subgraphs and produce unreadable overlap.
 
-  subgraph Local[Operator laptop / container]
-    direction LR
-    Web["@gsd/web<br/>React + Vite"]:::local
-    Server["@gsd/server<br/>Nest.js + Winston"]:::local
-    Web -- "/api/* + Bearer" --> Server
-  end
+### Game plane and operator control
 
-  subgraph AWS[AWS account]
-    direction TB
+The Nest.js API is the local control plane. It reads
+`terraform.tfstate` directly to discover infrastructure IDs, then drives
+ECS / DynamoDB / Secrets Manager / CloudWatch via SDK v3. Players reach
+the game either direct to the task's public IP (UDP / TCP games) or
+through the ALB (HTTPS games).
 
-    subgraph Data[Game plane]
-      direction LR
-      ECS["ECS Fargate<br/>{game}-server task defs"]:::aws
-      EFS["EFS + per-game<br/>access points"]:::aws
-      ALB["ALB + ACM<br/>(HTTPS games only)"]:::aws
-      ECS -- "nfs" --> EFS
-      ALB --> ECS
-    end
+![Game plane and operator]({{ '/diagrams/game-plane.svg' | relative_url }}){:.d2-diagram}
 
-    subgraph Ctrl[Control plane]
-      direction LR
-      IX["interactions Lambda<br/>Function URL"]:::aws
-      FU["followup Lambda"]:::aws
-      UD["update-dns Lambda"]:::aws
-      WD["watchdog Lambda"]:::aws
-      EB{{"EventBridge"}}:::aws
-      IX -- "async invoke" --> FU
-      EB -- "rate(N min)" --> WD
-      EB -- "ECS Task State Change" --> UD
-    end
+### Serverless Discord bot
 
-    subgraph State[State]
-      direction LR
-      DDB[("DynamoDB<br/>CONFIG#discord + PENDING#arn")]:::aws
-      SM[("Secrets Manager<br/>bot-token + public-key")]:::aws
-      R53[("Route 53<br/>{game}.yourdomain.com")]:::aws
-      CW[("CloudWatch<br/>logs + NetworkPacketsIn")]:::aws
-    end
+Two Lambdas and a single DynamoDB table handle every slash command.
+`interactions` is the synchronous entry point behind a Function URL —
+it verifies the Ed25519 signature, replies with a deferred ack within
+Discord's 3-second budget, then fires the async `followup` Lambda for
+anything that touches ECS.
 
-    Server -. "read tfstate (local file)" .-> TF[("terraform.tfstate")]:::aws
-    Server -- "RunTask / StopTask<br/>DescribeTasks" --> ECS
-    Server -- "put CONFIG#discord" --> DDB
-    Server -- "put bot-token / public-key" --> SM
-    Server -. "GetLogEvents" .-> CW
+![Serverless Discord bot]({{ '/diagrams/discord-bot.svg' | relative_url }}){:.d2-diagram}
 
-    FU -- "RunTask / StopTask" --> ECS
-    FU -- "put PENDING#arn" --> DDB
-    IX -- "get public-key" --> SM
-    IX -- "get CONFIG#discord" --> DDB
-    ECS -- "state change" --> EB
-    UD -- "UPSERT/DELETE A" --> R53
-    UD -- "register/deregister targets" --> ALB
-    UD -- "get+delete PENDING#arn" --> DDB
-    WD -- "GetMetricStatistics" --> CW
-    WD -- "StopTask + tag" --> ECS
-    WD -- "cleanup" --> R53
-    WD -- "cleanup" --> ALB
-  end
+### Control loops (DNS + watchdog)
 
-  Discord(["Discord<br/>application"]):::ext
-  Player(["Player"]):::ext
+EventBridge drives the two "always on" Lambdas that keep DNS and idle
+shutdown in sync with actual task state. `update-dns` fires on every
+ECS task state change and reconciles Route 53 / ALB targets plus the
+pending-interaction row in DynamoDB. `watchdog` fires on a schedule and
+stops tasks whose `NetworkPacketsIn` has stayed below the threshold for
+`IDLE_CHECKS` consecutive intervals.
 
-  Discord -- "HTTP interaction" --> IX
-  IX -- "PATCH @original" --> Discord
-  FU -- "PATCH @original" --> Discord
-  UD -- "PATCH @original" --> Discord
-  Player -- "UDP / TCP / HTTPS" --> ECS
-  Player -. "DNS lookup" .-> R53
-```
+![Control loops]({{ '/diagrams/control-loops.svg' | relative_url }}){:.d2-diagram}
 
 ## The `/server-start` critical path
 
@@ -103,38 +64,7 @@ When a user types `/server-start palworld` in Discord, five AWS services and
 three Lambdas cooperate to return a usable `palworld.yourdomain.com` without
 ever letting the interaction time out.
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant U as User
-  participant D as Discord
-  participant I as interactions Lambda
-  participant F as followup Lambda
-  participant E as ECS
-  participant EB as EventBridge
-  participant UD as update-dns Lambda
-  participant R as Route 53
-  participant DB as DynamoDB
-
-  U->>D: /server-start palworld
-  D->>I: POST FunctionURL (signed)
-  I->>I: Ed25519 verify + canRun()
-  I-->>D: type:5 deferred ack (within 3s)
-  I--)F: async invoke (FollowupPayload)
-  F->>E: RunTask palworld-server
-  E-->>F: taskArn
-  F->>DB: put PENDING#taskArn (TTL 15 min)
-  F->>D: PATCH @original "starting..."
-  Note over E: task pulls image, mounts EFS...
-  E-->>EB: ECS Task State Change (RUNNING)
-  EB->>UD: event
-  UD->>E: DescribeTasks → ENI → public IP
-  UD->>R: UPSERT A palworld.example.com
-  UD->>DB: get + delete PENDING#taskArn
-  UD->>D: PATCH @original "🟢 running — palworld.example.com"
-  U->>R: DNS lookup
-  U->>E: UDP 8211
-```
+![/server-start sequence]({{ '/diagrams/server-start.svg' | relative_url }}){:.d2-diagram}
 
 After the session: either the user types `/server-stop palworld` (same flow
 but `stopTask` + `DELETE` A record), or the Watchdog Lambda notices
