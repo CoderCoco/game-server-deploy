@@ -118,14 +118,28 @@ else
     --key-schema AttributeName=LockID,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
     --region "$TF_REGION"
+  echo "   Waiting for DynamoDB table to become ACTIVE..."
+  aws dynamodb wait table-exists \
+    --table-name "$TF_LOCK_TABLE" \
+    --region "$TF_REGION"
 fi
 
-terraform init \
-  -backend-config="bucket=${TF_STATE_BUCKET}" \
-  -backend-config="key=${TF_PROJECT}/terraform.tfstate" \
-  -backend-config="region=${TF_REGION}" \
-  -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+# If a local state file exists the backend is being migrated from local → S3.
+# Pass -migrate-state and auto-confirm so the script doesn't hang waiting for
+# interactive input.
+TF_INIT_FLAGS=(
+  -backend-config="bucket=${TF_STATE_BUCKET}"
+  -backend-config="key=${TF_PROJECT}/terraform.tfstate"
+  -backend-config="region=${TF_REGION}"
+  -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
   -backend-config="encrypt=true"
+)
+if [ -f terraform.tfstate ]; then
+  echo "   Local terraform.tfstate detected — migrating state to S3..."
+  echo "yes" | terraform init -migrate-state "${TF_INIT_FLAGS[@]}"
+else
+  terraform init "${TF_INIT_FLAGS[@]}"
+fi
 
 echo ""
 echo "  ✅  Setup complete!"
