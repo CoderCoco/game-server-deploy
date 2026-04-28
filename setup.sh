@@ -55,7 +55,7 @@ echo ""
 echo "🧱  Building Lambda bundles..."
 npm run build:lambdas
 
-# 3. Terraform init
+# 3. Bootstrap S3 backend, then Terraform init
 echo ""
 echo "🔧  Initializing Terraform..."
 cd "$SCRIPT_DIR/terraform"
@@ -63,7 +63,69 @@ if [ ! -f terraform.tfvars ]; then
   cp terraform.tfvars.example terraform.tfvars
   echo "   Created terraform.tfvars from example — edit it with your settings."
 fi
-terraform init
+
+# Derive bucket/table names from terraform.tfvars (fall back to defaults).
+TF_PROJECT=$(grep -E '^project_name\s*=' terraform.tfvars | head -1 | sed 's/.*=\s*"\(.*\)".*/\1/')
+TF_REGION=$(grep -E '^aws_region\s*=' terraform.tfvars | head -1 | sed 's/.*=\s*"\(.*\)".*/\1/')
+TF_PROJECT="${TF_PROJECT:-game-servers}"
+TF_REGION="${TF_REGION:-us-east-1}"
+TF_STATE_BUCKET="${TF_PROJECT}-tf-state"
+TF_LOCK_TABLE="${TF_PROJECT}-tf-locks"
+
+echo ""
+echo "☁️   Bootstrapping S3 backend (bucket: ${TF_STATE_BUCKET}, region: ${TF_REGION})..."
+
+# Create S3 bucket if it doesn't already exist.
+# us-east-1 is the only region that rejects --create-bucket-configuration.
+if aws s3api head-bucket --bucket "$TF_STATE_BUCKET" --region "$TF_REGION" 2>/dev/null; then
+  echo "   S3 bucket ${TF_STATE_BUCKET} already exists — skipping."
+else
+  echo "   Creating S3 bucket ${TF_STATE_BUCKET}..."
+  if [ "$TF_REGION" = "us-east-1" ]; then
+    aws s3api create-bucket \
+      --bucket "$TF_STATE_BUCKET" \
+      --region "$TF_REGION"
+  else
+    aws s3api create-bucket \
+      --bucket "$TF_STATE_BUCKET" \
+      --region "$TF_REGION" \
+      --create-bucket-configuration "LocationConstraint=${TF_REGION}"
+  fi
+  aws s3api put-bucket-versioning \
+    --bucket "$TF_STATE_BUCKET" \
+    --versioning-configuration Status=Enabled \
+    --region "$TF_REGION"
+  aws s3api put-public-access-block \
+    --bucket "$TF_STATE_BUCKET" \
+    --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" \
+    --region "$TF_REGION"
+  aws s3api put-bucket-encryption \
+    --bucket "$TF_STATE_BUCKET" \
+    --server-side-encryption-configuration \
+    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}' \
+    --region "$TF_REGION"
+fi
+
+# Create DynamoDB lock table if it doesn't already exist.
+if aws dynamodb describe-table --table-name "$TF_LOCK_TABLE" --region "$TF_REGION" 2>/dev/null; then
+  echo "   DynamoDB table ${TF_LOCK_TABLE} already exists — skipping."
+else
+  echo "   Creating DynamoDB lock table ${TF_LOCK_TABLE}..."
+  aws dynamodb create-table \
+    --table-name "$TF_LOCK_TABLE" \
+    --attribute-definitions AttributeName=LockID,AttributeType=S \
+    --key-schema AttributeName=LockID,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST \
+    --region "$TF_REGION"
+fi
+
+terraform init \
+  -backend-config="bucket=${TF_STATE_BUCKET}" \
+  -backend-config="key=${TF_PROJECT}/terraform.tfstate" \
+  -backend-config="region=${TF_REGION}" \
+  -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+  -backend-config="encrypt=true"
 
 echo ""
 echo "  ✅  Setup complete!"
