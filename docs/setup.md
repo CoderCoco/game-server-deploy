@@ -64,7 +64,6 @@ On the AWS side you need:
         "cloudwatch:*",
         "events:*",
         "route53:*",
-        "iam:*",
         "ce:*",
         "elasticloadbalancing:*",
         "acm:*",
@@ -73,6 +72,15 @@ On the AWS side you need:
         "s3:*"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "GameServerIAM",
+      "Effect": "Allow",
+      "Action": "iam:*",
+      "Resource": [
+        "arn:aws:iam::*:role/game-servers-*",
+        "arn:aws:iam::*:policy/game-servers-*"
+      ]
     }
   ]
 }
@@ -83,6 +91,11 @@ On the AWS side you need:
 > ~14 services. One inline policy also keeps the full blast radius visible
 > in one place. Trade-off: you lose AWS's auto-maintenance of action lists,
 > but since everything is `{service}:*` there is nothing to maintain.
+
+> **`iam:*` is scoped to project-prefixed ARNs**, not `Resource: *`, to avoid
+> granting `iam:PassRole` on every role in the account. The `game-servers-*`
+> prefix matches the default `project_name`. If you change `project_name` in
+> `terraform.tfvars`, update the two ARN patterns in `GameServerIAM` to match.
 
 You also need a tiny extra permission that is **not** in any AWS-managed
 policy: the AWS provider tags EventBridge rules on creation, which requires
