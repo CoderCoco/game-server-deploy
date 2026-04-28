@@ -12,9 +12,11 @@ terraform {
     }
   }
 
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # Backend config is supplied at `terraform init` time by setup.sh so the
+  # bucket/table names stay in sync with the values it creates.  When running
+  # init manually, pass the same -backend-config flags that setup.sh uses, or
+  # run setup.sh directly.
+  backend "s3" {}
 }
 
 provider "aws" {
