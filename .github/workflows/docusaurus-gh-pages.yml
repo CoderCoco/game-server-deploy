@@ -2,7 +2,7 @@ name: Deploy Docusaurus docs site to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "claude/docusaurus-dark-light-theme-4BT5j"]
     paths:
       - "docs/**"
       - ".github/workflows/docusaurus-gh-pages.yml"
