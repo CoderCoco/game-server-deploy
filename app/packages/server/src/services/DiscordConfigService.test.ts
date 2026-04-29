@@ -13,6 +13,7 @@ import { DiscordConfigService } from './DiscordConfigService.js';
 import { ConfigService, type TfOutputs } from './ConfigService.js';
 
 const getDiscordConfigMock = vi.fn();
+const getBaseDiscordConfigMock = vi.fn();
 const putDiscordConfigMock = vi.fn();
 const getBotTokenMock = vi.fn();
 const getPublicKeyMock = vi.fn();
@@ -25,6 +26,7 @@ vi.mock('@gsd/shared', async () => {
   return {
     ...actual,
     getDiscordConfig: (...args: unknown[]) => getDiscordConfigMock(...args),
+    getBaseDiscordConfig: (...args: unknown[]) => getBaseDiscordConfigMock(...args),
     putDiscordConfig: (...args: unknown[]) => putDiscordConfigMock(...args),
     getBotToken: (...args: unknown[]) => getBotTokenMock(...args),
     getPublicKey: (...args: unknown[]) => getPublicKeyMock(...args),
@@ -61,6 +63,7 @@ function makeService(outputs: TfOutputs | null = TF): DiscordConfigService {
 
 beforeEach(() => {
   getDiscordConfigMock.mockReset();
+  getBaseDiscordConfigMock.mockReset();
   putDiscordConfigMock.mockReset();
   getBotTokenMock.mockReset();
   getPublicKeyMock.mockReset();
@@ -72,6 +75,10 @@ beforeEach(() => {
     allowedGuilds: [],
     admins: { userIds: [], roleIds: [] },
     gamePermissions: {},
+  });
+  getBaseDiscordConfigMock.mockResolvedValue({
+    allowedGuilds: [],
+    admins: { userIds: [], roleIds: [] },
   });
   putDiscordConfigMock.mockResolvedValue(undefined);
   getBotTokenMock.mockResolvedValue(null);
@@ -126,6 +133,23 @@ describe('DiscordConfigService.getRedacted', () => {
     const redacted = await makeService().getRedacted();
     expect(redacted.botTokenSet).toBe(false);
     expect(redacted.publicKeySet).toBe(false);
+  });
+
+  it('should include base guild and admin lists from the BASE#discord row', async () => {
+    getBaseDiscordConfigMock.mockResolvedValue({
+      allowedGuilds: ['G-base'],
+      admins: { userIds: ['U-base'], roleIds: ['R-base'] },
+    });
+    const redacted = await makeService().getRedacted();
+    expect(redacted.baseAllowedGuilds).toEqual(['G-base']);
+    expect(redacted.baseAdmins).toEqual({ userIds: ['U-base'], roleIds: ['R-base'] });
+  });
+
+  it('should return empty base lists when no BASE#discord row exists', async () => {
+    getBaseDiscordConfigMock.mockResolvedValue({ allowedGuilds: [], admins: { userIds: [], roleIds: [] } });
+    const redacted = await makeService().getRedacted();
+    expect(redacted.baseAllowedGuilds).toEqual([]);
+    expect(redacted.baseAdmins).toEqual({ userIds: [], roleIds: [] });
   });
 });
 
@@ -188,7 +212,7 @@ describe('DiscordConfigService.allowedGuilds mutations', () => {
     );
   });
 
-  it('should remove a guild from the allowlist', async () => {
+  it('should remove a guild from the dynamic allowlist and return ok', async () => {
     getDiscordConfigMock.mockResolvedValue({
       clientId: '',
       allowedGuilds: ['G1', 'G2'],
@@ -196,11 +220,23 @@ describe('DiscordConfigService.allowedGuilds mutations', () => {
       gamePermissions: {},
     });
     const svc = makeService();
-    await svc.removeAllowedGuild('G1');
+    const result = await svc.removeAllowedGuild('G1');
+    expect(result).toEqual({ ok: true });
     expect(putDiscordConfigMock).toHaveBeenCalledWith(
       'test-discord',
       expect.objectContaining({ allowedGuilds: ['G2'] }),
     );
+  });
+
+  it('should refuse to remove a guild that is in the Terraform base config', async () => {
+    getBaseDiscordConfigMock.mockResolvedValue({
+      allowedGuilds: ['G-base'],
+      admins: { userIds: [], roleIds: [] },
+    });
+    const svc = makeService();
+    const result = await svc.removeAllowedGuild('G-base');
+    expect(result).toMatchObject({ ok: false });
+    expect(putDiscordConfigMock).not.toHaveBeenCalled();
   });
 
   it('should dedupe and drop empty strings when setAllowedGuilds is called', async () => {

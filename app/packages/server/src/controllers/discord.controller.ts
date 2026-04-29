@@ -90,13 +90,17 @@ export class DiscordController {
     };
   }
 
-  /** Returns the list of allowlisted guild IDs. The interactions Lambda rejects any command from a guild not in this list. */
+  /**
+   * Returns the dynamic allowlisted guild IDs and the Terraform-managed base guild IDs.
+   * The UI should render base guilds as locked (non-removable).
+   */
   @Get('guilds')
   async listGuilds() {
-    return { guilds: (await this.discord.getConfig()).allowedGuilds };
+    const [cfg, base] = await Promise.all([this.discord.getConfig(), this.discord.getBaseConfig()]);
+    return { guilds: cfg.allowedGuilds, baseGuilds: base.allowedGuilds };
   }
 
-  /** Adds a guild ID to the allowlist persisted in DynamoDB. Takes effect on the next interaction (Lambda re-reads per invocation). */
+  /** Adds a guild ID to the dynamic allowlist persisted in DynamoDB. Takes effect on the next interaction (Lambda re-reads per invocation). */
   @Post('guilds')
   async addGuild(@Body() body: { guildId?: unknown } = {}) {
     if (typeof body.guildId !== 'string') {
@@ -105,16 +109,25 @@ export class DiscordController {
     const guildId = body.guildId.trim();
     if (!guildId) throw new BadRequestException({ success: false, error: 'guildId required' });
     await this.discord.addAllowedGuild(guildId);
-    return { success: true, guilds: (await this.discord.getConfig()).allowedGuilds };
+    const [cfg, base] = await Promise.all([this.discord.getConfig(), this.discord.getBaseConfig()]);
+    return { success: true, guilds: cfg.allowedGuilds, baseGuilds: base.allowedGuilds };
   }
 
-  /** Removes a guild ID from the allowlist. Already-registered slash commands remain in Discord until manually cleaned up. */
+  /**
+   * Removes a guild ID from the dynamic allowlist. Returns 400 if the guild is
+   * in the Terraform base config — those entries require a tfvars edit + re-apply.
+   * Already-registered slash commands remain in Discord until manually cleaned up.
+   */
   @Delete('guilds/:guildId')
   async removeGuild(@Param('guildId') guildIdRaw: string) {
     const guildId = (guildIdRaw ?? '').trim();
     if (!guildId) throw new BadRequestException({ success: false, error: 'guildId required' });
-    await this.discord.removeAllowedGuild(guildId);
-    return { success: true, guilds: (await this.discord.getConfig()).allowedGuilds };
+    const result = await this.discord.removeAllowedGuild(guildId);
+    if (!result.ok) {
+      throw new BadRequestException({ success: false, error: result.reason });
+    }
+    const [cfg, base] = await Promise.all([this.discord.getConfig(), this.discord.getBaseConfig()]);
+    return { success: true, guilds: cfg.allowedGuilds, baseGuilds: base.allowedGuilds };
   }
 
   /**
@@ -130,19 +143,27 @@ export class DiscordController {
     return this.registrar.registerForGuild(guildId);
   }
 
-  /** Returns the global admin user/role lists. Admins bypass per-game permission gates in `canRun()`. */
+  /**
+   * Returns the dynamic admin user/role lists and the Terraform-managed base admin lists.
+   * The UI should render base admins as locked (non-removable).
+   */
   @Get('admins')
   async getAdmins() {
-    return (await this.discord.getConfig()).admins;
+    const [cfg, base] = await Promise.all([this.discord.getConfig(), this.discord.getBaseConfig()]);
+    return { ...cfg.admins, baseAdmins: base.admins };
   }
 
-  /** Replaces the admin user/role lists atomically. Omitted fields are treated as empty arrays (not "leave alone"). */
+  /**
+   * Replaces the dynamic admin user/role lists atomically. Omitted fields are treated as empty arrays
+   * (not "leave alone"). Base admins set via Terraform are unaffected by this endpoint.
+   */
   @Put('admins')
   async putAdmins(@Body() body: { userIds?: unknown; roleIds?: unknown } = {}) {
     const userIds = requireStringArray('userIds', body.userIds);
     const roleIds = requireStringArray('roleIds', body.roleIds);
     await this.discord.setAdmins({ userIds, roleIds });
-    return { success: true, admins: (await this.discord.getConfig()).admins };
+    const [cfg, base] = await Promise.all([this.discord.getConfig(), this.discord.getBaseConfig()]);
+    return { success: true, admins: cfg.admins, baseAdmins: base.admins };
   }
 
   /** Returns the per-game permission map (user/role IDs allowed to run specific actions on each game). */

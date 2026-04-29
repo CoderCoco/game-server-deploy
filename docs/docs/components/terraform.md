@@ -19,7 +19,7 @@ step 3 of the [setup guide](/setup) for details.
 | `watchdog.tf` | `watchdog` Lambda with its IAM, EventBridge schedule at `rate(${watchdog_interval_minutes} minute(s))`. |
 | `interactions.tf` | `interactions` Lambda with IAM + Function URL (`auth_type = NONE`, CORS for `https://discord.com`). Exposes `interactions_invoke_url`. |
 | `followup.tf` | `followup` Lambda with IAM (`ecs:RunTask`, `StopTask`, `DescribeTasks`, `iam:PassRole`, `dynamodb:GetItem`/`PutItem`, `ec2:DescribeNetworkInterfaces`). Async-invoked by interactions. |
-| `discord_store.tf` | DynamoDB table (pk+sk, TTL on `expiresAt`), two Secrets Manager secrets (`${project_name}/discord/bot-token`, `/discord/public-key`) with `recovery_window_in_days = 0` and `lifecycle.ignore_changes` on seeded secret values. Optional `CONFIG#discord` DynamoDB item seeded from tfvars. |
+| `discord_store.tf` | DynamoDB table (pk+sk, TTL on `expiresAt`), two Secrets Manager secrets (`${project_name}/discord/bot-token`, `/discord/public-key`) with `recovery_window_in_days = 0` and `lifecycle.ignore_changes` on seeded secret values. Optional `CONFIG#discord` DynamoDB item seeded from tfvars. Optional `BASE#discord` item holding the Terraform-managed base allowlist/admins (see `base_allowed_guilds` / `base_admin_*` variables). |
 | `variables.tf` | Every configurable input. See the table below. |
 | `outputs.tf` | Every value the management app (and humans) consume. |
 | `terraform.tfvars.example` | Starting point for your `terraform.tfvars`. |
@@ -41,6 +41,9 @@ step 3 of the [setup guide](/setup) for details.
 | `discord_application_id` | `string` | `""` | Seeds `CONFIG#discord` in DynamoDB on first apply. Skipped if empty. |
 | `discord_bot_token` | `string` (sensitive) | `""` | Seeds `${project_name}/discord/bot-token`. Empty → Terraform writes `"placeholder"`. |
 | `discord_public_key` | `string` (sensitive) | `""` | Seeds `${project_name}/discord/public-key`. Same placeholder behaviour. |
+| `base_allowed_guilds` | `list(string)` | `[]` | Guild IDs written to the `BASE#discord` row on every apply. The management UI shows these as locked; they cannot be removed via the UI. Update in tfvars + re-apply to change. |
+| `base_admin_user_ids` | `list(string)` | `[]` | Discord user IDs with permanent server-wide admin rights. Same Terraform-managed floor as above. |
+| `base_admin_role_ids` | `list(string)` | `[]` | Discord role IDs with permanent server-wide admin rights. Same Terraform-managed floor as above. |
 | `tags` | `map(string)` | defaults | Merged into `default_tags` for cost allocation (`Project`). |
 
 ## Outputs

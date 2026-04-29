@@ -5,7 +5,7 @@ import {
   GetCommand,
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { getDiscordConfig, putDiscordConfig } from './configStore.js';
+import { getBaseDiscordConfig, getDiscordConfig, getEffectiveDiscordConfig, putDiscordConfig } from './configStore.js';
 import { __resetDocClient } from './client.js';
 
 const ddb = mockClient(DynamoDBDocumentClient);
@@ -102,6 +102,114 @@ describe('getDiscordConfig', () => {
     const calls = ddb.commandCalls(GetCommand);
     expect(calls).toHaveLength(1);
     expect(calls[0]!.args[0]!.input.ConsistentRead).toBe(true);
+  });
+});
+
+describe('getBaseDiscordConfig', () => {
+  beforeEach(() => {
+    ddb.reset();
+    __resetDocClient();
+  });
+
+  it('should return an empty base when the BASE#discord row is absent', async () => {
+    ddb.on(GetCommand).resolves({});
+    const base = await getBaseDiscordConfig(TABLE);
+    expect(base).toEqual({ allowedGuilds: [], admins: { userIds: [], roleIds: [] } });
+  });
+
+  it('should parse allowedGuilds and admins from a stored base row', async () => {
+    ddb.on(GetCommand).resolves({
+      Item: {
+        pk: 'BASE#discord',
+        sk: 'BASE',
+        data: {
+          allowedGuilds: ['G-base'],
+          admins: { userIds: ['U-base'], roleIds: ['R-base'] },
+        },
+      },
+    });
+    const base = await getBaseDiscordConfig(TABLE);
+    expect(base.allowedGuilds).toEqual(['G-base']);
+    expect(base.admins).toEqual({ userIds: ['U-base'], roleIds: ['R-base'] });
+  });
+
+  it('should sanitize malformed base data without throwing', async () => {
+    ddb.on(GetCommand).resolves({
+      Item: {
+        pk: 'BASE#discord',
+        sk: 'BASE',
+        data: { allowedGuilds: 'not-an-array', admins: null },
+      },
+    });
+    const base = await getBaseDiscordConfig(TABLE);
+    expect(base.allowedGuilds).toEqual([]);
+    expect(base.admins).toEqual({ userIds: [], roleIds: [] });
+  });
+
+  it('should issue a strongly consistent read for the base row', async () => {
+    ddb.on(GetCommand).resolves({});
+    await getBaseDiscordConfig(TABLE);
+    const calls = ddb.commandCalls(GetCommand);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.args[0]!.input.ConsistentRead).toBe(true);
+  });
+});
+
+describe('getEffectiveDiscordConfig', () => {
+  beforeEach(() => {
+    ddb.reset();
+    __resetDocClient();
+  });
+
+  it('should merge base and dynamic guild lists without duplicates', async () => {
+    ddb
+      .on(GetCommand, { Key: { pk: 'CONFIG#discord', sk: 'CONFIG' } })
+      .resolves({
+        Item: { data: { clientId: 'c1', allowedGuilds: ['G1', 'G-shared'], admins: { userIds: [], roleIds: [] }, gamePermissions: {} } },
+      })
+      .on(GetCommand, { Key: { pk: 'BASE#discord', sk: 'BASE' } })
+      .resolves({
+        Item: { data: { allowedGuilds: ['G-base', 'G-shared'], admins: { userIds: [], roleIds: [] } } },
+      });
+    const cfg = await getEffectiveDiscordConfig(TABLE);
+    expect(cfg.allowedGuilds).toEqual(expect.arrayContaining(['G1', 'G-base', 'G-shared']));
+    expect(cfg.allowedGuilds).toHaveLength(3);
+  });
+
+  it('should merge base and dynamic admin lists without duplicates', async () => {
+    ddb
+      .on(GetCommand, { Key: { pk: 'CONFIG#discord', sk: 'CONFIG' } })
+      .resolves({
+        Item: { data: { clientId: '', allowedGuilds: [], admins: { userIds: ['U1'], roleIds: ['R-shared'] }, gamePermissions: {} } },
+      })
+      .on(GetCommand, { Key: { pk: 'BASE#discord', sk: 'BASE' } })
+      .resolves({
+        Item: { data: { allowedGuilds: [], admins: { userIds: ['U-base'], roleIds: ['R-shared'] } } },
+      });
+    const cfg = await getEffectiveDiscordConfig(TABLE);
+    expect(cfg.admins.userIds).toEqual(expect.arrayContaining(['U1', 'U-base']));
+    expect(cfg.admins.userIds).toHaveLength(2);
+    expect(cfg.admins.roleIds).toEqual(['R-shared']);
+  });
+
+  it('should preserve dynamic gamePermissions and clientId in the effective config', async () => {
+    ddb
+      .on(GetCommand, { Key: { pk: 'CONFIG#discord', sk: 'CONFIG' } })
+      .resolves({
+        Item: {
+          data: {
+            clientId: 'my-client',
+            allowedGuilds: [],
+            admins: { userIds: [], roleIds: [] },
+            gamePermissions: { palworld: { userIds: ['U1'], roleIds: [], actions: ['start'] } },
+          },
+        },
+      })
+      .on(GetCommand, { Key: { pk: 'BASE#discord', sk: 'BASE' } })
+      .resolves({});
+    const cfg = await getEffectiveDiscordConfig(TABLE);
+    expect(cfg.clientId).toBe('my-client');
+    expect(cfg.gamePermissions).toEqual({ palworld: { userIds: ['U1'], roleIds: [], actions: ['start'] } });
   });
 });
 

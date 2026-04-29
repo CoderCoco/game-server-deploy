@@ -17,7 +17,7 @@
 import { verifyAsync } from '@noble/ed25519';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { canRun, getDiscordConfig, getPublicKey } from '@gsd/shared';
+import { canRun, getEffectiveDiscordConfig, getPublicKey } from '@gsd/shared';
 import type { DiscordAction, DiscordConfig } from '@gsd/shared';
 
 /** Discord interaction types we care about. Full list in discord-api-types. */
@@ -297,7 +297,7 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
   }
 
   const tableName = requireEnv('TABLE_NAME');
-  const cfg = await getDiscordConfig(tableName);
+  const cfg = await getEffectiveDiscordConfig(tableName);
 
   if (interaction.type === INTERACTION_APPLICATION_COMMAND_AUTOCOMPLETE) {
     return handleAutocomplete(interaction, cfg);

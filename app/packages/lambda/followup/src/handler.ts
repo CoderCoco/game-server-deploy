@@ -24,7 +24,7 @@ import {
   EC2Client,
   DescribeNetworkInterfacesCommand,
 } from '@aws-sdk/client-ec2';
-import { canRun, formatGameStatus, getDiscordConfig, putPending } from '@gsd/shared';
+import { canRun, formatGameStatus, getEffectiveDiscordConfig, putPending } from '@gsd/shared';
 import type { DiscordAction, DiscordConfig, GameStatus } from '@gsd/shared';
 
 interface FollowupEvent {
@@ -252,7 +252,7 @@ function recheck(event: FollowupEvent, cfg: DiscordConfig, action: DiscordAction
  */
 export const handler = async (event: FollowupEvent): Promise<void> => {
   const tableName = requireEnv('TABLE_NAME');
-  const cfg = await getDiscordConfig(tableName);
+  const cfg = await getEffectiveDiscordConfig(tableName);
 
   let content: string;
   try {

@@ -16,13 +16,13 @@ import {
   EC2Client,
 } from '@aws-sdk/client-ec2';
 
-const getDiscordConfigMock = vi.fn();
+const getEffectiveDiscordConfigMock = vi.fn();
 const putPendingMock = vi.fn();
 vi.mock('@gsd/shared', async () => {
   const actual = await vi.importActual<typeof import('@gsd/shared')>('@gsd/shared');
   return {
     ...actual,
-    getDiscordConfig: (...args: unknown[]) => getDiscordConfigMock(...args),
+    getEffectiveDiscordConfig: (...args: unknown[]) => getEffectiveDiscordConfigMock(...args),
     putPending: (...args: unknown[]) => putPendingMock(...args),
   };
 });
@@ -69,9 +69,9 @@ beforeEach(() => {
   ecsMock.reset();
   ec2Mock.reset();
   fetchMock.mockReset();
-  getDiscordConfigMock.mockReset();
+  getEffectiveDiscordConfigMock.mockReset();
   putPendingMock.mockReset();
-  getDiscordConfigMock.mockResolvedValue(PERMISSIVE_CONFIG);
+  getEffectiveDiscordConfigMock.mockResolvedValue(PERMISSIVE_CONFIG);
   fetchMock.mockResolvedValue({ ok: true, text: async () => '' });
 });
 
@@ -116,7 +116,7 @@ describe('FollowupLambda: start', () => {
   });
 
   it('should deny the start when canRun() rejects the caller', async () => {
-    getDiscordConfigMock.mockResolvedValue({
+    getEffectiveDiscordConfigMock.mockResolvedValue({
       ...PERMISSIVE_CONFIG,
       admins: { userIds: [], roleIds: [] },
       gamePermissions: { palworld: { userIds: [], roleIds: [], actions: [] } },
@@ -193,7 +193,7 @@ describe('FollowupLambda: status', () => {
 
 describe('FollowupLambda: list', () => {
   it('should only fetch status for games the caller can view, and join lines with newlines', async () => {
-    getDiscordConfigMock.mockResolvedValue({
+    getEffectiveDiscordConfigMock.mockResolvedValue({
       ...PERMISSIVE_CONFIG,
       admins: { userIds: [], roleIds: [] },
       gamePermissions: {
@@ -211,7 +211,7 @@ describe('FollowupLambda: list', () => {
   });
 
   it('should return a helpful message when the caller can see nothing', async () => {
-    getDiscordConfigMock.mockResolvedValue({
+    getEffectiveDiscordConfigMock.mockResolvedValue({
       ...PERMISSIVE_CONFIG,
       admins: { userIds: [], roleIds: [] },
       gamePermissions: {},

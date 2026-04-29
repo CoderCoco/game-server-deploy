@@ -100,6 +100,40 @@ resource "aws_secretsmanager_secret_version" "discord_public_key" {
 # the UI creates the row on first save — avoids a stray empty row on UI-only
 # deployments.
 
+# ─ Discord base config row ────────────────────────────────────────────────────
+# Written on every `terraform apply` when any base list is non-empty. Unlike the
+# config seed below, there is NO `ignore_changes` — re-applying after editing
+# the variables always updates this row. The management app merges this row with
+# the dynamic CONFIG#discord row; entries here can never be removed via the UI.
+#
+# The resource is skipped entirely when all three lists are empty so a
+# UI-only deployment doesn't end up with a stray empty row.
+
+resource "aws_dynamodb_table_item" "discord_base_config" {
+  count = (length(var.base_allowed_guilds) + length(var.base_admin_user_ids) + length(var.base_admin_role_ids)) > 0 ? 1 : 0
+
+  table_name = aws_dynamodb_table.discord.name
+  hash_key   = aws_dynamodb_table.discord.hash_key
+  range_key  = aws_dynamodb_table.discord.range_key
+
+  item = jsonencode({
+    pk = { S = "BASE#discord" }
+    sk = { S = "BASE" }
+    data = {
+      M = {
+        allowedGuilds = { L = [for g in var.base_allowed_guilds : { S = g }] }
+        admins = {
+          M = {
+            userIds = { L = [for u in var.base_admin_user_ids : { S = u }] }
+            roleIds = { L = [for r in var.base_admin_role_ids : { S = r }] }
+          }
+        }
+      }
+    }
+    updatedAt = { N = "0" }
+  })
+}
+
 resource "aws_dynamodb_table_item" "discord_config_seed" {
   count = var.discord_application_id != "" ? 1 : 0
 
