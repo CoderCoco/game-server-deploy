@@ -111,58 +111,6 @@ Cost ballpark: **Fargate 2 vCPU / 8 GB ≈ $0.12/hr** while running; EFS is
 pennies/month. Playing 4 hours/day, 5 days/week ≈ **$10–12/month**, vs.
 ~$60/month for a 24/7 t3.large.
 
-## Additional inline policies required
-
-Two actions used by Terraform are **not** covered by any AWS managed policy and
-must be granted as inline policies on the deploy user/role. Without them
-`terraform apply` will fail with `AccessDenied`.
-
-### EventBridge tag operations
-
-The AWS provider tags EventBridge rules on creation, which requires three
-actions absent from `AmazonEventBridgeFullAccess`:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": [
-      "events:TagResource",
-      "events:UntagResource",
-      "events:ListTagsForResource"
-    ],
-    "Resource": "*"
-  }]
-}
-```
-
-### CloudFront (Discord custom domain)
-
-The Discord interactions endpoint is fronted by a CloudFront distribution.
-CloudFront is not included in any of the managed policies attached during
-setup:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": [
-      "cloudfront:CreateDistribution",
-      "cloudfront:CreateDistributionWithTags",
-      "cloudfront:GetDistribution",
-      "cloudfront:UpdateDistribution",
-      "cloudfront:DeleteDistribution",
-      "cloudfront:TagResource",
-      "cloudfront:UntagResource",
-      "cloudfront:ListTagsForResource"
-    ],
-    "Resource": "arn:aws:cloudfront::*:distribution/*"
-  }]
-}
-```
-
 ## Repository structure
 
 ```text
