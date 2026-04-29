@@ -3,13 +3,37 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from '../logger.js';
+import { EMBEDDED_TFSTATE } from '../generated/tfstate.js';
 
-// Workspace move: ConfigService now lives one extra directory level deep
-// (app/packages/server/src/services/ instead of app/src/server/services/),
-// so the relative walk to the repo's `terraform/` folder needs one more `..`.
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const TF_STATE_PATH = join(__dirname, '../../../../../../terraform/terraform.tfstate');
-const CONFIG_PATH = join(__dirname, '../../../../../../app/server_config.json');
+
+/**
+ * Probes candidate relative paths from __dirname in order and returns the
+ * first that exists on disk.  Falls back to the first candidate when none
+ * exist so callers get a deterministic (missing-file) path rather than
+ * undefined behaviour.
+ *
+ * Needed because the depth from __dirname to the repo/workspace root differs
+ * between environments:
+ *   - local source tree  (src/services or dist/services inside repo): 5 levels up → repo root
+ *   - Docker image       (dist/services inside /app):                  4 levels up → /app
+ */
+function resolveRuntimePath(...relativeCandidates: string[]): string {
+  for (const rel of relativeCandidates) {
+    const resolved = join(__dirname, rel);
+    if (existsSync(resolved)) return resolved;
+  }
+  return join(__dirname, relativeCandidates[0]);
+}
+
+const TF_STATE_PATH = resolveRuntimePath(
+  '../../../../../terraform/terraform.tfstate',
+  '../../../../terraform/terraform.tfstate',
+);
+const CONFIG_PATH = resolveRuntimePath(
+  '../../../../../app/server_config.json',
+  '../../../../server_config.json',
+);
 
 /**
  * Shape of the subset of Terraform root outputs the management app consumes.
@@ -79,22 +103,33 @@ export class ConfigService {
 
   /**
    * Parse `terraform/terraform.tfstate` (once, then memoised) and project the
-   * pieces the app cares about. Returns `null` when the state file is absent
-   * (pre-`terraform apply`) or unparseable — callers treat that as "infra
-   * not deployed yet" and degrade gracefully.
+   * pieces the app cares about. Falls back to the state embedded at build time
+   * by `scripts/embed-tfstate.mjs` when the runtime file is absent. Returns
+   * `null` when neither source is available — callers treat that as "infra not
+   * deployed yet" and degrade gracefully.
    */
   getTfOutputs(): TfOutputs | null {
     if (this.tfCache) return this.tfCache;
 
-    if (!existsSync(TF_STATE_PATH)) {
+    type RawState = { outputs?: Record<string, { value: unknown }> };
+    let raw: RawState;
+
+    if (existsSync(TF_STATE_PATH)) {
+      try {
+        raw = JSON.parse(readFileSync(TF_STATE_PATH, 'utf-8')) as RawState;
+      } catch (err) {
+        logger.error('Failed to parse Terraform state', { err, path: TF_STATE_PATH });
+        return null;
+      }
+    } else if (EMBEDDED_TFSTATE) {
+      logger.debug('Using build-time embedded Terraform state');
+      raw = EMBEDDED_TFSTATE as unknown as RawState;
+    } else {
       logger.warn('Terraform state not found', { path: TF_STATE_PATH });
       return null;
     }
 
     try {
-      const raw = JSON.parse(readFileSync(TF_STATE_PATH, 'utf-8')) as {
-        outputs?: Record<string, { value: unknown }>;
-      };
       const out = raw.outputs ?? {};
       const get = <T>(key: string, fallback: T): T =>
         key in out ? (out[key]!.value as T) : fallback;
@@ -121,7 +156,7 @@ export class ConfigService {
       logger.debug('Loaded Terraform outputs', { games: this.tfCache.game_names });
       return this.tfCache;
     } catch (err) {
-      logger.error('Failed to parse Terraform state', { err, path: TF_STATE_PATH });
+      logger.error('Failed to parse Terraform state', { err });
       return null;
     }
   }

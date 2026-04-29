@@ -24,12 +24,18 @@ const ALL_ACTIONS: DiscordAction[] = ['start', 'stop', 'status'];
  */
 export function DiscordPanel({ games }: { games: string[] }) {
   const [cfg, setCfg] = useState<DiscordConfigRedacted | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [tab, setTab] = useState<'bot' | 'guilds' | 'admins' | 'perms'>('bot');
   const [busy, setBusy] = useState(false);
 
   /** Re-fetch the (redacted) Discord config from the API after mutations. */
   async function refresh() {
-    setCfg(await api.discordConfig());
+    try {
+      setCfg(await api.discordConfig());
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    }
   }
   useEffect(() => {
     void refresh();
@@ -39,7 +45,9 @@ export function DiscordPanel({ games }: { games: string[] }) {
     return (
       <div style={panelStyle}>
         <h2 style={headingStyle}>Discord Bot</h2>
-        <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Loading…</div>
+        <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+          {loadError ? 'Discord config unavailable — infrastructure not deployed yet.' : 'Loading…'}
+        </div>
       </div>
     );
   }

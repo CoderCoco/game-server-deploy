@@ -10,7 +10,9 @@
     "packages/lambda/*"
   ],
   "scripts": {
+    "predev": "node scripts/embed-tfstate.mjs",
     "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev -w @gsd/server\" \"npm run dev -w @gsd/web\"",
+    "prebuild": "node scripts/embed-tfstate.mjs",
     "build": "npm run build -w @gsd/shared && npm run build -w @gsd/server && npm run build -w @gsd/web",
     "build:lambdas": "npm run build -w @gsd/shared && npm run build -w @gsd/lambda-interactions -w @gsd/lambda-followup -w @gsd/lambda-update-dns -w @gsd/lambda-watchdog",
     "start": "node packages/server/dist/main.js",

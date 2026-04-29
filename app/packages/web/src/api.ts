@@ -133,6 +133,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     unauthorizedHandler?.();
     return new Promise<T>(() => undefined);
   }
+  if (!res.ok) throw new Error(`API error ${res.status}`);
   return res.json() as Promise<T>;
 }
 
