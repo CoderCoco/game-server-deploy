@@ -160,24 +160,26 @@ locals {
 # When discord_bot_token, discord_application_id, and base_allowed_guilds are
 # all set, this registers the slash commands in each base guild during
 # `terraform apply`. Re-runs whenever the application ID, token, or command
-# descriptors change. Guilds added later via the management UI still require
-# the "Register commands" button in the Guilds tab.
+# descriptors change (tracked via triggers_replace). Guilds added later via the
+# management UI still require the "Register commands" button in the Guilds tab.
 #
+# Uses terraform_data (built into Terraform ≥1.4; no extra provider needed).
 # The bot token is passed via environment variable (not a shell argument) so it
-# never appears in the process list.
-resource "null_resource" "discord_register_commands" {
-  for_each = (var.discord_bot_token != "" && var.discord_application_id != "") ? toset(var.base_allowed_guilds) : toset([])
+# never appears in the process list. nonsensitive() is required because
+# sensitive values are not permitted in for_each or trigger keys.
+resource "terraform_data" "discord_register_commands" {
+  for_each = (nonsensitive(var.discord_bot_token) != "" && var.discord_application_id != "") ? toset(var.base_allowed_guilds) : toset([])
 
-  triggers = {
+  triggers_replace = {
     application_id    = var.discord_application_id
     guild_id          = each.value
-    token_hash        = sha256(var.discord_bot_token)
+    token_hash        = sha256(nonsensitive(var.discord_bot_token))
     commands_checksum = sha256(local.discord_command_descriptors)
   }
 
   provisioner "local-exec" {
     command = <<-EOT
-      curl -sf -X PUT \
+      curl -sSf -X PUT \
         "https://discord.com/api/v10/applications/${var.discord_application_id}/guilds/${each.value}/commands" \
         -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
         -H "Content-Type: application/json" \
