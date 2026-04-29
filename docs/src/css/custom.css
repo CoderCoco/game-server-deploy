@@ -1,0 +1,41 @@
+/**
+ * Custom CSS overrides for the Game Server Deploy documentation site.
+ * Docusaurus applies the correct set of variables automatically based on the
+ * user's OS colour-scheme preference (light/dark), controlled by
+ * `respectPrefersColorScheme: true` in docusaurus.config.ts.
+ */
+
+/* ── Light theme ──────────────────────────────────────────────────────────── */
+:root {
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1d4ed8;
+  --ifm-color-primary-darker: #1e40af;
+  --ifm-color-primary-darkest: #1e3a8a;
+  --ifm-color-primary-light: #3b82f6;
+  --ifm-color-primary-lighter: #60a5fa;
+  --ifm-color-primary-lightest: #93c5fd;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+/* ── Dark theme ───────────────────────────────────────────────────────────── */
+[data-theme='dark'] {
+  --ifm-color-primary: #60a5fa;
+  --ifm-color-primary-dark: #3b82f6;
+  --ifm-color-primary-darker: #2563eb;
+  --ifm-color-primary-darkest: #1d4ed8;
+  --ifm-color-primary-light: #93c5fd;
+  --ifm-color-primary-lighter: #bfdbfe;
+  --ifm-color-primary-lightest: #dbeafe;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* ── Diagrams ─────────────────────────────────────────────────────────────── */
+img[src$='.svg'] {
+  max-width: 100%;
+  height: auto;
+}
+
+[data-theme='dark'] img[src$='.svg'] {
+  filter: invert(0.85) hue-rotate(180deg);
+}

@@ -1,6 +1,6 @@
 ---
 title: Setup guide
-nav_order: 3
+sidebar_position: 3
 ---
 
 # Setup guide
@@ -10,7 +10,7 @@ Fargate task you can connect to from your game client, plus the optional
 Discord bot. Allow ~30 minutes the first time; most of that is waiting for
 `terraform apply`.
 
-The [submodule guide]({{ '/guides/submodule/' | relative_url }}) covers the
+The [submodule guide](/guides/submodule) covers the
 alternative workflow of vendoring this repo inside a private parent that
 holds `terraform.tfvars` and state. Come back here afterwards for the
 per-step detail.
@@ -212,7 +212,7 @@ discord_public_key     = "abcd...ef01"             # sensitive
 
 `terraform.tfvars` is gitignored, so these stay on your machine. Rotation
 after the first apply takes one `terraform taint`; see the
-[submodule guide]({{ '/guides/submodule/' | relative_url }}) for the pattern
+[submodule guide](/guides/submodule) for the pattern
 that puts this file in a private parent repo.
 
 ## 5. Apply the infrastructure
@@ -283,7 +283,7 @@ Manager secrets — all created by `terraform apply` in step 5. You now
 connect it to a Discord application.
 
 1. **Create a Discord application** at
-   <https://discord.com/developers/applications> → **New Application** →
+   [discord.com/developers/applications](https://discord.com/developers/applications) → **New Application** →
    add a **Bot**. Copy three values from **General Information**:
 
    | Value | Where it goes | Used for |
@@ -334,9 +334,9 @@ connect it to a Discord application.
    - **Per-Game Permissions tab**: for each game, which users/roles can
      invoke which subset of `start` / `stop` / `status`.
 
-The [user guide]({{ '/guides/user/' | relative_url }}) has the day-to-day
+The [user guide](/guides/user) has the day-to-day
 command reference; the
-[interactions/followup Lambda docs]({{ '/components/lambdas/' | relative_url }})
+[interactions/followup Lambda docs](/components/lambdas)
 have the wire-level detail.
 
 ## 8. Smoke test

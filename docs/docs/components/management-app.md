@@ -1,7 +1,6 @@
 ---
 title: Management app
-parent: Components
-nav_order: 2
+sidebar_position: 3
 ---
 
 # Management app
@@ -9,7 +8,7 @@ nav_order: 2
 A TypeScript npm-workspaces monorepo under `app/`. Three packages are shipped
 as the local control plane — a Nest.js API, a React dashboard, and a pure
 library — plus the four Lambda packages documented
-[here]({{ '/components/lambdas/' | relative_url }}).
+[here](/components/lambdas).
 
 Install everything from the root:
 
@@ -152,7 +151,7 @@ everywhere, not `console.log`.
 3. **Server Config** — watchdog knobs. Saves go to `server_config.json`;
    take effect on next `terraform apply`.
 4. **Discord Bot** — four tabs: Credentials, Guilds, Admins, Per-Game
-   Permissions. See the [user guide]({{ '/guides/user/' | relative_url }})
+   Permissions. See the [user guide](/guides/user)
    for the day-to-day workflow.
 5. **Live Logs** — tails the last N events from
    `/ecs/{game}-server` for the most recent task.

@@ -1,7 +1,7 @@
 ---
 title: Home
-nav_order: 1
-permalink: /
+sidebar_position: 1
+slug: /
 ---
 
 # Game Server Deploy
@@ -28,15 +28,15 @@ is silent except for a handful of near-free Lambdas.
 The rest of the site is organised around three roles. Pick the one that
 matches what you're doing right now:
 
-- **[Setup guide]({{ '/setup/' | relative_url }})** — from a blank AWS account
+- **[Setup guide](/setup)** — from a blank AWS account
   to a running game server, in order.
-- **[User guide]({{ '/guides/user/' | relative_url }})** — day-to-day
+- **[User guide](/guides/user)** — day-to-day
   operation: starting/stopping servers from the dashboard or Discord, reading
   the cost panel, checking logs.
-- **[Maintainer guide]({{ '/guides/maintainer/' | relative_url }})** — working
+- **[Maintainer guide](/guides/maintainer)** — working
   on the code: monorepo layout, tests, lint, CI, release/deploy mechanics,
   load-bearing invariants not to break.
-- **[Submodule guide]({{ '/guides/submodule/' | relative_url }})** — the
+- **[Submodule guide](/guides/submodule)** — the
   pattern of wrapping this repo as a git submodule inside a private parent
   repo that holds `terraform.tfvars`, `server_config.json`, state, and
   anything else secret.
@@ -45,18 +45,18 @@ matches what you're doing right now:
 
 Deep-dives on each piece, for when the guides hand-wave past something:
 
-- [Architecture overview]({{ '/architecture/' | relative_url }}) — the diagram
+- [Architecture overview](/architecture) — the diagram
   below in full, with every arrow annotated.
-- [Terraform]({{ '/components/terraform/' | relative_url }}) — every `.tf`
+- [Terraform](/components/terraform) — every `.tf`
   file, variables, outputs, and AWS services touched.
-- [Management app]({{ '/components/management-app/' | relative_url }}) — the
+- [Management app](/components/management-app) — the
   Nest.js API, React dashboard, and `@gsd/shared` library.
-- [Lambdas]({{ '/components/lambdas/' | relative_url }}) — the four Node.js
+- [Lambdas](/components/lambdas) — the four Node.js
   Lambdas (interactions, followup, update-dns, watchdog).
 
 ## High-level architecture
 
-![High-level architecture]({{ '/diagrams/context.svg' | relative_url }}){:.d2-diagram}
+![High-level architecture](/diagrams/context.svg)
 
 Run Terraform from your laptop (or a CI runner); after that the control
 plane is the dashboard, the Discord bot, or EventBridge schedules. No
@@ -65,7 +65,7 @@ and only while they're running.
 
 For the full breakdown (Discord bot internals, control-loop Lambdas, and
 the `/server-start` sequence) see the
-[architecture overview]({{ '/architecture/' | relative_url }}).
+[architecture overview](/architecture).
 
 ## Repository map
 

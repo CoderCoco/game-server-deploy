@@ -1,6 +1,6 @@
 ---
 title: Architecture
-nav_order: 2
+sidebar_position: 2
 ---
 
 # Architecture
@@ -35,7 +35,7 @@ ECS / DynamoDB / Secrets Manager / CloudWatch via SDK v3. Players reach
 the game either direct to the task's public IP (UDP / TCP games) or
 through the ALB (HTTPS games).
 
-![Game plane and operator]({{ '/diagrams/game-plane.svg' | relative_url }}){:.d2-diagram}
+![Game plane and operator](/diagrams/game-plane.svg)
 
 ### Serverless Discord bot
 
@@ -45,7 +45,7 @@ it verifies the Ed25519 signature, replies with a deferred ack within
 Discord's 3-second budget, then fires the async `followup` Lambda for
 anything that touches ECS.
 
-![Serverless Discord bot]({{ '/diagrams/discord-bot.svg' | relative_url }}){:.d2-diagram}
+![Serverless Discord bot](/diagrams/discord-bot.svg)
 
 ### Control loops (DNS + watchdog)
 
@@ -56,7 +56,7 @@ pending-interaction row in DynamoDB. `watchdog` fires on a schedule and
 stops tasks whose `NetworkPacketsIn` has stayed below the threshold for
 `IDLE_CHECKS` consecutive intervals.
 
-![Control loops]({{ '/diagrams/control-loops.svg' | relative_url }}){:.d2-diagram}
+![Control loops](/diagrams/control-loops.svg)
 
 ## The `/server-start` critical path
 
@@ -64,7 +64,7 @@ When a user types `/server-start palworld` in Discord, five AWS services and
 three Lambdas cooperate to return a usable `palworld.yourdomain.com` without
 ever letting the interaction time out.
 
-![/server-start sequence]({{ '/diagrams/server-start.svg' | relative_url }}){:.d2-diagram}
+![/server-start sequence](/diagrams/server-start.svg)
 
 After the session: either the user types `/server-stop palworld` (same flow
 but `stopTask` + `DELETE` A record), or the Watchdog Lambda notices
@@ -110,5 +110,5 @@ write the PR description as if you're explaining the new design.
    the idle counter — it is an `idle_checks` tag on each running task.
    Counter resets when a task stops, which is free.
 
-See the [maintainer guide]({{ '/guides/maintainer/' | relative_url }}) for
+See the [maintainer guide](/guides/maintainer) for
 what tends to break these and what the failure modes look like.

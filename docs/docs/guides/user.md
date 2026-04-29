@@ -1,7 +1,6 @@
 ---
-title: User
-parent: Guides
-nav_order: 1
+title: User guide
+sidebar_position: 2
 ---
 
 # User guide
@@ -11,7 +10,7 @@ infrastructure has already been provisioned, the dashboard is running, and the
 Discord bot is registered. This page covers everyday use.
 
 If any of those assumptions isn't true yet, start at the
-[setup guide]({{ '/setup/' | relative_url }}).
+[setup guide](/setup).
 
 ## Two ways to drive it
 
@@ -231,9 +230,9 @@ remain stopped during this.
 
 ## Further reading
 
-- [Architecture]({{ '/architecture/' | relative_url }}) — the full diagram
+- [Architecture](/architecture) — the full diagram
   and the `/server-start` sequence, end to end.
-- [Lambdas]({{ '/components/lambdas/' | relative_url }}) — what each
+- [Lambdas](/components/lambdas) — what each
   Lambda does on every invocation.
-- [Management app]({{ '/components/management-app/' | relative_url }}) — the
+- [Management app](/components/management-app) — the
   API routes you're hitting through the dashboard.

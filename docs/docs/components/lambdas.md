@@ -1,7 +1,6 @@
 ---
 title: Lambdas
-parent: Components
-nav_order: 3
+sidebar_position: 4
 ---
 
 # Lambdas
@@ -127,7 +126,7 @@ Event shape (simplified):
 ```json
 {
   "detail": {
-    "lastStatus": "RUNNING" | "STOPPED",
+    "lastStatus": "RUNNING | STOPPED",
     "taskArn": "...",
     "clusterArn": "...",
     "group": "family:palworld-server"
@@ -204,7 +203,7 @@ Failure modes:
 
 ## The `/server-start` critical path, assembled
 
-```
+```text
 User types /server-start palworld
   → Discord POSTs to interactions Function URL
     → interactions verifies + returns type:5 ack + async-invokes followup
