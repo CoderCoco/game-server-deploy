@@ -18,6 +18,7 @@ import { ConfigService } from './ConfigService.js';
 import {
   asStringArray,
   getBotToken,
+  getBaseDiscordConfig,
   getDiscordConfig,
   getPublicKey,
   invalidateSecretsCache,
@@ -25,6 +26,7 @@ import {
   putBotToken,
   putDiscordConfig,
   putPublicKey,
+  type BaseDiscordConfig,
   type DiscordAction,
   type DiscordConfig,
   type RedactedDiscordConfig,
@@ -58,6 +60,9 @@ export class DiscordConfigService {
   private cache: DiscordConfig | null = null;
   /** Promise of an in-flight load — coalesces concurrent reads into one DDB call. */
   private inflight: Promise<DiscordConfig> | null = null;
+
+  private baseCache: BaseDiscordConfig | null = null;
+  private baseInflight: Promise<BaseDiscordConfig> | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -101,6 +106,31 @@ export class DiscordConfigService {
     return this.inflight;
   }
 
+  /**
+   * Read the Terraform-managed BASE#discord row. Empty base returned when the
+   * row is absent (i.e. no base Terraform variables were set). Result is cached
+   * until `invalidateCache()` is called, same as the dynamic config cache.
+   */
+  private async loadBase(): Promise<BaseDiscordConfig> {
+    if (this.baseCache) return this.baseCache;
+    if (this.baseInflight) return this.baseInflight;
+    this.baseInflight = (async () => {
+      try {
+        const tableName = this.config.getTfOutputs()?.discord_table_name;
+        if (!tableName) return { allowedGuilds: [], admins: { userIds: [], roleIds: [] } };
+        const base = await getBaseDiscordConfig(tableName);
+        this.baseCache = base;
+        return base;
+      } catch (err) {
+        logger.error('Failed to load base Discord config from DynamoDB', { err });
+        return { allowedGuilds: [], admins: { userIds: [], roleIds: [] } };
+      } finally {
+        this.baseInflight = null;
+      }
+    })();
+    return this.baseInflight;
+  }
+
   private async save(cfg: DiscordConfig): Promise<void> {
     await putDiscordConfig(this.tableName(), cfg);
     this.cache = cfg;
@@ -110,9 +140,14 @@ export class DiscordConfigService {
     });
   }
 
-  /** Full (unredacted) config — only call this server-side. */
+  /** Full (unredacted) dynamic config — only call this server-side. */
   async getConfig(): Promise<DiscordConfig> {
     return this.load();
+  }
+
+  /** The Terraform-managed base allowlist and admins — read-only from the app's perspective. */
+  async getBaseConfig(): Promise<BaseDiscordConfig> {
+    return this.loadBase();
   }
 
   /** Bot token from Secrets Manager (used by the slash-command registrar). `null` if unset. */
@@ -120,10 +155,11 @@ export class DiscordConfigService {
     return getBotToken(this.botTokenSecretArn());
   }
 
-  /** Redacted view safe to return to the web client. Includes `*Set` flags for both secrets. */
+  /** Redacted view safe to return to the web client. Includes `*Set` flags for both secrets and the Terraform base lists. */
   async getRedacted(): Promise<RedactedDiscordConfig> {
-    const cfg = await this.load();
-    const [botToken, publicKey] = await Promise.all([
+    const [cfg, base, botToken, publicKey] = await Promise.all([
+      this.load(),
+      this.loadBase(),
       getBotToken(this.botTokenSecretArn()).catch(() => null),
       getPublicKey(this.publicKeySecretArn()).catch(() => null),
     ]);
@@ -132,6 +168,8 @@ export class DiscordConfigService {
       allowedGuilds: cfg.allowedGuilds,
       admins: cfg.admins,
       gamePermissions: cfg.gamePermissions,
+      baseAllowedGuilds: base.allowedGuilds,
+      baseAdmins: base.admins,
       botTokenSet: Boolean(botToken),
       publicKeySet: Boolean(publicKey),
     };
@@ -186,11 +224,23 @@ export class DiscordConfigService {
     }
   }
 
-  /** Remove a guild from the allowlist; no-op if it wasn't there. */
-  async removeAllowedGuild(guildId: string): Promise<void> {
+  /**
+   * Remove a guild from the dynamic allowlist. Returns `{ ok: false }` when the
+   * guild is in the Terraform base config — those entries can only be removed by
+   * editing tfvars and re-applying Terraform.
+   */
+  async removeAllowedGuild(guildId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const base = await this.loadBase();
+    if (base.allowedGuilds.includes(guildId)) {
+      return {
+        ok: false,
+        reason: `Guild ${guildId} is in the Terraform base config and cannot be removed via the UI. Edit base_allowed_guilds in tfvars and re-apply Terraform.`,
+      };
+    }
     const cfg = await this.load();
     cfg.allowedGuilds = cfg.allowedGuilds.filter((g) => g !== guildId);
     await this.save(cfg);
+    return { ok: true };
   }
 
   /**
@@ -254,6 +304,7 @@ export class DiscordConfigService {
   /** Drop the in-memory cache so the next read sees fresh values from DDB. */
   invalidateCache(): void {
     this.cache = null;
+    this.baseCache = null;
   }
 }
 

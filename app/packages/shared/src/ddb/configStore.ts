@@ -1,10 +1,13 @@
 import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import type { DiscordConfig } from '../types.js';
+import type { BaseDiscordConfig, DiscordConfig } from '../types.js';
 import { asString, asStringArray, isSafeGameKey, sanitizeGamePermission } from '../sanitize.js';
 import { getDocClient } from './client.js';
 
 const CONFIG_PK = 'CONFIG#discord';
 const CONFIG_SK = 'CONFIG';
+
+const BASE_PK = 'BASE#discord';
+const BASE_SK = 'BASE';
 
 /** Empty, mutable DiscordConfig used when no item exists yet. */
 function emptyConfig(): DiscordConfig {
@@ -38,6 +41,66 @@ function parseConfigData(raw: unknown): DiscordConfig {
       roleIds: asStringArray(rawAdmins['roleIds']),
     },
     gamePermissions,
+  };
+}
+
+/** Empty base returned when no BASE#discord row exists (all lists default empty). */
+function emptyBase(): BaseDiscordConfig {
+  return { allowedGuilds: [], admins: { userIds: [], roleIds: [] } };
+}
+
+/**
+ * Coerce the stored BASE#discord `data` payload into a valid BaseDiscordConfig.
+ * Applies the same defensive sanitization as parseConfigData so hand-edited
+ * items or a missing row don't crash callers.
+ */
+function parseBaseData(raw: unknown): BaseDiscordConfig {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const rawAdmins = (obj['admins'] ?? {}) as Record<string, unknown>;
+  return {
+    allowedGuilds: asStringArray(obj['allowedGuilds']),
+    admins: {
+      userIds: asStringArray(rawAdmins['userIds']),
+      roleIds: asStringArray(rawAdmins['roleIds']),
+    },
+  };
+}
+
+/**
+ * Read the Terraform-managed BASE#discord row. Returns an empty base when the
+ * row is absent (i.e. all three base Terraform variables are unset).
+ */
+export async function getBaseDiscordConfig(tableName: string): Promise<BaseDiscordConfig> {
+  const resp = await getDocClient().send(
+    new GetCommand({
+      TableName: tableName,
+      Key: { pk: BASE_PK, sk: BASE_SK },
+      ConsistentRead: true,
+    }),
+  );
+  if (!resp.Item) return emptyBase();
+  return parseBaseData(resp.Item['data']);
+}
+
+/**
+ * Read both the Terraform base row and the app-managed dynamic row, then return
+ * their union as the effective config. This is what `canRun()` and the Lambdas
+ * should use — it ensures base entries are always enforced even when the dynamic
+ * row doesn't list them.
+ */
+export async function getEffectiveDiscordConfig(tableName: string): Promise<DiscordConfig> {
+  const [dynamic, base] = await Promise.all([
+    getDiscordConfig(tableName),
+    getBaseDiscordConfig(tableName),
+  ]);
+  return {
+    clientId: dynamic.clientId,
+    allowedGuilds: [...new Set([...base.allowedGuilds, ...dynamic.allowedGuilds])],
+    admins: {
+      userIds: [...new Set([...base.admins.userIds, ...dynamic.admins.userIds])],
+      roleIds: [...new Set([...base.admins.roleIds, ...dynamic.admins.roleIds])],
+    },
+    gamePermissions: dynamic.gamePermissions,
   };
 }
 

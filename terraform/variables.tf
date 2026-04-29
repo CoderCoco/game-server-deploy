@@ -135,6 +135,33 @@ variable "dns_ttl" {
   default     = 30
 }
 
+# ── Discord base allowlist / admins (optional) ───────────────────────────────
+# These lists are Terraform-managed and written to a separate DynamoDB row
+# (BASE#discord) on every `terraform apply`. They form an immutable floor that
+# the management UI can never remove — operators can only add/remove entries
+# they themselves added via the UI.
+#
+# Leave all three empty (the default) to manage everything through the UI.
+# Edit the lists in terraform.tfvars and re-apply to change the base set.
+
+variable "base_allowed_guilds" {
+  description = "Guild IDs permanently allowlisted by Terraform. Cannot be removed via the management UI."
+  type        = list(string)
+  default     = []
+}
+
+variable "base_admin_user_ids" {
+  description = "Discord user IDs with permanent server-wide admin privileges. Cannot be removed via the management UI."
+  type        = list(string)
+  default     = []
+}
+
+variable "base_admin_role_ids" {
+  description = "Discord role IDs with permanent server-wide admin privileges. Cannot be removed via the management UI."
+  type        = list(string)
+  default     = []
+}
+
 # ── Discord bot credentials (optional) ───────────────────────────────────────
 # If set, these seed the AWS Secrets Manager secrets on first `terraform apply`
 # so the bot is fully configured without touching the web UI. Leave empty to

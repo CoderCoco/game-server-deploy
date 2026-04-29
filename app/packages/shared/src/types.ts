@@ -31,12 +31,28 @@ export interface DiscordConfig {
   gamePermissions: Record<string, DiscordGamePermission>;
 }
 
+/**
+ * Terraform-managed baseline stored in the BASE#discord DynamoDB row.
+ *
+ * These entries form a read-only floor: the management UI can never remove
+ * them (only `terraform apply` can). The effective config seen by `canRun()`
+ * and the Lambdas is the union of this base and the dynamic CONFIG#discord row.
+ */
+export interface BaseDiscordConfig {
+  allowedGuilds: string[];
+  admins: DiscordAdmins;
+}
+
 /** Config shape returned to the web client — includes secret-presence flags, never the secret values. */
 export interface RedactedDiscordConfig {
   clientId: string;
   allowedGuilds: string[];
   admins: DiscordAdmins;
   gamePermissions: Record<string, DiscordGamePermission>;
+  /** Guild IDs locked in by Terraform — shown as non-removable in the UI. */
+  baseAllowedGuilds: string[];
+  /** Admin user/role IDs locked in by Terraform — shown as non-removable in the UI. */
+  baseAdmins: DiscordAdmins;
   botTokenSet: boolean;
   publicKeySet: boolean;
 }

@@ -20,13 +20,13 @@ vi.mock('@noble/ed25519', () => ({
 
 // Mock the shared config + secrets stores so we never hit AWS.
 const getPublicKeyMock = vi.fn();
-const getDiscordConfigMock = vi.fn();
+const getEffectiveDiscordConfigMock = vi.fn();
 vi.mock('@gsd/shared', async () => {
   const actual = await vi.importActual<typeof import('@gsd/shared')>('@gsd/shared');
   return {
     ...actual,
     getPublicKey: (...args: unknown[]) => getPublicKeyMock(...args),
-    getDiscordConfig: (...args: unknown[]) => getDiscordConfigMock(...args),
+    getEffectiveDiscordConfig: (...args: unknown[]) => getEffectiveDiscordConfigMock(...args),
   };
 });
 
@@ -69,9 +69,9 @@ beforeEach(() => {
   lambdaMock.reset();
   verifyAsyncMock.mockReset();
   getPublicKeyMock.mockReset();
-  getDiscordConfigMock.mockReset();
+  getEffectiveDiscordConfigMock.mockReset();
   getPublicKeyMock.mockResolvedValue('0a'.repeat(32));
-  getDiscordConfigMock.mockResolvedValue({
+  getEffectiveDiscordConfigMock.mockResolvedValue({
     clientId: 'app-id',
     allowedGuilds: ['G1'],
     admins: { userIds: ['ADMIN'], roleIds: [] },
@@ -261,7 +261,7 @@ describe('InteractionsLambda: APPLICATION_COMMAND_AUTOCOMPLETE', () => {
   it('should cap autocomplete choices at 25 to satisfy the Discord limit', async () => {
     const manyGames = Array.from({ length: 50 }, (_, i) => `game${i}`);
     process.env['GAME_NAMES'] = manyGames.join(',');
-    getDiscordConfigMock.mockResolvedValueOnce({
+    getEffectiveDiscordConfigMock.mockResolvedValueOnce({
       clientId: 'app-id',
       allowedGuilds: ['G1'],
       admins: { userIds: ['U1'], roleIds: [] },
