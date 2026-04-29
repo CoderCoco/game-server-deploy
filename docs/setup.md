@@ -98,7 +98,7 @@ On the AWS side you need:
 > prefix matches the default `project_name`. If you change `project_name` in
 > `terraform.tfvars`, update the two ARN patterns in `GameServerIAM` to match.
 
-Two actions used by Terraform are **not** covered by any AWS managed policy and are explicitly included above to avoid `AccessDenied` during `terraform apply`:
+Two permission areas used by Terraform are **not** covered by any AWS managed policy and are explicitly included above to avoid `AccessDenied` during `terraform apply`:
 
 - **EventBridge tag operations** — the AWS provider tags EventBridge rules on creation, which requires `events:TagResource`, `events:UntagResource`, and `events:ListTagsForResource`. `events:*` above already grants these — if you tighten the policy later, keep those three actions in.
 - **CloudFront** — the Discord interactions endpoint is fronted by a CloudFront distribution. `cloudfront:*` above covers creation, updates, tagging, and deletion of distributions.
