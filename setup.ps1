@@ -28,6 +28,16 @@ function Test-Command {
   return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+# $ErrorActionPreference = 'Stop' only traps cmdlet errors, not native-exe exit codes.
+# Wrap every native call with this so a non-zero exit code throws immediately.
+function Invoke-Native {
+  param([scriptblock]$Block)
+  & $Block
+  if ($LASTEXITCODE -ne 0) {
+    throw "Command failed with exit code $LASTEXITCODE."
+  }
+}
+
 function Install-WithWinget {
   param([string]$PackageId, [string]$DisplayName)
   if (-not (Test-Command 'winget')) {
@@ -35,7 +45,7 @@ function Install-WithWinget {
     exit 1
   }
   Write-Host "  Installing $DisplayName via winget..."
-  winget install --id $PackageId --silent --accept-package-agreements --accept-source-agreements
+  Invoke-Native { winget install --id $PackageId --silent --accept-package-agreements --accept-source-agreements }
   # Refresh PATH for the current session so subsequent Test-Command calls work.
   $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
               [System.Environment]::GetEnvironmentVariable('PATH', 'User')
@@ -95,11 +105,11 @@ Write-Host "  Prerequisites found (node, terraform, aws cli)"
 Write-Host ""
 Write-Host "  Installing Node dependencies..."
 Set-Location (Join-Path $ScriptDir 'app')
-npm ci
+Invoke-Native { npm ci }
 
 Write-Host ""
 Write-Host "  Building Lambda bundles..."
-npm run build:lambdas
+Invoke-Native { npm run build:lambdas }
 
 # ---------------------------------------------------------------------------
 # 3. Bootstrap S3 backend + Terraform init
@@ -142,27 +152,33 @@ if ($bucketExists) {
 } else {
   Write-Host "   Creating S3 bucket $TfStateBucket..."
   if ($TfRegion -eq 'us-east-1') {
-    aws s3api create-bucket --bucket $TfStateBucket --region $TfRegion
+    Invoke-Native { aws s3api create-bucket --bucket $TfStateBucket --region $TfRegion }
   } else {
-    aws s3api create-bucket `
-      --bucket $TfStateBucket `
-      --region $TfRegion `
-      --create-bucket-configuration "LocationConstraint=$TfRegion"
+    Invoke-Native {
+      aws s3api create-bucket `
+        --bucket $TfStateBucket `
+        --region $TfRegion `
+        --create-bucket-configuration "LocationConstraint=$TfRegion"
+    }
   }
-  aws s3api put-bucket-versioning `
-    --bucket $TfStateBucket `
-    --versioning-configuration Status=Enabled `
-    --region $TfRegion
-
-  aws s3api put-public-access-block `
-    --bucket $TfStateBucket `
-    --public-access-block-configuration 'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true' `
-    --region $TfRegion
-
-  aws s3api put-bucket-encryption `
-    --bucket $TfStateBucket `
-    --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}' `
-    --region $TfRegion
+  Invoke-Native {
+    aws s3api put-bucket-versioning `
+      --bucket $TfStateBucket `
+      --versioning-configuration Status=Enabled `
+      --region $TfRegion
+  }
+  Invoke-Native {
+    aws s3api put-public-access-block `
+      --bucket $TfStateBucket `
+      --public-access-block-configuration 'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true' `
+      --region $TfRegion
+  }
+  Invoke-Native {
+    aws s3api put-bucket-encryption `
+      --bucket $TfStateBucket `
+      --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}' `
+      --region $TfRegion
+  }
 }
 
 # DynamoDB lock table
@@ -176,15 +192,16 @@ if ($tableExists) {
   Write-Host "   DynamoDB table $TfLockTable already exists - skipping."
 } else {
   Write-Host "   Creating DynamoDB lock table $TfLockTable..."
-  aws dynamodb create-table `
-    --table-name $TfLockTable `
-    --attribute-definitions AttributeName=LockID,AttributeType=S `
-    --key-schema AttributeName=LockID,KeyType=HASH `
-    --billing-mode PAY_PER_REQUEST `
-    --region $TfRegion
-
+  Invoke-Native {
+    aws dynamodb create-table `
+      --table-name $TfLockTable `
+      --attribute-definitions AttributeName=LockID,AttributeType=S `
+      --key-schema AttributeName=LockID,KeyType=HASH `
+      --billing-mode PAY_PER_REQUEST `
+      --region $TfRegion
+  }
   Write-Host "   Waiting for DynamoDB table to become ACTIVE..."
-  aws dynamodb wait table-exists --table-name $TfLockTable --region $TfRegion
+  Invoke-Native { aws dynamodb wait table-exists --table-name $TfLockTable --region $TfRegion }
 }
 
 # terraform init (with optional state migration)
@@ -198,9 +215,9 @@ $tfInitArgs = @(
 
 if (Test-Path 'terraform.tfstate') {
   Write-Host "   Local terraform.tfstate detected - migrating state to S3..."
-  echo 'yes' | terraform init -migrate-state @tfInitArgs
+  Invoke-Native { 'yes' | terraform init -migrate-state @tfInitArgs }
 } else {
-  terraform init @tfInitArgs
+  Invoke-Native { terraform init @tfInitArgs }
 }
 
 # ---------------------------------------------------------------------------
