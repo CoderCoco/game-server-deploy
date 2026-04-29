@@ -29,6 +29,7 @@ exclude:
   - vendor/
   # D2 sources + helpers are build-time inputs only; the rendered *.svg
   # outputs in the same directory are what get published.
+  - "diagrams/.gitignore"
   - "diagrams/*.d2"
   - "diagrams/render.sh"
   - "diagrams/README.md"
