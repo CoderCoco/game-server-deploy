@@ -6,10 +6,34 @@ import { logger } from '../logger.js';
 import { EMBEDDED_TFSTATE } from '../generated/tfstate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// In dev (tsx): __dirname is src/services/ — 5 levels up reaches repo root.
-// In prod (tsc): __dirname is dist/services/ — also 5 levels up reaches repo root.
-const TF_STATE_PATH = join(__dirname, '../../../../../terraform/terraform.tfstate');
-const CONFIG_PATH = join(__dirname, '../../../../../app/server_config.json');
+
+/**
+ * Probes candidate relative paths from __dirname in order and returns the
+ * first that exists on disk.  Falls back to the first candidate when none
+ * exist so callers get a deterministic (missing-file) path rather than
+ * undefined behaviour.
+ *
+ * Needed because the depth from __dirname to the repo/workspace root differs
+ * between environments:
+ *   - local source tree  (src/services or dist/services inside repo): 5 levels up → repo root
+ *   - Docker image       (dist/services inside /app):                  4 levels up → /app
+ */
+function resolveRuntimePath(...relativeCandidates: string[]): string {
+  for (const rel of relativeCandidates) {
+    const resolved = join(__dirname, rel);
+    if (existsSync(resolved)) return resolved;
+  }
+  return join(__dirname, relativeCandidates[0]);
+}
+
+const TF_STATE_PATH = resolveRuntimePath(
+  '../../../../../terraform/terraform.tfstate',
+  '../../../../terraform/terraform.tfstate',
+);
+const CONFIG_PATH = resolveRuntimePath(
+  '../../../../../app/server_config.json',
+  '../../../../server_config.json',
+);
 
 /**
  * Shape of the subset of Terraform root outputs the management app consumes.
