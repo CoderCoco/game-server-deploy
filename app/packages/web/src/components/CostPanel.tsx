@@ -17,13 +17,13 @@ export function CostPanel({ estimates }: Props) {
     void api.costsActual().then(setActual);
   }, []);
 
-  const maxCost = Math.max(...(actual?.daily.map((d) => d.cost) ?? [0]), 0.001);
+  const maxCost = Math.max(...(actual?.daily?.map((d) => d.cost) ?? [0]), 0.001);
 
   return (
     <div style={panelStyle}>
       <h2 style={headingStyle}>Actual Costs (7 days)</h2>
 
-      {actual?.daily.length ? (
+      {actual?.daily?.length ? (
         <>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '72px', marginBottom: '0.5rem' }}>
             {actual.daily.map((d) => (
