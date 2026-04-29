@@ -105,6 +105,16 @@ resource "aws_lambda_function_url" "interactions" {
   }
 }
 
+# Since October 2025, Lambda Function URLs require both lambda:InvokeFunctionUrl
+# (created automatically by aws_lambda_function_url) and lambda:InvokeFunction.
+resource "aws_lambda_permission" "interactions_url_invoke" {
+  statement_id           = "FunctionURLInvokeAllowPublicAccess"
+  action                 = "lambda:InvokeFunction"
+  function_name          = aws_lambda_function.interactions.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
 output "interactions_invoke_url" {
   description = "Paste this into the 'Interactions Endpoint URL' field in the Discord Developer Portal"
   value       = "https://discord.${var.hosted_zone_name}/"
