@@ -85,6 +85,7 @@ game-server-deploy/
 ├── docs/                      # this site
 ├── Dockerfile                 # containerised management app
 ├── docker-compose.yml
-├── setup.sh                   # first-time bootstrap (node/terraform/aws)
+├── setup.sh                   # first-time bootstrap — Linux / macOS
+├── setup.ps1                  # first-time bootstrap — Windows (PowerShell)
 └── README.md
 ```
