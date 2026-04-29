@@ -15,8 +15,9 @@ Create a pull request for the current branch, enforcing the repo's Conventional 
    - If $ARGUMENTS is non-empty, treat it as the user's suggested title or type hint and incorporate it
 
 3. **Validate before proceeding.**
-   - The title must match: `^(feat|fix|refactor|docs|test|chore|perf|build|ci|style)(\([^)]+\))?: .{1,60}$`
-   - If it doesn't, fix it — do not create the PR with a non-conforming title
+   - The title must match: `^(feat|fix|refactor|docs|test|chore|perf|build|ci|style)(\([^)]+\))?: .+$`
+   - The full title must be under 70 characters total
+   - If either check fails, fix the title — do not create the PR with a non-conforming title
 
 4. **Show the proposed title** to the user and ask for confirmation before creating the PR.
 
