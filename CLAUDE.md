@@ -131,6 +131,15 @@ The full deploy IAM policy (`GameServerDeployAll`) lives in **`docs/setup.md`** 
 
 All resources inherit `default_tags` from `provider "aws"` (`Project = "game-servers-poc"`, `Environment = "poc"`, `ManagedBy = "terraform"`). For Cost Explorer breakdowns, the `Project` cost allocation tag must be activated manually in AWS Billing — this is a one-time console action, not Terraform-managed.
 
+## Checklist for Terraform variable changes
+
+Any time you add or remove Terraform variables, update **all four** of these in the same commit — failing to touch any one of them is a common oversight:
+
+1. `terraform/variables.tf` — the variable declaration itself.
+2. `terraform/terraform.tfvars.example` — a commented-out example entry with a short explanation so operators know how to use it.
+3. `docs/docs/components/terraform.md` — the Variables table row.
+4. `docs/docs/setup.md` — any relevant step in the setup guide (especially if the variable affects the Discord bot or a core workflow).
+
 ## Code & Test Conventions
 
 - **Test names**: every `it(...)` case must read as a natural-language sentence starting with "should" — e.g. `it('should return null when state file is missing')`, not `it('returns null...')`.

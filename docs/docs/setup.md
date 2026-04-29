@@ -321,6 +321,18 @@ connect it to a Discord application.
      paste and Save. The dashboard writes directly to DynamoDB and Secrets
      Manager.
 
+   Optionally set a **base allowlist and admins** in `terraform.tfvars`.
+   These are written to a separate `BASE#discord` DynamoDB row on every
+   `terraform apply` and cannot be removed via the dashboard UI — only a
+   tfvars edit + re-apply can change them. Useful for locking in your own
+   guild and user ID before handing the dashboard to others:
+
+   ```hcl
+   base_allowed_guilds = ["123456789012345678"]
+   base_admin_user_ids = ["987654321098765432"]
+   base_admin_role_ids = []
+   ```
+
 3. **Copy the interactions endpoint URL** (the `interactions_invoke_url`
    Terraform output, also shown in the dashboard Credentials tab) into the
    Discord Developer Portal under **General Information → Interactions

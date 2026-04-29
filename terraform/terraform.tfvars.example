@@ -29,6 +29,15 @@ watchdog_min_packets      = 100
 # discord_bot_token      = "MTIz...xyz"
 # discord_public_key     = "0123abc..."
 
+# Base allowlist / admins (optional — permanent floor managed by Terraform).
+# Guilds and admin user/role IDs listed here are written to a separate
+# BASE#discord DynamoDB row on every `terraform apply`. The management UI
+# shows them as locked and cannot remove them; only editing these lists and
+# re-applying Terraform can change the base set.
+# base_allowed_guilds  = ["123456789012345678"]
+# base_admin_user_ids  = ["987654321098765432"]
+# base_admin_role_ids  = []
+
 # Override game server settings (optional — defaults are set in variables.tf)
 game_servers = {
   palworld = {
