@@ -46,7 +46,7 @@ jobs:
           source: ./docs
           destination: ./_site
       - name: Fix _site permissions
-        run: chmod -R +rX _site/
+        run: sudo chmod -R +rX _site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
