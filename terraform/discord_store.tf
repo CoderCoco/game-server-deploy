@@ -109,6 +109,91 @@ resource "aws_secretsmanager_secret_version" "discord_public_key" {
 # The resource is skipped entirely when all three lists are empty so a
 # UI-only deployment doesn't end up with a stray empty row.
 
+# ─ Slash-command descriptors ──────────────────────────────────────────────────
+# Must be kept in sync with COMMAND_DESCRIPTORS in
+# app/packages/shared/src/commands.ts. The sha256 of this value is used as a
+# trigger so `null_resource.discord_register_commands` re-runs whenever the
+# command set changes.
+locals {
+  discord_command_descriptors = jsonencode([
+    {
+      name        = "server-start"
+      description = "Start a game server"
+      options = [{
+        type         = 3
+        name         = "game"
+        description  = "Game to start"
+        required     = true
+        autocomplete = true
+      }]
+    },
+    {
+      name        = "server-stop"
+      description = "Stop a running game server"
+      options = [{
+        type         = 3
+        name         = "game"
+        description  = "Game to stop"
+        required     = true
+        autocomplete = true
+      }]
+    },
+    {
+      name        = "server-status"
+      description = "Show status of a game server (or all if omitted)"
+      options = [{
+        type         = 3
+        name         = "game"
+        description  = "Game to check"
+        required     = false
+        autocomplete = true
+      }]
+    },
+    {
+      name        = "server-list"
+      description = "List all configured game servers and their state"
+    }
+  ])
+}
+
+# ─ Auto-register slash commands ───────────────────────────────────────────────
+# When discord_bot_token, discord_application_id, and base_allowed_guilds are
+# all set, this registers the slash commands in each base guild during
+# `terraform apply`. Re-runs whenever the application ID, token, or command
+# descriptors change. Guilds added later via the management UI still require
+# the "Register commands" button in the Guilds tab.
+#
+# The bot token is passed via environment variable (not a shell argument) so it
+# never appears in the process list.
+resource "null_resource" "discord_register_commands" {
+  for_each = (var.discord_bot_token != "" && var.discord_application_id != "") ? toset(var.base_allowed_guilds) : toset([])
+
+  triggers = {
+    application_id    = var.discord_application_id
+    guild_id          = each.value
+    token_hash        = sha256(var.discord_bot_token)
+    commands_checksum = sha256(local.discord_command_descriptors)
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      curl -sf -X PUT \
+        "https://discord.com/api/v10/applications/${var.discord_application_id}/guilds/${each.value}/commands" \
+        -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '${local.discord_command_descriptors}'
+    EOT
+    environment = {
+      DISCORD_BOT_TOKEN = var.discord_bot_token
+    }
+  }
+
+  depends_on = [
+    aws_dynamodb_table_item.discord_base_config,
+    aws_secretsmanager_secret_version.discord_bot_token,
+  ]
+}
+
 resource "aws_dynamodb_table_item" "discord_base_config" {
   count = (length(var.base_allowed_guilds) + length(var.base_admin_user_ids) + length(var.base_admin_role_ids)) > 0 ? 1 : 0
 
