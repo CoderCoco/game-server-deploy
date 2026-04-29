@@ -211,6 +211,9 @@ function CredentialsTab({
  * Manage the guild (server) allowlist. Each row also shows a "Register
  * commands" button — operator-triggered re-registration replaces the old
  * always-on bot's automatic registration on `ready`/`guildCreate`.
+ *
+ * Guilds from the Terraform `base_allowed_guilds` variable are shown as locked
+ * rows — they can be registered but not removed via the UI.
  */
 function GuildsTab({
   cfg,
@@ -226,6 +229,7 @@ function GuildsTab({
   onRegister: (g: string) => void;
 }) {
   const [next, setNext] = useState('');
+  const hasAny = cfg.baseAllowedGuilds.length > 0 || cfg.allowedGuilds.length > 0;
   return (
     <div style={{ display: 'grid', gap: '0.6rem' }}>
       <p style={helpStyle}>
@@ -244,10 +248,19 @@ function GuildsTab({
           Add
         </button>
       </div>
-      {cfg.allowedGuilds.length === 0 ? (
+      {!hasAny ? (
         <div style={helpStyle}>No guilds allowlisted yet.</div>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.3rem' }}>
+          {cfg.baseAllowedGuilds.map((g) => (
+            <li key={`base:${g}`} style={rowStyle}>
+              <code style={{ fontSize: '0.8rem', flex: 1 }}>{g}</code>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>terraform-managed</span>
+              <button className="btn-secondary btn-sm" disabled={busy} onClick={() => onRegister(g)}>
+                Register commands
+              </button>
+            </li>
+          ))}
           {cfg.allowedGuilds.map((g) => (
             <li key={g} style={rowStyle}>
               <code style={{ fontSize: '0.8rem', flex: 1 }}>{g}</code>
@@ -268,6 +281,9 @@ function GuildsTab({
 /**
  * Editor for the server-wide admin list — users or roles that bypass the
  * per-game permission check and can run every Discord command.
+ *
+ * Admins set via the Terraform `base_admin_user_ids` / `base_admin_role_ids`
+ * variables are shown as read-only below the editable section.
  */
 function AdminsTab({
   cfg,
@@ -280,6 +296,8 @@ function AdminsTab({
 }) {
   const [userIds, setUserIds] = useState(cfg.admins.userIds.join(', '));
   const [roleIds, setRoleIds] = useState(cfg.admins.roleIds.join(', '));
+  const hasBaseAdmins =
+    cfg.baseAdmins.userIds.length > 0 || cfg.baseAdmins.roleIds.length > 0;
   return (
     <div style={{ display: 'grid', gap: '0.6rem' }}>
       <p style={helpStyle}>
@@ -297,6 +315,29 @@ function AdminsTab({
           Save
         </button>
       </div>
+      {hasBaseAdmins && (
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.6rem', display: 'grid', gap: '0.4rem' }}>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+            Terraform-managed (read-only)
+          </div>
+          {cfg.baseAdmins.userIds.length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Admin User IDs</div>
+              <code style={{ fontSize: '0.78rem', wordBreak: 'break-all' }}>
+                {cfg.baseAdmins.userIds.join(', ')}
+              </code>
+            </div>
+          )}
+          {cfg.baseAdmins.roleIds.length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Admin Role IDs</div>
+              <code style={{ fontSize: '0.78rem', wordBreak: 'break-all' }}>
+                {cfg.baseAdmins.roleIds.join(', ')}
+              </code>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -85,6 +85,10 @@ export interface DiscordConfigRedacted {
   allowedGuilds: string[];
   admins: DiscordAdmins;
   gamePermissions: Record<string, DiscordGamePermission>;
+  /** Guild IDs locked in by Terraform — non-removable via the UI. */
+  baseAllowedGuilds: string[];
+  /** Admin user/role IDs locked in by Terraform — non-removable via the UI. */
+  baseAdmins: DiscordAdmins;
   botTokenSet: boolean;
   publicKeySet: boolean;
   interactionsEndpointUrl: string | null;

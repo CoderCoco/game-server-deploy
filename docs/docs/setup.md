@@ -333,6 +333,11 @@ connect it to a Discord application.
    base_admin_role_ids = []
    ```
 
+   When `discord_bot_token`, `discord_application_id`, **and** at least one
+   entry in `base_allowed_guilds` are all set, `terraform apply` also
+   registers the slash commands in each base guild automatically — no manual
+   "Register commands" click needed for those guilds.
+
 3. **Copy the interactions endpoint URL** (the `interactions_invoke_url`
    Terraform output, also shown in the dashboard Credentials tab) into the
    Discord Developer Portal under **General Information → Interactions
@@ -353,10 +358,12 @@ connect it to a Discord application.
    **Copy ID**.
 
 6. **In the dashboard's Discord Bot panel:**
-   - **Guilds tab**: add the guild ID and click **Register commands** so
-     Discord learns about `/server-start`, `/server-stop`, `/server-status`,
-     `/server-list`. This is a per-guild REST call; there are no global
-     commands.
+   - **Guilds tab**: guilds in `base_allowed_guilds` have their slash commands
+     registered automatically by `terraform apply` (provided the bot token and
+     application ID were set in tfvars). For any guild added via the UI, click
+     **Register commands** to install `/server-start`, `/server-stop`,
+     `/server-status`, `/server-list`. This is always a per-guild REST call;
+     there are no global commands.
    - **Admins tab**: user IDs and/or role IDs that can run everything on
      everything.
    - **Per-Game Permissions tab**: for each game, which users/roles can
@@ -407,7 +414,7 @@ hitting "already scheduled for deletion".
 | Dashboard says **terraform not applied** in the Discord panel | `interactions_invoke_url` output missing | Re-run `cd app && npm run build:lambdas && cd ../terraform && terraform apply`. |
 | Dashboard says **awaiting credentials** | Secrets still contain the Terraform `"placeholder"` seed | Paste the real bot token + public key in the Credentials tab and Save. |
 | Discord rejects the interactions URL with "invalid interactions endpoint URL" | Public key in Secrets Manager doesn't match Discord's | Re-copy the Application Public Key from the Developer Portal and Save. |
-| `/server-*` slash commands don't appear in Discord | Per-guild registration not done | Guilds tab → **Register commands** next to the guild ID. |
+| `/server-*` slash commands don't appear in Discord | Per-guild registration not done | For base guilds: ensure `discord_bot_token`, `discord_application_id`, and `base_allowed_guilds` are all set in tfvars, then re-run `terraform apply`. For UI-added guilds: Guilds tab → **Register commands** next to the guild ID. |
 | `/server-start` says "You don't have permission" | Your user/role isn't in admins or per-game permissions, or the `start` action isn't ticked | Admins tab or Per-Game Permissions tab, then retry. |
 | Task reaches RUNNING but DNS never updates | update-dns Lambda errored; EventBridge rule might be disabled | Check the Lambda's CloudWatch logs; verify the EventBridge rule is enabled. |
 | Watchdog stops tasks too aggressively | Low `watchdog_min_packets`, short `watchdog_interval_minutes`, or low `watchdog_idle_checks` | Tune the three knobs via the dashboard **Server Config** panel and re-apply. |
