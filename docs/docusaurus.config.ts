@@ -5,8 +5,6 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'Game Server Deploy',
   tagline: 'Cost-efficient multi-game dedicated server platform on AWS Fargate',
-  favicon: 'img/favicon.ico',
-
   url: 'https://codercoco.github.io',
   baseUrl: '/game-server-deploy/',
 
