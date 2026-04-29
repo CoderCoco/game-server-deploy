@@ -1,0 +1,4 @@
+# Docusaurus generated outputs — not committed
+.docusaurus/
+build/
+node_modules/

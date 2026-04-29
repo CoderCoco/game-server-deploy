@@ -1,14 +1,13 @@
 ---
 title: Terraform
-parent: Components
-nav_order: 1
+sidebar_position: 2
 ---
 
 # Terraform
 
 All AWS infrastructure lives under `terraform/`. State is stored in an S3
 bucket with DynamoDB locking, bootstrapped automatically by `setup.sh` — see
-step 3 of the [setup guide]({{ '/setup/' | relative_url }}) for details.
+step 3 of the [setup guide](/setup) for details.
 
 ## Files
 

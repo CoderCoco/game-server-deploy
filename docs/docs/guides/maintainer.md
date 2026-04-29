@@ -1,7 +1,6 @@
 ---
-title: Maintainer
-parent: Guides
-nav_order: 2
+title: Maintainer guide
+sidebar_position: 3
 ---
 
 # Maintainer guide
@@ -38,7 +37,7 @@ game-server-deploy/
 │   ├── discord_store.tf variables.tf outputs.tf
 │   └── terraform.tfvars.example
 ├── docs/                                # this site
-├── .github/workflows/                   # lint.yml, test.yml, jekyll-gh-pages.yml
+├── .github/workflows/                   # lint.yml, test.yml, docusaurus-gh-pages.yml
 ├── Dockerfile docker-compose.yml
 └── setup.sh
 ```
@@ -110,10 +109,9 @@ Three workflows live in `.github/workflows/`:
 - **`lint.yml`** — ESLint + `tflint` + `terraform fmt -check -recursive` +
   `terraform validate`. Runs on every push/PR.
 - **`test.yml`** — `vitest run` across all workspaces.
-- **`jekyll-gh-pages.yml`** — publishes this site. Only triggers on
+- **`docusaurus-gh-pages.yml`** — publishes this site. Only triggers on
   `docs/**` and the workflow itself on `main`, plus `workflow_dispatch`.
-  If you want to preview doc changes locally, run `jekyll serve --source docs`
-  in a Ruby environment with the `github-pages` gem.
+  To preview doc changes locally, run `cd docs && npm install && npm start`.
 
 There is also CodeQL security analysis configured at the org level (see
 `CONTRIBUTING.md`).
@@ -275,8 +273,7 @@ machine holds the AWS credentials.
 If you're wrapping this repo as a submodule inside a private parent repo
 that holds `terraform.tfvars` and state — which is the
 pattern we recommend for anyone running this for real — see the
-[submodule guide]({{ '/guides/submodule/' | relative_url }}) for that
-layout.
+[submodule guide](/guides/submodule) for that layout.
 
 ## Useful references
 
@@ -284,7 +281,7 @@ layout.
   project instructions in full, including the "why" for every invariant.
 - [`CONTRIBUTING.md`](https://github.com/codercoco/game-server-deploy/blob/main/CONTRIBUTING.md) —
   PR rules, review policy, local-check commands.
-- [Architecture]({{ '/architecture/' | relative_url }}) —
+- [Architecture](/architecture) —
   component and sequence diagrams.
-- [Component docs]({{ '/' | relative_url }}#component-reference) —
+- [Component docs](/#component-reference) —
   deep-dives on terraform, the management app, and the Lambdas.

@@ -1,7 +1,6 @@
 ---
 title: Submodule layout
-parent: Guides
-nav_order: 3
+sidebar_position: 4
 ---
 
 # Private parent repo + submodule
@@ -13,7 +12,7 @@ lives in a public fork, and pulling upstream changes is `git submodule update
 --remote`.
 
 If you're just kicking the tyres, the plain
-[setup guide]({{ '/setup/' | relative_url }}) is fine. Come back to this
+[setup guide](/setup) is fine. Come back to this
 page when you're ready to commit your config to source control.
 
 ## Why this layout
@@ -357,8 +356,7 @@ jobs:
 
 Use OIDC → an IAM role for `aws-actions/configure-aws-credentials` rather
 than stashing long-lived keys. The role's policy is the same
-`GameServerDeployAll` inline policy from the [setup guide]({{ '/setup/' |
-relative_url }}).
+`GameServerDeployAll` inline policy from the [setup guide](/setup).
 
 ## What NOT to do
 
