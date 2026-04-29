@@ -27,3 +27,5 @@ Thumbs.db
 # lives at .claude/settings.json (commit that instead if you want the
 # allowlist shared across the team).
 .claude/settings.local.json
+
+.make
