@@ -24,7 +24,11 @@ When you post one of these, be specific: name the exact failure scenario, not "t
 
 ## PR title check (always run this)
 
-Before reviewing the diff, **read the PR title**. We squash-merge, so the PR title becomes the commit subject on `main` verbatim. The title MUST:
+Before reviewing the diff, **read the PR title**. We squash-merge, so the PR title becomes the commit subject on `main` verbatim.
+
+> **Important — strip shell/tool quoting before evaluating.** Whatever command or API you used to retrieve the title may wrap it in surrounding double-quotes (e.g. `"fix(docs): update readme"`). Those outer quotes are formatting added by the tool, not characters in the actual title. **Remove them before checking.** Only flag quote characters if they appear *inside* the title text itself (e.g. `fix: handle "unknown" state` — the inner quotes would be unusual but are the author's choice). Never flag a title as malformed solely because the tool output surrounded it with quotes.
+
+The title MUST:
 
 1. Start with a Conventional Commits type — one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`.
 2. Optionally include a scope in parentheses, e.g. `feat(server):`, `fix(watchdog):`.
