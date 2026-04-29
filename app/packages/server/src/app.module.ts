@@ -9,6 +9,7 @@ import { APP_GUARD } from '@nestjs/core';
 import type { Request, Response, NextFunction } from 'express';
 import { AwsModule } from './modules/aws.module.js';
 import { DiscordModule } from './modules/discord.module.js';
+import { ConfigService } from './services/ConfigService.js';
 import { GamesController } from './controllers/games.controller.js';
 import { ConfigController } from './controllers/config.controller.js';
 import { CostsController } from './controllers/costs.controller.js';
@@ -51,7 +52,13 @@ class RequestLoggerMiddleware implements NestMiddleware {
     FilesController,
     DiscordController,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ApiTokenGuard }],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useFactory: (config: ConfigService) => new ApiTokenGuard(config),
+      inject: [ConfigService],
+    },
+  ],
 })
 export class AppModule implements NestModule {
   /** Attaches the request logger to every route so each HTTP call emits one structured line. */
