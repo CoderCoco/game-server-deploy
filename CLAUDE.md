@@ -123,9 +123,9 @@ The interactions Lambda handles autocomplete synchronously within the 3-second b
 
 Lambda env vars named `AWS_REGION` are reserved by the runtime. All four Lambdas use `AWS_REGION_` (trailing underscore) to pass the configured region — preserve this when editing.
 
-## AWS IAM Requirement Not Covered by Managed Policies
+## AWS IAM Policy
 
-The AWS provider tags EventBridge rules on creation, which requires `events:TagResource` / `UntagResource` / `ListTagsForResource`. These are **not** in any of the managed policies listed in the README. An inline policy granting them must be attached to the deploy user or `terraform apply` will fail. See README "Additional inline policies required".
+The full deploy IAM policy (`GameServerDeployAll`) lives in **`docs/setup.md`** — that is the single source of truth. Any time a new AWS service or action is needed (e.g. a new Terraform resource), update the policy JSON there and nowhere else. The policy already covers EventBridge tagging (`events:*`) and CloudFront (`cloudfront:*`), both of which are absent from AWS managed policies but required by `terraform apply`.
 
 ## Cost Tagging
 

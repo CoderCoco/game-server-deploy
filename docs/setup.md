@@ -69,7 +69,8 @@ On the AWS side you need:
         "acm:*",
         "dynamodb:*",
         "secretsmanager:*",
-        "s3:*"
+        "s3:*",
+        "cloudfront:*"
       ],
       "Resource": "*"
     },
@@ -97,11 +98,12 @@ On the AWS side you need:
 > prefix matches the default `project_name`. If you change `project_name` in
 > `terraform.tfvars`, update the two ARN patterns in `GameServerIAM` to match.
 
-You also need a tiny extra permission that is **not** in any AWS-managed
-policy: the AWS provider tags EventBridge rules on creation, which requires
-`events:TagResource`, `events:UntagResource`, and `events:ListTagsForResource`.
-`events:*` above already grants these — if you tighten the policy later, keep
-those three actions in.
+Two actions used by Terraform are **not** covered by any AWS managed policy and are explicitly included above to avoid `AccessDenied` during `terraform apply`:
+
+- **EventBridge tag operations** — the AWS provider tags EventBridge rules on creation, which requires `events:TagResource`, `events:UntagResource`, and `events:ListTagsForResource`. `events:*` above already grants these — if you tighten the policy later, keep those three actions in.
+- **CloudFront** — the Discord interactions endpoint is fronted by a CloudFront distribution. `cloudfront:*` above covers creation, updates, tagging, and deletion of distributions.
+
+This policy is the **single source of truth** for IAM permissions. If you need to add or remove permissions, edit it here — do not create separate inline policies or update the README independently.
 
 ## 2. Configure the AWS CLI
 
