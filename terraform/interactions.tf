@@ -107,5 +107,5 @@ resource "aws_lambda_function_url" "interactions" {
 
 output "interactions_invoke_url" {
   description = "Paste this into the 'Interactions Endpoint URL' field in the Discord Developer Portal"
-  value       = aws_lambda_function_url.interactions.function_url
+  value       = "https://discord.${var.hosted_zone_name}/"
 }
