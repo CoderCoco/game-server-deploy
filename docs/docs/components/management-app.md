@@ -86,9 +86,13 @@ Every route is under `/api/*` and gated by `ApiTokenGuard`.
   Caches in-memory; `invalidateCache()` is called by the games controller
   on list/status so a new `terraform apply` is picked up without a server
   restart. Also resolves the bearer token from `API_TOKEN` (wins) or
-  `server_config.json:api_token`. Returns `null` from `getTfOutputs()` if
-  tfstate is missing/unparseable — callers degrade gracefully so the
-  dashboard can render even pre-apply.
+  `server_config.json:api_token`. State resolution order: (1) runtime
+  `terraform/terraform.tfstate`; (2) build-time embedded state from
+  `app/packages/server/src/generated/tfstate.ts` (written by
+  `app/scripts/embed-tfstate.mjs` via the `predev`/`prebuild` npm hooks
+  — useful in Docker/CI where the Terraform directory isn't mounted);
+  (3) `null` — callers degrade gracefully so the dashboard can render
+  even pre-apply.
 - **`DiscordConfigService`** — persistence facade over DynamoDB
   (`CONFIG#discord`) + Secrets Manager. Concurrent reads are coalesced via
   an inflight-promise pattern. `getRedacted()` returns
