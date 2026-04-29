@@ -21,10 +21,10 @@ On the machine that will run `terraform apply` and the management app:
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Node.js | 20+ | Enforced by `setup.sh` and the Nest server boot. |
+| Node.js | 20+ | Enforced by both setup scripts and the Nest server boot. |
 | npm | 10+ | Ships with Node 20. |
-| Terraform | 1.5+ | Installed automatically by `setup.sh` on Debian/Ubuntu. |
-| AWS CLI | v2 | Installed automatically by `setup.sh` on Linux. |
+| Terraform | 1.5+ | Installed automatically by `setup.sh` (Debian/Ubuntu) or `setup.ps1` (Windows via winget). |
+| AWS CLI | v2 | Installed automatically by `setup.sh` (Linux) or `setup.ps1` (Windows via MSI). |
 | Docker | 24+ | Only if you plan to run the app via `docker compose`. |
 
 On the AWS side you need:
@@ -124,6 +124,8 @@ instead — the management app will pick them up too.
 
 ## 3. Clone and bootstrap
 
+**Linux / macOS:**
+
 ```bash
 git clone https://github.com/codercoco/game-server-deploy.git
 cd game-server-deploy
@@ -131,10 +133,22 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-`setup.sh` is idempotent — safe to re-run at any time. It:
+**Windows (PowerShell 5.1+):**
+
+```powershell
+git clone https://github.com/codercoco/game-server-deploy.git
+cd game-server-deploy
+.\setup.ps1
+```
+
+> If PowerShell blocks the script with an execution-policy error, run
+> `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` once, then retry.
+
+Both scripts are idempotent — safe to re-run at any time. They:
 
 1. Checks for Node 20+, and installs Terraform and the AWS CLI if missing
-   (Debian/Ubuntu only; macOS users should install those manually first).
+   (`setup.sh` uses apt on Debian/Ubuntu; `setup.ps1` uses winget + the AWS MSI
+   installer on Windows; macOS users should install those tools manually first).
 2. Runs `npm ci` from `app/` so all workspaces are installed.
 3. Runs `npm run build:lambdas` to produce `app/packages/lambda/*/dist/handler.cjs`
    — Terraform's `archive_file` data sources zip these at apply time, so
