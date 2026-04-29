@@ -125,7 +125,7 @@ Lambda env vars named `AWS_REGION` are reserved by the runtime. All four Lambdas
 
 ## AWS IAM Requirement Not Covered by Managed Policies
 
-The AWS provider tags EventBridge rules on creation, which requires `events:TagResource` / `UntagResource` / `ListTagsForResource`. These are **not** in any of the managed policies listed in the README. An inline policy granting them must be attached to the deploy user or `terraform apply` will fail. See README "Additional inline policy required".
+The AWS provider tags EventBridge rules on creation, which requires `events:TagResource` / `UntagResource` / `ListTagsForResource`. These are **not** in any of the managed policies listed in the README. An inline policy granting them must be attached to the deploy user or `terraform apply` will fail. See README "Additional inline policies required".
 
 ## Cost Tagging
 
