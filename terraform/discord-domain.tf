@@ -9,9 +9,9 @@
 #     → Route 53 ALIAS → CloudFront distribution
 #       → Lambda Function URL (HTTPS origin)
 #
-# CloudFront is in the global edge network but the ACM certificate must be in
-# us-east-1. Since that's the default region for this project, no provider
-# alias is required.
+# CloudFront is in the global edge network but ACM certificates must always be
+# in us-east-1, regardless of var.aws_region. The aws.us_east_1 provider alias
+# (defined in main.tf) is used for the certificate and its validation resource.
 #
 # Cache is fully disabled — every Discord interaction is unique. Discord's
 # signature headers (X-Signature-Ed25519, X-Signature-Timestamp) are forwarded
@@ -34,6 +34,7 @@ locals {
 # ── ACM Certificate ───────────────────────────────────────────────────────────
 
 resource "aws_acm_certificate" "discord" {
+  provider          = aws.us_east_1
   domain_name       = local.discord_domain
   validation_method = "DNS"
 
@@ -63,6 +64,7 @@ resource "aws_route53_record" "discord_acm_validation" {
 }
 
 resource "aws_acm_certificate_validation" "discord" {
+  provider                = aws.us_east_1
   certificate_arn         = aws_acm_certificate.discord.arn
   validation_record_fqdns = [for r in aws_route53_record.discord_acm_validation : r.fqdn]
 }

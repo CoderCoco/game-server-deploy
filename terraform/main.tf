@@ -27,6 +27,17 @@ provider "aws" {
   }
 }
 
+# CloudFront ACM certificates must always be in us-east-1, regardless of the
+# deployment region. This alias is used only for those certificate resources.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = var.tags
+  }
+}
+
 # ── Data Sources ─────────────────────────────────────────────────────────────
 
 data "aws_availability_zones" "available" {
