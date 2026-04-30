@@ -74,12 +74,12 @@ resource "aws_lambda_function" "interactions" {
 
   environment {
     variables = {
-      AWS_REGION_                    = var.aws_region
-      TABLE_NAME                     = aws_dynamodb_table.discord.name
-      DISCORD_PUBLIC_KEY_SECRET_ARN  = aws_secretsmanager_secret.discord_public_key.arn
-      FOLLOWUP_LAMBDA_NAME           = aws_lambda_function.followup.function_name
-      GAME_NAMES                     = join(",", keys(var.game_servers))
-      HOSTED_ZONE_NAME               = var.hosted_zone_name
+      AWS_REGION_                   = var.aws_region
+      TABLE_NAME                    = aws_dynamodb_table.discord.name
+      DISCORD_PUBLIC_KEY_SECRET_ARN = aws_secretsmanager_secret.discord_public_key.arn
+      FOLLOWUP_LAMBDA_NAME          = aws_lambda_function.followup.function_name
+      GAME_NAMES                    = join(",", keys(var.game_servers))
+      HOSTED_ZONE_NAME              = var.hosted_zone_name
     }
   }
 
@@ -105,14 +105,24 @@ resource "aws_lambda_function_url" "interactions" {
   }
 }
 
-# Since October 2025, Lambda Function URLs require both lambda:InvokeFunctionUrl
-# (created automatically by aws_lambda_function_url) and lambda:InvokeFunction.
-resource "aws_lambda_permission" "interactions_url_invoke" {
-  statement_id           = "FunctionURLInvokeAllowPublicAccess"
-  action                 = "lambda:InvokeFunction"
+# Since October 2025, Lambda Function URLs require BOTH lambda:InvokeFunctionUrl
+# AND lambda:InvokeFunction in the resource policy — without the second one,
+# Discord's endpoint validation gets 403 before the handler runs. AWS only
+# accepts function_url_auth_type paired with lambda:InvokeFunctionUrl, so the
+# two grants are split into two statements.
+resource "aws_lambda_permission" "interactions_url_invoke_url" {
+  statement_id           = "FunctionURLInvokeUrlAllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.interactions.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "interactions_url_invoke" {
+  statement_id  = "FunctionURLInvokeAllowPublicAccess"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.interactions.function_name
+  principal     = "*"
 }
 
 output "interactions_invoke_url" {
