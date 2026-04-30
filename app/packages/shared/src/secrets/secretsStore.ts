@@ -53,16 +53,18 @@ async function putSecret(secretId: string, value: string): Promise<void> {
 
 /** Return the configured bot token, or `null` if not set / still on the placeholder. */
 export async function getBotToken(secretArn: string): Promise<string | null> {
-  const value = await getSecret(secretArn);
+  const raw = await getSecret(secretArn);
+  const value = raw?.trim() ?? null;
   if (!value || value === SECRET_PLACEHOLDER) return null;
-  return value.trim();
+  return value;
 }
 
 /** Return the configured Ed25519 public key (hex), or `null` if not set / still on the placeholder. */
 export async function getPublicKey(secretArn: string): Promise<string | null> {
-  const value = await getSecret(secretArn);
+  const raw = await getSecret(secretArn);
+  const value = raw?.trim() ?? null;
   if (!value || value === SECRET_PLACEHOLDER) return null;
-  return value.trim();
+  return value;
 }
 
 /** Persist a new bot token, trimmed of surrounding whitespace. */
