@@ -32,6 +32,16 @@ variable "game_servers" {
     https       = optional(bool, false) # If true, traffic is routed through ALB with TLS termination
   }))
 
+  validation {
+    condition = alltrue([
+      for cfg in values(var.game_servers) :
+      length(cfg.volumes) > 0 && alltrue([
+        for v in cfg.volumes : length(v.name) > 0 && length(v.container_path) > 0
+      ])
+    ])
+    error_message = "Each game server must have at least one volume entry with non-empty name and container_path."
+  }
+
   default = {
     palworld = {
       image  = "thijsvanloef/palworld-server-docker:latest"
