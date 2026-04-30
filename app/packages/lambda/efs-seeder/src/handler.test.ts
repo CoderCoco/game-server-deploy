@@ -102,6 +102,16 @@ describe('efs-seeder handler', () => {
     ).rejects.toThrow('does not start with container_path');
   });
 
+  it('should throw when the seed path equals container_path with no file component', async () => {
+    await expect(
+      handler({
+        game: GAME,
+        seeds: [{ path: '/palworld', content: 'x=1' }],
+        container_path: CONTAINER_PATH,
+      }),
+    ).rejects.toThrow('no file component after container_path');
+  });
+
   it('should throw on path traversal attempts', async () => {
     await expect(
       handler({
@@ -120,6 +130,26 @@ describe('efs-seeder handler', () => {
         container_path: CONTAINER_PATH,
       }),
     ).rejects.toThrow('neither content nor content_base64');
+  });
+
+  it('should throw when a seed sets both content and content_base64', async () => {
+    await expect(
+      handler({
+        game: GAME,
+        seeds: [{ path: '/palworld/a.ini', content: 'x=1', content_base64: 'eD0x' }],
+        container_path: CONTAINER_PATH,
+      }),
+    ).rejects.toThrow('sets both content and content_base64');
+  });
+
+  it('should throw when mode is not a valid octal string', async () => {
+    await expect(
+      handler({
+        game: GAME,
+        seeds: [{ path: '/palworld/a.ini', content: 'x=1', mode: 'rwxr-xr-x' }],
+        container_path: CONTAINER_PATH,
+      }),
+    ).rejects.toThrow('invalid mode');
   });
 
   it('should handle an empty seeds list without errors', async () => {
