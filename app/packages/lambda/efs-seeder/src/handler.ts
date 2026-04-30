@@ -41,6 +41,11 @@ function resolveDestination(seedPath: string, containerPath: string): string {
   return dest;
 }
 
+/**
+ * Writes each `file_seeds` entry to the EFS access point mounted at
+ * `/mnt/efs`.  Invoked synchronously by `aws_lambda_invocation` during
+ * `terraform apply`; throws on any error so Terraform surfaces the failure.
+ */
 export const handler = async (event: SeederEvent): Promise<void> => {
   const { game, seeds, container_path: containerPath } = event;
 
