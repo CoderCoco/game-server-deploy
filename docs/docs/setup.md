@@ -197,17 +197,21 @@ game_servers = {
       { name = "SERVER_NAME",    value = "My Palworld Server" },
       { name = "ADMIN_PASSWORD", value = "CHANGE_ME" },
     ]
-    efs_path = "/palworld"
-    https    = false
+    volumes = [
+      { name = "saves", container_path = "/palworld" },
+    ]
+    https = false
   }
 }
 ```
 
 Rules worth knowing before you save:
 
-- **`efs_path`** maps to a dedicated EFS access point — each game is isolated
-  in its own directory with UID/GID 1000 ownership. Game images that run as
-  a different UID will fail to mount.
+- **`volumes`** is a list of EFS mount points for the game. Each entry creates
+  a dedicated EFS access point rooted at `/${game}/${name}` and mounts it at
+  `container_path` inside the container. Most games need one entry; add more
+  if the image expects multiple distinct paths. All access points use UID/GID
+  1000 ownership — game images that run as a different UID will fail to mount.
 - **`https = true`** routes the game through an ALB + ACM + Route 53 ALIAS.
   Only set it on games that actually serve HTTP(S); UDP games (most game
   servers) must stay `false`. The ALB is only created if at least one game

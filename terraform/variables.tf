@@ -28,9 +28,19 @@ variable "game_servers" {
     memory      = number  # MiB
     ports       = list(object({ container = number, protocol = string }))
     environment = optional(list(object({ name = string, value = string })), [])
-    efs_path    = string  # Mount path inside the container
+    volumes     = list(object({ name = string, container_path = string }))
     https       = optional(bool, false) # If true, traffic is routed through ALB with TLS termination
   }))
+
+  validation {
+    condition = alltrue([
+      for cfg in values(var.game_servers) :
+      length(cfg.volumes) > 0 && alltrue([
+        for v in cfg.volumes : length(v.name) > 0 && length(v.container_path) > 0
+      ])
+    ])
+    error_message = "Each game server must have at least one volume entry with non-empty name and container_path."
+  }
 
   default = {
     palworld = {
@@ -53,8 +63,10 @@ variable "game_servers" {
         { name = "BACKUP_CRON_EXPRESSION", value = "0 */6 * * *" },
         { name = "DIFFICULTY",        value = "Normal" },
       ]
-      efs_path = "/palworld"
-      https   = false
+      volumes = [
+        { name = "saves", container_path = "/palworld" },
+      ]
+      https = false
     }
 
     satisfactory = {
@@ -71,8 +83,10 @@ variable "game_servers" {
         { name = "PGID",       value = "1000" },
         { name = "PUID",       value = "1000" },
       ]
-      efs_path = "/config"
-      https   = false
+      volumes = [
+        { name = "config", container_path = "/config" },
+      ]
+      https = false
     }
 
     foundryvtt = {
@@ -87,8 +101,10 @@ variable "game_servers" {
         { name = "FOUNDRY_PROXY_PORT", value = "443" },
         { name = "CONTAINER_VERBOSE",  value = "true" },
       ]
-      efs_path = "/data"
-      https   = true
+      volumes = [
+        { name = "data", container_path = "/data" },
+      ]
+      https = true
     }
   }
 }

@@ -59,8 +59,11 @@ output "file_manager_security_group_id" {
 }
 
 output "efs_access_points" {
-  description = "Map of game name → EFS access point ID"
-  value       = { for game, ap in aws_efs_access_point.game : game => ap.id }
+  description = "Map of game name → first volume's EFS access point ID (consumed by FileManagerService)"
+  value = {
+    for game, cfg in var.game_servers :
+    game => aws_efs_access_point.game["${game}-${cfg.volumes[0].name}"].id
+  }
 }
 
 output "alb_dns_name" {

@@ -87,6 +87,21 @@ resource "aws_route_table_association" "public" {
 # Dynamic ingress rules — one per port across all configured game servers.
 
 locals {
+  # Flattened map of all game-volume pairs, keyed by "${game}-${volume.name}".
+  # Used to create one EFS access point per volume entry.
+  game_volumes = {
+    for pair in flatten([
+      for game, cfg in var.game_servers : [
+        for vol in cfg.volumes : {
+          key            = "${game}-${vol.name}"
+          game           = game
+          name           = vol.name
+          container_path = vol.container_path
+        }
+      ]
+    ]) : pair.key => pair
+  }
+
   # Ports for non-HTTPS games — open directly to the internet
   direct_game_ports = {
     for pair in distinct(flatten([
@@ -224,9 +239,9 @@ resource "aws_efs_mount_target" "saves" {
   security_groups = [aws_security_group.efs.id]
 }
 
-# One access point per game — isolates each game's save directory
+# One access point per game volume — isolates each volume under /${game}/${volume_name}
 resource "aws_efs_access_point" "game" {
-  for_each       = var.game_servers
+  for_each       = local.game_volumes
   file_system_id = aws_efs_file_system.saves.id
 
   posix_user {
@@ -235,7 +250,7 @@ resource "aws_efs_access_point" "game" {
   }
 
   root_directory {
-    path = "/${each.key}"
+    path = "/${each.value.game}/${each.value.name}"
     creation_info {
       owner_uid   = 1000
       owner_gid   = 1000
@@ -243,7 +258,7 @@ resource "aws_efs_access_point" "game" {
     }
   }
 
-  tags = { Name = "${each.key}-saves" }
+  tags = { Name = each.key }
 }
 
 # ── CloudWatch Log Groups ─────────────────────────────────────────────────────
@@ -308,14 +323,17 @@ resource "aws_ecs_task_definition" "game" {
   memory                   = each.value.memory
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
 
-  volume {
-    name = "${each.key}-saves"
-    efs_volume_configuration {
-      file_system_id     = aws_efs_file_system.saves.id
-      transit_encryption = "ENABLED"
-      authorization_config {
-        access_point_id = aws_efs_access_point.game[each.key].id
-        iam             = "DISABLED"
+  dynamic "volume" {
+    for_each = each.value.volumes
+    content {
+      name = "${each.key}-${volume.value.name}"
+      efs_volume_configuration {
+        file_system_id     = aws_efs_file_system.saves.id
+        transit_encryption = "ENABLED"
+        authorization_config {
+          access_point_id = aws_efs_access_point.game["${each.key}-${volume.value.name}"].id
+          iam             = "DISABLED"
+        }
       }
     }
   }
@@ -333,9 +351,9 @@ resource "aws_ecs_task_definition" "game" {
 
     environment = each.value.environment
 
-    mountPoints = [{
-      sourceVolume  = "${each.key}-saves"
-      containerPath = each.value.efs_path
+    mountPoints = [for vol in each.value.volumes : {
+      sourceVolume  = "${each.key}-${vol.name}"
+      containerPath = vol.container_path
       readOnly      = false
     }]
 
