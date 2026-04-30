@@ -88,6 +88,8 @@ resource "aws_lambda_function" "followup" {
       SECURITY_GROUP_ID = aws_security_group.game_servers.id
       DOMAIN_NAME       = var.hosted_zone_name
       GAME_NAMES        = join(",", keys(var.game_servers))
+      CONNECT_MESSAGES  = jsonencode({ for g, cfg in var.game_servers : g => cfg.connect_message if cfg.connect_message != null })
+      GAME_PORTS        = jsonencode({ for g, cfg in var.game_servers : g => cfg.ports[0].container })
     }
   }
 

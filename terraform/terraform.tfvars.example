@@ -70,6 +70,9 @@ watchdog_min_packets      = 100
 #       { name = "saves", container_path = "/palworld" },
 #     ]
 #     https = false
+#     # Optional: message shown in Discord when the server is running.
+#     # Supports {host}, {ip}, {port} (first port), and {game} placeholders.
+#     # connect_message = "connect in game at {host}:{port}"
 #
 #     # Optional: pre-seed files onto the EFS volume before the server starts.
 #     # path is the in-container path; the container_path prefix is stripped to
