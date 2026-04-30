@@ -41,78 +41,12 @@ variable "game_servers" {
     ])
     error_message = "Each game server must have at least one volume entry with non-empty name and container_path."
   }
-
-  default = {
-    palworld = {
-      image  = "thijsvanloef/palworld-server-docker:latest"
-      cpu    = 2048
-      memory = 8192
-      ports = [
-        { container = 8211,  protocol = "udp" },
-        { container = 27015, protocol = "udp" }, # Steam query port
-      ]
-      environment = [
-        { name = "PLAYERS",           value = "16" },
-        { name = "MULTITHREADING",    value = "true" },
-        { name = "RCON_ENABLED",      value = "true" },
-        { name = "RCON_PORT",         value = "25575" },
-        { name = "ADMIN_PASSWORD",    value = "changeme_please" },
-        { name = "SERVER_NAME",       value = "Palworld Server" },
-        { name = "UPDATE_ON_BOOT",    value = "true" },
-        { name = "BACKUP_ENABLED",    value = "true" },
-        { name = "BACKUP_CRON_EXPRESSION", value = "0 */6 * * *" },
-        { name = "DIFFICULTY",        value = "Normal" },
-      ]
-      volumes = [
-        { name = "saves", container_path = "/palworld" },
-      ]
-      https = false
-    }
-
-    satisfactory = {
-      image  = "wolveix/satisfactory-server:latest"
-      cpu    = 2048
-      memory = 8192
-      ports = [
-        { container = 7777,  protocol = "udp" },
-        { container = 15000, protocol = "udp" },
-        { container = 15777, protocol = "udp" },
-      ]
-      environment = [
-        { name = "MAXPLAYERS", value = "4" },
-        { name = "PGID",       value = "1000" },
-        { name = "PUID",       value = "1000" },
-      ]
-      volumes = [
-        { name = "config", container_path = "/config" },
-      ]
-      https = false
-    }
-
-    foundryvtt = {
-      image  = "felddy/foundryvtt:release"
-      cpu    = 1024
-      memory = 2048
-      ports = [
-        { container = 30000, protocol = "tcp" },
-      ]
-      environment = [
-        { name = "FOUNDRY_PROXY_SSL",  value = "true" },
-        { name = "FOUNDRY_PROXY_PORT", value = "443" },
-        { name = "CONTAINER_VERBOSE",  value = "true" },
-      ]
-      volumes = [
-        { name = "data", container_path = "/data" },
-      ]
-      https = true
-    }
-  }
 }
 
 # ── HTTPS / ALB ─────────────────────────────────────────────────────────────
 
 variable "acm_certificate_domain" {
-  description = "Domain for the ACM TLS certificate used by the ALB (e.g. *.codercoco.com)"
+  description = "Domain for the ACM TLS certificate used by the ALB (e.g. *.example.com). Defaults to *.{hosted_zone_name} when null."
   type        = string
   default     = null # When null, defaults to *.{hosted_zone_name}
 }
@@ -140,9 +74,8 @@ variable "watchdog_min_packets" {
 # ── DNS ──────────────────────────────────────────────────────────────────────
 
 variable "hosted_zone_name" {
-  description = "Route 53 hosted zone domain (must already exist)"
+  description = "Route 53 hosted zone domain (must already exist, e.g. example.com)"
   type        = string
-  default     = "codercoco.com"
 }
 
 variable "dns_ttl" {

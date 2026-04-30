@@ -5,8 +5,8 @@ aws_region   = "us-east-1"
 project_name = "game-servers"
 
 # Domain for server DNS records (must have a hosted zone in Route 53)
-# Creates: palworld.codercoco.com, satisfactory.codercoco.com, etc.
-hosted_zone_name = "codercoco.com"
+# Creates: {game}.example.com for each entry in game_servers below.
+hosted_zone_name = "example.com"
 
 # Watchdog: auto-shuts down idle servers after (interval × idle_checks) minutes
 # Defaults: 15 min × 4 checks = 60 minutes of idle before shutdown
@@ -16,7 +16,7 @@ watchdog_idle_checks      = 4
 watchdog_min_packets      = 100
 
 # ACM certificate domain for HTTPS game servers (default: *.{hosted_zone_name})
-# acm_certificate_domain = "*.codercoco.com"
+# acm_certificate_domain = "*.example.com"
 
 # Discord bot credentials (optional — leave commented out to configure via the web UI).
 # If set here, they seed the backing stores on the first `terraform apply`.
@@ -38,58 +38,37 @@ watchdog_min_packets      = 100
 # base_admin_user_ids  = ["987654321098765432"]
 # base_admin_role_ids  = []
 
-# Override game server settings (optional — defaults are set in variables.tf)
-game_servers = {
-  palworld = {
-    image  = "thijsvanloef/palworld-server-docker:latest"
-    cpu    = 2048
-    memory = 8192
-    ports = [
-      { container = 8211,  protocol = "udp" },
-      { container = 27015, protocol = "udp" },
-    ]
-    environment = [
-      { name = "PLAYERS",        value = "8" },
-      { name = "MULTITHREADING", value = "true" },
-      { name = "RCON_ENABLED",   value = "true" },
-      { name = "RCON_PORT",      value = "25575" },
-      { name = "ADMIN_PASSWORD", value = "your_secure_password_here" },
-      { name = "SERVER_NAME",    value = "CoderCoco Palworld" },
-      { name = "UPDATE_ON_BOOT", value = "true" },
-      { name = "BACKUP_ENABLED", value = "true" },
-      { name = "BACKUP_CRON_EXPRESSION", value = "0 */6 * * *" },
-      { name = "DIFFICULTY",     value = "Normal" },
-    ]
-    # Each entry gets its own EFS access point rooted at /${game}/${name}.
-    # Add more entries if the image expects multiple mount paths.
-    volumes = [
-      { name = "saves", container_path = "/palworld" },
-    ]
-    https = false
-  }
-
-  # FoundryVTT — web-based virtual tabletop (requires HTTPS)
-  # The felddy/foundryvtt image needs FOUNDRY_USERNAME + FOUNDRY_PASSWORD
-  # to download the licensed FoundryVTT software on first run.
-  foundryvtt = {
-    image  = "felddy/foundryvtt:release"
-    cpu    = 1024
-    memory = 2048
-    ports = [
-      { container = 30000, protocol = "tcp" },
-    ]
-    environment = [
-      { name = "FOUNDRY_USERNAME",    value = "your_foundry_username" },
-      { name = "FOUNDRY_PASSWORD",    value = "your_foundry_password" },
-      { name = "FOUNDRY_ADMIN_KEY",   value = "your_admin_key" },
-      { name = "FOUNDRY_PROXY_SSL",   value = "true" },
-      { name = "FOUNDRY_PROXY_PORT",  value = "443" },
-      { name = "CONTAINER_VERBOSE",   value = "true" },
-      { name = "FOUNDRY_WORLD",       value = "my-world" },
-    ]
-    volumes = [
-      { name = "data", container_path = "/data" },
-    ]
-    https = true
-  }
-}
+# Game server definitions — required, no defaults are provided.
+# Each entry creates its own ECS task definition, EFS access point, log group,
+# and security group rules. Add as many games as you need.
+#
+# Example entry (Palworld):
+# game_servers = {
+#   palworld = {
+#     image  = "thijsvanloef/palworld-server-docker:latest"
+#     cpu    = 2048
+#     memory = 8192
+#     ports = [
+#       { container = 8211,  protocol = "udp" },
+#       { container = 27015, protocol = "udp" },
+#     ]
+#     environment = [
+#       { name = "PLAYERS",        value = "16" },
+#       { name = "MULTITHREADING", value = "true" },
+#       { name = "RCON_ENABLED",   value = "true" },
+#       { name = "RCON_PORT",      value = "25575" },
+#       { name = "ADMIN_PASSWORD", value = "your_secure_password_here" },
+#       { name = "SERVER_NAME",    value = "My Palworld Server" },
+#       { name = "UPDATE_ON_BOOT", value = "true" },
+#       { name = "BACKUP_ENABLED", value = "true" },
+#       { name = "BACKUP_CRON_EXPRESSION", value = "0 */6 * * *" },
+#       { name = "DIFFICULTY",     value = "Normal" },
+#     ]
+#     # Each entry gets its own EFS access point rooted at /${game}/${name}.
+#     # Add more entries if the image expects multiple mount paths.
+#     volumes = [
+#       { name = "saves", container_path = "/palworld" },
+#     ]
+#     https = false
+#   }
+# }
