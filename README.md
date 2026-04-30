@@ -39,7 +39,7 @@ organised around three roles. Pick the one that matches what you need to do.
 | [**Setup guide**](https://codercoco.github.io/game-server-deploy/setup/) | Going from a blank AWS account to a running Fargate task. |
 | [**User guide**](https://codercoco.github.io/game-server-deploy/guides/user/) | Driving an already-provisioned deployment — the dashboard, Discord commands, day-to-day ops. |
 | [**Maintainer guide**](https://codercoco.github.io/game-server-deploy/guides/maintainer/) | Working on this codebase. |
-| [**Private parent + submodule guide**](https://codercoco.github.io/game-server-deploy/guides/submodule/) | Wrapping this repo in a private repo that holds `terraform.tfvars`, `server_config.json`, and tfstate. |
+| [**Private parent + submodule guide**](https://codercoco.github.io/game-server-deploy/guides/submodule/) | Wrapping this repo in a private repo that holds `terraform.tfvars` and tfstate. Includes an interactive scaffolder ([`scripts/init-parent.ts`](./scripts/init-parent.ts)) that generates the wrapper Makefile, tfvars, and `.env`. |
 
 Component deep-dives:
 
@@ -130,6 +130,7 @@ game-server-deploy/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── setup.sh                   # First-time bootstrap (node/terraform/aws)
+├── scripts/                   # Helper scripts (init-parent.ts scaffolder)
 ├── CLAUDE.md                  # Project instructions + invariants
 ├── CONTRIBUTING.md            # PR conventions, local checks
 └── README.md                  # this file
