@@ -27,5 +27,10 @@ Thumbs.db
 # lives at .claude/settings.json (commit that instead if you want the
 # allowlist shared across the team).
 .claude/settings.local.json
+.claude/worktrees/
+
+# Auto-generated at dev/build time — committed as null, real state must not
+# be committed (contains AWS ARNs/account IDs).
+app/packages/server/src/generated/tfstate.ts
 
 .make
