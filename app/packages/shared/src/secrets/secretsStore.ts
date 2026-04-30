@@ -55,24 +55,24 @@ async function putSecret(secretId: string, value: string): Promise<void> {
 export async function getBotToken(secretArn: string): Promise<string | null> {
   const value = await getSecret(secretArn);
   if (!value || value === SECRET_PLACEHOLDER) return null;
-  return value;
+  return value.trim();
 }
 
 /** Return the configured Ed25519 public key (hex), or `null` if not set / still on the placeholder. */
 export async function getPublicKey(secretArn: string): Promise<string | null> {
   const value = await getSecret(secretArn);
   if (!value || value === SECRET_PLACEHOLDER) return null;
-  return value;
+  return value.trim();
 }
 
-/** Persist a new bot token. */
+/** Persist a new bot token, trimmed of surrounding whitespace. */
 export async function putBotToken(secretArn: string, value: string): Promise<void> {
-  await putSecret(secretArn, value);
+  await putSecret(secretArn, value.trim());
 }
 
-/** Persist a new public key (hex). */
+/** Persist a new public key (hex), trimmed of surrounding whitespace. */
 export async function putPublicKey(secretArn: string, value: string): Promise<void> {
-  await putSecret(secretArn, value);
+  await putSecret(secretArn, value.trim());
 }
 
 /** Drop the in-process secrets cache. Exposed for the Nest app's "save credentials" path. */
