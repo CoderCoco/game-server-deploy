@@ -60,8 +60,12 @@ game_servers = {
       { name = "BACKUP_CRON_EXPRESSION", value = "0 */6 * * *" },
       { name = "DIFFICULTY",     value = "Normal" },
     ]
-    efs_path = "/palworld"
-    https   = false
+    # Each entry gets its own EFS access point rooted at /${game}/${name}.
+    # Add more entries if the image expects multiple mount paths.
+    volumes = [
+      { name = "saves", container_path = "/palworld" },
+    ]
+    https = false
   }
 
   # FoundryVTT — web-based virtual tabletop (requires HTTPS)
@@ -83,7 +87,9 @@ game_servers = {
       { name = "CONTAINER_VERBOSE",   value = "true" },
       { name = "FOUNDRY_WORLD",       value = "my-world" },
     ]
-    efs_path = "/data"
-    https   = true
+    volumes = [
+      { name = "data", container_path = "/data" },
+    ]
+    https = true
   }
 }

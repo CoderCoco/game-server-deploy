@@ -31,7 +31,7 @@ step 3 of the [setup guide](/setup) for details.
 | `aws_region` | `string` | `us-east-1` | AWS region for all resources. |
 | `project_name` | `string` | `game-servers` | Prefix for named resources and the Secrets Manager paths. |
 | `vpc_cidr` | `string` | `10.0.0.0/16` | Parent CIDR; subnets are /24s within it. |
-| `game_servers` | `map(object)` | — | The single source of truth. Per-game: `image`, `cpu`, `memory`, `ports[]`, `environment[]`, `efs_path`, `https`. |
+| `game_servers` | `map(object)` | — | The single source of truth. Per-game: `image`, `cpu`, `memory`, `ports[]`, `environment[]`, `volumes[]` (`name` + `container_path`), `https`. Each `volumes` entry creates its own EFS access point rooted at `/${game}/${name}`. |
 | `hosted_zone_name` | `string` | `codercoco.com` | Existing Route 53 zone looked up as a data source. |
 | `acm_certificate_domain` | `string` | `null` → `*.{hosted_zone_name}` | Wildcard ACM cert for the ALB listener. |
 | `dns_ttl` | `number` | `30` | TTL on Route 53 A records the update-dns Lambda writes. Keep low for fast task churn. |
