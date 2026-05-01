@@ -201,6 +201,9 @@ game_servers = {
       { name = "saves", container_path = "/palworld" },
     ]
     https = false
+    # Optional: Discord message shown when the server reaches RUNNING.
+    # Supports {host}, {ip}, {port} (first port), and {game} placeholders.
+    # connect_message = "connect in game at {host}:{port}"
   }
 }
 ```

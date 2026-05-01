@@ -29,7 +29,8 @@ variable "game_servers" {
     ports       = list(object({ container = number, protocol = string }))
     environment = optional(list(object({ name = string, value = string })), [])
     volumes     = list(object({ name = string, container_path = string }))
-    https       = optional(bool, false) # If true, traffic is routed through ALB with TLS termination
+    https           = optional(bool, false)   # If true, traffic is routed through ALB with TLS termination
+    connect_message = optional(string)        # Discord connect hint; supports {host}, {ip}, {port}, {game} placeholders
     file_seeds  = optional(list(object({
       path           = string           # In-container path, e.g. "/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini"
       content        = optional(string) # UTF-8 text content
