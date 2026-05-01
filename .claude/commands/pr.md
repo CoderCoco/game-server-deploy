@@ -7,23 +7,29 @@ Create a pull request for the current branch, enforcing the repo's Conventional 
    - `git diff main...HEAD --stat` — files changed
    - `git status` — any uncommitted work (warn if present)
 
-2. **Derive a CC-formatted title.**
+2. **Check for a linked issue** — scan for issue references in the branch name and commit messages:
+   - Look for patterns like `#123`, `fixes #123`, `closes #123`, or `issue-123` in `git log main..HEAD` output and the branch name
+   - If found, note the issue number(s) — `Closes #N` will be required in the body
+   - If not found, ask the user: "Does this PR resolve a GitHub issue? If so, what's the number?"
+   - If the user confirms an issue, use `Closes #N`; if no issue, skip
+
+3. **Derive a CC-formatted title.**
    - Format: `<type>(<optional-scope>): <imperative summary>`
    - `<type>` must be one of: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`
    - Keep the full title under 70 characters
    - Base the title on what the branch actually changes — use the commit log and diff stat as evidence, not just the branch name
    - If $ARGUMENTS is non-empty, treat it as the user's suggested title or type hint and incorporate it
 
-3. **Validate before proceeding.**
+4. **Validate before proceeding.**
    - The title must match: `^(feat|fix|refactor|docs|test|chore|perf|build|ci|style)(\([^)]+\))?: .+$`
    - The full title must be under 70 characters total
    - If either check fails, fix the title — do not create the PR with a non-conforming title
 
-4. **Show the proposed title** to the user and ask for confirmation before creating the PR.
+5. **Show the proposed title** to the user and ask for confirmation before creating the PR.
 
-5. **Create the PR** using `mcp__github__create_pull_request` with:
+6. **Create the PR** using `mcp__github__create_pull_request` with:
    - The validated title
-   - A body summarising: what changed, why, and a test plan (bullet points)
+   - A body with: `Closes #N` as the first line (if a linked issue exists), then a summary of what changed, why, and a test plan (bullet points)
    - Base branch: `main`
 
-6. **Return the PR URL** when done.
+7. **Return the PR URL** when done.
