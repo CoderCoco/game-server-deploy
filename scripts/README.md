@@ -1,11 +1,9 @@
 # scripts/
 
-Helper scripts for `game-server-deploy`. These are intentionally **not** part
-of the `app/` workspace — they exist to be run from a *parent* repo that
-vendors `game-server-deploy` as a git submodule, before any of the app's
-dependencies have been installed.
+Helper scripts for `game-server-deploy` maintainers. Part of the repo's npm
+workspace — installed with a single `npm install` from the repo root.
 
-## `init-parent.ts`
+## `init-parent` CLI
 
 Interactive scaffolder for the [private parent + submodule deployment
 pattern](https://codercoco.github.io/game-server-deploy/guides/submodule/). It
@@ -19,17 +17,37 @@ From the parent (private) repo root, after adding the submodule:
 
 ```bash
 git submodule add https://github.com/CoderCoco/game-server-deploy.git
-(cd game-server-deploy/scripts && npm install)
-node --import tsx game-server-deploy/scripts/init-parent.ts
-# or, equivalently:
-npx --prefix game-server-deploy/scripts tsx game-server-deploy/scripts/init-parent.ts
+(cd game-server-deploy && npm install)
+npm run scripts:init-parent -w @gsd/scripts
 ```
 
-Flags:
+Or using the subcommand directly:
 
-- `--force` — overwrite existing files instead of skipping them.
+```bash
+npx tsx game-server-deploy/scripts/src/index.ts init
+```
 
-The script never reads or modifies anything inside the submodule. Safe to
+### Subcommands
+
+```
+init-parent [subcommand] [options]
+init-parent --help
+```
+
+| Subcommand  | Description                                                    |
+|-------------|----------------------------------------------------------------|
+| `init`      | Interactive scaffolding for a new parent-repo deployment (default) |
+| `bootstrap` | git init + optional repo create + submodule add + init (planned in #47) |
+| `migrate`   | In-place rewrite of Makefile and .gitignore (planned in #47)   |
+
+When invoked with no subcommand, `init` runs automatically.
+
+### Options
+
+- `--force` — overwrite existing files instead of skipping them (applies to `init`).
+- `--help`, `-h` — list subcommands with one-line summaries.
+
+The scaffolder never reads or modifies anything inside the submodule. Safe to
 re-run; without `--force` it leaves existing files alone.
 
 ### Requirements

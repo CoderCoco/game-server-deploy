@@ -2,19 +2,21 @@
   "name": "@gsd/scripts",
   "private": true,
   "version": "0.0.0",
-  "description": "Helper scripts for game-server-deploy. Not part of the app workspace — install from this directory.",
+  "description": "Helper scripts for game-server-deploy maintainers.",
   "type": "module",
   "scripts": {
-    "init-parent": "tsx init-parent.ts",
-    "test": "tsx init-parent.test.ts",
+    "init-parent": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@types/node": "^20.16.10",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
-    "@types/node": "^20.16.10"
+    "vitest": "^2.1.9"
   }
 }

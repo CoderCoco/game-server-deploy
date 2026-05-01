@@ -10,7 +10,7 @@ The repo uses a single **npm-workspaces** tree rooted at the repo root. Workspac
 - `@gsd/server` — Nest.js management API.
 - `@gsd/web` — React + Vite client.
 - `@gsd/lambda-interactions`, `@gsd/lambda-followup`, `@gsd/lambda-update-dns`, `@gsd/lambda-watchdog` — four Lambda packages, each bundled to a single `dist/handler.cjs` by esbuild.
-- `@gsd/scripts` — maintainer helper scripts (`init-parent.ts` scaffolder).
+- `@gsd/scripts` — maintainer helper scripts (`init-parent` CLI scaffolder).
 
 ```bash
 # Install all workspaces in one go (run from repo root)

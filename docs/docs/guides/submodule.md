@@ -154,7 +154,7 @@ endif
 ```
 
 `.env` is in the parent's `.gitignore`. Generate a fresh token with
-`openssl rand -hex 32` (or just re-run `init-parent.ts`) — there's no need
+`openssl rand -hex 32` (or just re-run `npm run scripts:init-parent`) — there's no need
 to keep the same token across rebuilds.
 
 ## tfstate lives in S3 by default
@@ -181,7 +181,7 @@ Public Key. Trade-offs:
 | **Environment at apply time** (`TF_VAR_discord_bot_token=…`) | Never on disk. | Every operator needs the token in their shell to apply. |
 | **Dashboard only** | Token only exists in Secrets Manager. | You have to paste it once per fresh environment, and the DDB `CONFIG#discord` row is seeded manually. |
 
-The tfvars route is what most people pick, and it's what `init-parent.ts`
+The tfvars route is what most people pick, and it's what `init-parent init`
 will offer to seed. Your parent repo is private, so it ends up covered by
 the same "private-repo trust boundary" as everything else.
 
