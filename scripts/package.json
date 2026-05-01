@@ -4,17 +4,24 @@
   "version": "0.0.0",
   "description": "Helper scripts for game-server-deploy. Not part of the app workspace — install from this directory.",
   "type": "module",
+  "bin": {
+    "init-parent": "./dist/init-parent.mjs"
+  },
   "scripts": {
-    "init-parent": "tsx init-parent.ts",
-    "test": "tsx init-parent.test.ts",
+    "init-parent": "tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/init-parent.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@types/node": "^20.16.10",
+    "esbuild": "^0.24.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
-    "@types/node": "^20.16.10"
+    "vitest": "^2.1.0"
   }
 }
