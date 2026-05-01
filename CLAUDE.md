@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Commands
 
-The management app is a TypeScript **npm-workspaces** monorepo under `app/`. Dependencies are installed once at the workspace root. The workspaces are:
+The repo uses a single **npm-workspaces** tree rooted at the repo root. Workspaces are:
 
 - `@gsd/shared` — types, `canRun`, sanitizers, status formatter, command descriptors, DynamoDB + Secrets Manager helpers (used by both the server and the Lambdas).
 - `@gsd/server` — Nest.js management API.
 - `@gsd/web` — React + Vite client.
 - `@gsd/lambda-interactions`, `@gsd/lambda-followup`, `@gsd/lambda-update-dns`, `@gsd/lambda-watchdog` — four Lambda packages, each bundled to a single `dist/handler.cjs` by esbuild.
+- `@gsd/scripts` — maintainer helper scripts (`init-parent.ts` scaffolder).
 
 ```bash
-# Install all workspaces in one go
-cd app && npm install
+# Install all workspaces in one go (run from repo root)
+npm install
 
 # Run the dev servers (Nest on 3001, Vite on 5173 with /api proxy)
 cd app && npm run dev
@@ -23,6 +24,9 @@ cd app && npm run build && npm start    # http://localhost:3001
 
 # Build all Lambda bundles (required before `terraform apply`)
 cd app && npm run build:lambdas
+
+# Run the scaffolder script from anywhere in the repo
+npm run init-parent -w @gsd/scripts
 
 # Run the app in Docker (mounts ./terraform ro, ./app/server_config.json, ~/.aws)
 docker compose up --build               # http://localhost:5000

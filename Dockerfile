@@ -1,24 +1,38 @@
 FROM node:20-slim
 
-WORKDIR /app
+# Workspace root lives at /workspace (= repo root).  All npm workspace
+# members (app, app/packages/*, scripts) are installed from here.
+WORKDIR /workspace
 
-# Install dependencies first (layer cache).  npm ci uses the workspace root's
-# package.json + lockfile, which installs every workspace package's deps.
-COPY app/package.json app/package-lock.json* ./
-COPY app/packages/shared/package.json packages/shared/
-COPY app/packages/server/package.json packages/server/
-COPY app/packages/web/package.json packages/web/
-COPY app/packages/lambda/interactions/package.json packages/lambda/interactions/
-COPY app/packages/lambda/followup/package.json packages/lambda/followup/
-COPY app/packages/lambda/update-dns/package.json packages/lambda/update-dns/
-COPY app/packages/lambda/watchdog/package.json packages/lambda/watchdog/
+# Copy root manifest + lockfile first for layer-cache-efficient installs.
+COPY package.json package-lock.json ./
+
+# Copy every workspace member's package.json so npm ci can resolve them.
+COPY app/package.json app/
+COPY app/packages/shared/package.json app/packages/shared/
+COPY app/packages/server/package.json app/packages/server/
+COPY app/packages/web/package.json app/packages/web/
+COPY app/packages/lambda/interactions/package.json app/packages/lambda/interactions/
+COPY app/packages/lambda/followup/package.json app/packages/lambda/followup/
+COPY app/packages/lambda/update-dns/package.json app/packages/lambda/update-dns/
+COPY app/packages/lambda/watchdog/package.json app/packages/lambda/watchdog/
+COPY app/packages/lambda/efs-seeder/package.json app/packages/lambda/efs-seeder/
+
+# Stub out the scripts workspace so npm ci doesn't pull in tsx or other
+# maintainer-only dev tools that have no place in the production image.
+RUN mkdir -p scripts && printf '{"name":"@gsd/scripts","version":"0.0.0","private":true}' > scripts/package.json
+
 RUN npm ci --ignore-scripts
 
 # Copy source and build the server + web bundle for the management app. The
 # Lambda packages are NOT built here — they are bundled and deployed by
 # `terraform apply` (see `setup.sh`) and have no place inside the container.
-COPY app/ .
-RUN npm run build
+COPY app/ app/
+RUN npm run build -w game-server-manager
+
+# Switch to the app directory so ConfigService path probing and process.cwd()
+# behave the same as in the previous single-WORKDIR setup.
+WORKDIR /workspace/app
 
 EXPOSE 3001
 

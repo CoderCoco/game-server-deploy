@@ -1,0 +1,6 @@
+{
+  "name": "game-server-deploy",
+  "private": true,
+  "workspaces": ["app", "app/packages/*", "scripts"],
+  "engines": { "node": ">=20" }
+}
