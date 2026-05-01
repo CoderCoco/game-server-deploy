@@ -3,12 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/shared",
-    "packages/server",
-    "packages/web",
-    "packages/lambda/*"
-  ],
   "scripts": {
     "predev": "node scripts/embed-tfstate.mjs",
     "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev -w @gsd/server\" \"npm run dev -w @gsd/web\"",
