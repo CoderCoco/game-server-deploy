@@ -2,5 +2,32 @@
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
     "terraform@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "Edit(terraform/terraform.tfstate)",
+      "Edit(terraform/terraform.tfstate.backup)",
+      "Edit(terraform/terraform.tfvars)",
+      "Write(terraform/terraform.tfstate)",
+      "Write(terraform/terraform.tfstate.backup)",
+      "Write(terraform/terraform.tfvars)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/terraform-fmt.sh\""
+          }
+        ]
+      }
+    ]
   }
 }
