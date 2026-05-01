@@ -28,6 +28,7 @@ Thumbs.db
 # allowlist shared across the team).
 .claude/settings.local.json
 .claude/worktrees/
+.worktrees/
 
 # Auto-generated at dev/build time — committed as null, real state must not
 # be committed (contains AWS ARNs/account IDs).
