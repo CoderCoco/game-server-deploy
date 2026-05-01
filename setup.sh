@@ -267,7 +267,7 @@ add_game() {
   echo "  Paste this into the game_servers = { ... } map in terraform.tfvars:"
   echo "  ──────────────────────────────────────"
   cat <<EOF
-    ${name} = {
+    "${name}" = {
       image  = "${image}"
       cpu    = ${cpu}
       memory = ${memory}
