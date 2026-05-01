@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Common Commands
 
 The management app is a TypeScript **npm-workspaces** monorepo under `app/`. Dependencies are installed once at the workspace root. The workspaces are:
@@ -35,6 +33,9 @@ terraform init
 terraform plan
 terraform apply
 terraform destroy
+
+# Cost allocation: all resources tagged Project=game-servers-poc. Activate the
+# "Project" tag in AWS Billing → Cost allocation tags for Cost Explorer breakdowns.
 
 # First-time environment bootstrap (installs terraform + aws CLI if missing,
 # runs npm ci, builds Lambdas, runs terraform init)
@@ -83,7 +84,7 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 
 `ConfigService.getTfOutputs()` (in `app/packages/server/src/services/ConfigService.ts`) parses `terraform.tfstate` as JSON and caches it in-memory. `invalidateCache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes. The parsed `TfOutputs` shape now also exposes `discord_table_name`, `discord_bot_token_secret_arn`, `discord_public_key_secret_arn`, and `interactions_invoke_url` so `DiscordConfigService` can reach the Discord stores without extra env-var plumbing.
 
-**Build-time state embedding**: `app/scripts/embed-tfstate.mjs` runs automatically via `predev` and `prebuild` npm lifecycle hooks. It reads Terraform state (via `terraform state pull`, or a file path from `TF_STATE_PATH` / the first CLI arg) and writes `app/packages/server/src/generated/tfstate.ts` with the state serialized as a JSON literal. `ConfigService` imports this as `EMBEDDED_TFSTATE` and uses it as a fallback when the runtime `terraform.tfstate` file is absent — useful in Docker or CI environments where the Terraform directory isn't mounted. When neither source is available, `getTfOutputs()` returns `null` and callers degrade gracefully. The generated file is committed as `null` (no real state) and is overwritten at dev/build time.
+**Build-time state embedding**: `app/scripts/embed-tfstate.mjs` (runs via `predev`/`prebuild` hooks) writes `app/packages/server/src/generated/tfstate.ts`; `ConfigService` uses it as a fallback when the runtime `terraform.tfstate` is absent (Docker/CI). The file is committed as `null` and overwritten at dev/build time.
 
 ### API authentication
 
@@ -93,13 +94,10 @@ Every `/api/*` route is gated behind a bearer token via `ApiTokenGuard` in `app/
 
 There is **no discord.js dependency, no long-running bot process, and no `DiscordBotService`**. The bot is split across two Lambdas provisioned by Terraform (`interactions.tf`, `followup.tf`):
 
-- **`@gsd/lambda-interactions`** — receives every Discord HTTP interaction at a Lambda Function URL, verifies the Ed25519 signature against the public key in Secrets Manager, and then either: (a) responds `type:1` (PONG) for PINGs, (b) filters the game list env var by `canRun()` for autocomplete, or (c) responds with a deferred ack (`type:5`) and async-invokes `@gsd/lambda-followup` for slash commands. It never calls ECS directly — Discord's 3-second reply budget doesn't leave room.
-- **`@gsd/lambda-followup`** — does the slow ECS work (`RunTask` / `StopTask` / `DescribeTasks`), then `PATCH`es the original interaction message via `https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}/messages/@original`. For start commands, it also writes a `PENDING#{taskArn}` row to the DynamoDB table so `@gsd/lambda-update-dns` can PATCH the same interaction again when the task reaches RUNNING with the resolved IP/hostname.
+- **`@gsd/lambda-interactions`** — verifies Ed25519 signature, PONGs pings, handles autocomplete synchronously, and defers slash commands to `@gsd/lambda-followup` (Discord's 3-second budget doesn't leave room for ECS calls).
+- **`@gsd/lambda-followup`** — does the ECS work (`RunTask` / `StopTask` / `DescribeTasks`) and PATCHes the original interaction message. For start commands it writes a pending-interaction row to DynamoDB so `@gsd/lambda-update-dns` can patch again with the resolved IP once the task reaches RUNNING.
 
-Persistent state:
-
-- **DynamoDB** — single table `${project_name}-discord`, two item types. `pk="CONFIG#discord"` holds the `DiscordConfig` (allowedGuilds, admins, gamePermissions, clientId). `pk="PENDING#{taskArn}"` holds pending-interaction rows with a 15-minute TTL on `expiresAt` (Discord interaction tokens expire after 15 min).
-- **Secrets Manager** — two secrets: `${project_name}/discord/bot-token` and `${project_name}/discord/public-key`. The Nest app writes both via `PUT /api/discord/config` (needs `secretsmanager:PutSecretValue`); the interactions Lambda reads the public key; nothing else touches them. The Nest server additionally reads the bot token when the operator clicks "Register commands" in the UI (see `DiscordCommandRegistrar`).
+Persistent state: DynamoDB table `${project_name}-discord` (Discord config + pending-interaction rows with 15-min TTL) and two Secrets Manager secrets (`${project_name}/discord/bot-token`, `${project_name}/discord/public-key`).
 
 Key design rules to preserve:
 
@@ -117,10 +115,6 @@ The four commands — `/server-start`, `/server-stop`, `/server-status`, `/serve
 3. Update `actionForCommand()` in the same `commands.ts` so `canRun()` gets the right permission bucket.
 4. Rebuild Lambdas + `terraform apply` to redeploy; operators click "Register commands" per guild so Discord picks up the new descriptor.
 
-#### Autocomplete
-
-The interactions Lambda handles autocomplete synchronously within the 3-second budget: it reads the game list from the `GAME_NAMES` env var (baked in at `terraform apply` time), filters by the user's partial input, then filters again by `canRun(game, actionForCommand(name))`. No ECS calls. The env var approach avoids a tfstate read from inside Lambda, which wouldn't have access to the file anyway.
-
 ### Known Lambda env-var quirk
 
 Lambda env vars named `AWS_REGION` are reserved by the runtime. All four Lambdas use `AWS_REGION_` (trailing underscore) to pass the configured region — preserve this when editing.
@@ -128,10 +122,6 @@ Lambda env vars named `AWS_REGION` are reserved by the runtime. All four Lambdas
 ## AWS IAM Policy
 
 The full deploy IAM policy (`GameServerDeployAll`) lives in **`docs/setup.md`** — that is the single source of truth. Any time a new AWS service or action is needed (e.g. a new Terraform resource), update the policy JSON there and nowhere else. The policy already covers EventBridge tagging (`events:*`) and CloudFront (`cloudfront:*`), both of which are required by `terraform apply` and are not included in the AWS-managed policies used in this setup.
-
-## Cost Tagging
-
-All resources inherit `default_tags` from `provider "aws"` (`Project = "game-servers-poc"`, `Environment = "poc"`, `ManagedBy = "terraform"`). For Cost Explorer breakdowns, the `Project` cost allocation tag must be activated manually in AWS Billing — this is a one-time console action, not Terraform-managed.
 
 ## Checklist for Terraform variable changes
 
@@ -149,6 +139,16 @@ Any time you add or remove Terraform variables, update **all four** of these in 
 - **Typing in tests**: avoid `as unknown as SomeType` casts. Prefer `vi.mocked(fn)` for mocked modules and `Partial<T>` + a single `as T` for service-shaped stubs.
 - **No raw `process.env` in business logic**: wrap environment access behind a service method so tests can stub it via `vi.spyOn` instead of mutating `process.env` (which is flaky and leaks across tests).
 
+## Git & Branch Workflow
+
+`main` is a protected branch — direct pushes are blocked. All changes go through a PR, including trivial chores (`.gitignore` entries, config tweaks). Never commit directly to `main`.
+
+Use `.worktrees/<branch-name>` for feature work (the directory is gitignored). Create with:
+
+```bash
+git worktree add .worktrees/<branch> -b <branch>
+```
+
 ## PR Conventions
 
 - **Always use `/pr` to create pull requests.** The `.claude/commands/pr.md` skill validates the title format before calling the API. Never call `mcp__github__create_pull_request` directly without running this check first.
@@ -158,20 +158,11 @@ Any time you add or remove Terraform variables, update **all four** of these in 
 
 ## PR Review Workflow
 
-**Be strict with Copilot review suggestions. Don't enter a fix-and-repush loop.** Copilot runs automatically on every push, so a cycle of "Copilot comments → fix → Copilot comments on the fix → fix again" can go on forever on nitpicks. Most Copilot suggestions on a given PR are **not actionable** — expect to apply maybe one in three, decline the rest on the thread, and keep moving.
+Copilot runs automatically on every push. Most suggestions are not actionable — expect to apply ~1 in 3.
 
-**The bar for acting on a Copilot comment:** the code is actually buggy, insecure, broken in production, or clearly wrong. Not "could be clearer", "consider renaming", "add a log line here", "extract a helper", "slight inconsistency with other files", "prefer X over Y". Those get declined with a one-line reply explaining why, and the thread stays unresolved only if you want visibility (resolve it otherwise).
+- **Fix** if: genuinely buggy, insecure, crashes, or incorrect logic.
+- **Decline** if: style, naming, "consider", missing non-essential comment, minor nit — one-line reply ("Declined — stylistic, leaving as-is.") then resolve the thread.
+- **Ask** (`AskUserQuestion`) if: ambiguous or architecturally significant. Don't silently dismiss.
+- **Stop pushing** when the round is all nitpicks — the PR is ready. Reply to each thread and move on.
 
-When a Copilot comment lands on a PR:
-
-1. **Evaluate first.** Read the surrounding code and reason about whether the critique describes a real problem and whether the proposed fix actually addresses it. Copilot hallucinates issues and suggests fixes that introduce worse problems. Assume the comment is wrong until you've convinced yourself otherwise.
-2. **Triage the category.**
-   - *Genuine bug, security issue, crash, or incorrect logic* → fix it.
-   - *Style, naming, readability, idiom preference, "consider", "might want to", missing-but-non-essential docstring/log/comment, minor duplication, test-organization nit* → **decline on the thread.** Do not rewrite the code. A short reply like "Declined — stylistic, not a correctness issue; leaving as-is." is enough.
-   - *Ambiguous or architecturally significant* → `AskUserQuestion` before acting. Don't silently dismiss.
-3. **Apply if correct**, but feel free to deviate from Copilot's exact suggested code when a different fix fits the codebase better (e.g. reuse an existing permission system instead of adding a new one).
-4. **Reply on the thread** explaining either the fix applied, why you declined, or that you're checking with the user. Reference the commit SHA when a fix was committed.
-5. **Resolve the thread** with `mcp__github__resolve_review_thread` after a fix is committed and the reply is posted, or after you decline a clear nitpick, so the PR's conversation tab shows a clean state. Only leave a thread unresolved when you're waiting on the user or the issue genuinely isn't fixed yet.
-6. **Stop when the signal is noise.** If Copilot's latest round is only nitpicks, don't push another commit. Reply to each thread with a brief decline and move on — the PR is ready to merge.
-
-This rule applies to every PR review bot (Copilot or otherwise), but Copilot is the one we see most often. Copilot's system-level behavior is tuned via `.github/copilot-instructions.md` in this repo — keep that file and this section in sync.
+Always reply on the thread (fix applied + SHA, or reason for decline) and resolve it with `mcp__github__resolve_review_thread`. Copilot's system behaviour is tuned via `.github/copilot-instructions.md` — keep that file and this section in sync.
