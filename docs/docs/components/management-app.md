@@ -74,7 +74,7 @@ Every route is under `/api/*` and gated by `ApiTokenGuard`.
 | `GamesController` | `GET /api/games`, `GET /api/status`, `GET /api/status/:game`, `POST /api/start/:game`, `POST /api/stop/:game` | List/read status, trigger RunTask/StopTask. Invalidates ConfigService's tfstate cache on list/status reads so fresh applies are picked up without restarting. |
 | `ConfigController` | `GET /api/config`, `POST /api/config` | Read/write watchdog knobs in `server_config.json`. Takes effect on next `terraform apply` (the values are baked into Lambda env). |
 | `CostsController` | `GET /api/costs/estimate`, `GET /api/costs/actual?days=N` | Per-game Fargate estimates; Cost Explorer actuals grouped by the `Project` tag. |
-| `LogsController` | `GET /api/logs/:game?limit=50` | Last N log events from `/ecs/{game}-server` on the most recent task. |
+| `LogsController` | `GET /api/logs/:game?limit=50`, `GET /api/logs/:game/stream` | Snapshot of last N log events; SSE stream of new events as they arrive (polls `FilterLogEvents` every 2 s). |
 | `FilesController` | `GET /api/files/:game`, `POST /api/files/:game/start`, `POST /api/files/:game/stop` | Ad-hoc FileBrowser task against the game's EFS access point. |
 | `DiscordController` | `GET/PUT /api/discord/config`, `POST /api/discord/guilds`, `DELETE /api/discord/guilds/:id`, `POST /api/discord/guilds/:id/register-commands`, `PUT /api/discord/admins`, `PUT /api/discord/permissions/:game`, `DELETE /api/discord/permissions/:game` | Read-redacted config, save credentials, manage guild allowlist + commands, admins, per-game permissions. |
 
@@ -105,6 +105,8 @@ Every route is under `/api/*` and gated by `ApiTokenGuard`.
   (no path traversal, no SSRF).
 - **`EcsService` / `Ec2Service` / `LogsService` / `CostService` /
   `FileManagerService`** — thin wrappers over the AWS SDK v3 clients.
+  `LogsService.streamLogs(game, signal)` is an `AsyncGenerator` that polls
+  `FilterLogEvents` every 2 s; `getRecentLogs` remains the snapshot path.
 
 ### Auth
 
@@ -113,7 +115,9 @@ Every route is under `/api/*` and gated by `ApiTokenGuard`.
 
 - Reads the configured token from `ConfigService` (not cached — rotation
   takes effect immediately).
-- Matches `Authorization: Bearer <token>` exactly.
+- Matches `Authorization: Bearer <token>` exactly; falls back to
+  `?token=<token>` query param when the header is absent (needed for the
+  SSE stream endpoint because `EventSource` cannot set headers).
 - In dev mode, if no token is configured: logs once and allows the
   request.
 - In production, boot is refused if no token is configured, so the
@@ -157,8 +161,13 @@ everywhere, not `console.log`.
 4. **Discord Bot** — four tabs: Credentials, Guilds, Admins, Per-Game
    Permissions. See the [user guide](/guides/user)
    for the day-to-day workflow.
-5. **Live Logs** — tails the last N events from
-   `/ecs/{game}-server` for the most recent task.
+5. **Live Logs** — fetches a snapshot of the last 50 events on game change,
+   then opens an SSE stream (`/api/logs/:game/stream`) that appends new
+   lines as they arrive (capped at 1 000 lines in the DOM). Pause/Resume
+   toggle buffers incoming lines without scrolling. The token is sent as
+   `?token=` because `EventSource` cannot set custom headers. Log streaming
+   is SSE, not WebSocket — if interactive features ever require
+   bidirectional comms, revisit then.
 6. **File Manager modal** — spawns a FileBrowser Fargate task against the
    game's EFS access point so you can inspect/upload saves without
    starting the game itself.
