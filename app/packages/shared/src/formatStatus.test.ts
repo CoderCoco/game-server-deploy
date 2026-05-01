@@ -112,4 +112,15 @@ describe('formatGameStatus', () => {
     );
     expect(line).toBe('🟢 **palworld**: running\nconnect at palworld.example.com');
   });
+
+  it('should ignore the connect message when state is not running', () => {
+    const stopped = formatGameStatus({ game: 'palworld', state: 'stopped' }, 'connect at {host}:8211');
+    expect(stopped).toBe('⚫ **palworld**: stopped');
+
+    const starting = formatGameStatus({ game: 'palworld', state: 'starting' }, 'connect at {host}:8211');
+    expect(starting).toBe('🟡 **palworld**: starting');
+
+    const error = formatGameStatus({ game: 'palworld', state: 'error' }, 'connect at {host}:8211');
+    expect(error).toBe('⚠️ **palworld**: error');
+  });
 });
