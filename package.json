@@ -12,6 +12,7 @@
     "app:test:watch":    "npm run test:watch     -w game-server-manager",
     "app:lint":          "npm run lint           -w game-server-manager",
     "app:lint:fix":      "npm run lint:fix       -w game-server-manager",
+    "scripts:build":       "npm run build        -w @gsd/scripts",
     "scripts:init-parent": "npm run init-parent  -w @gsd/scripts",
     "scripts:test":        "npm run test         -w @gsd/scripts"
   }

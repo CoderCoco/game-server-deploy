@@ -74,21 +74,19 @@ That's the whole shape. No `config/` directory, no symlinks, no
 
 ## Quick start (interactive scaffolder)
 
-The public repo ships an interactive TypeScript script that writes the four
-files above for you. It only needs Node.js 20+, which you already need for
-the rest of the project.
+The easiest path is to download the pre-built release asset and run it
+directly. It only needs Node.js 20+.
 
 ```bash
-# 1. Create a private repo on GitHub, then clone it.
-git clone git@github.com:you/your-private-games.git
-cd your-private-games
+# 1. Create an empty directory for your private repo and enter it.
+mkdir your-private-games && cd your-private-games
 
-# 2. Add the submodule.
-git submodule add https://github.com/CoderCoco/game-server-deploy.git
-
-# 3. Install all deps and run the scaffolder.
-(cd game-server-deploy && npm install)
-(cd game-server-deploy && npm run scripts:init-parent)
+# 2. Download the scaffolder and run bootstrap mode.
+#    It will offer to git init, optionally create a GitHub repo, add the
+#    submodule, then walk you through the interactive prompt.
+curl -fsSL https://github.com/CoderCoco/game-server-deploy/releases/latest/download/init-parent.mjs \
+  -o init-parent.mjs
+node init-parent.mjs bootstrap
 ```
 
 The script prompts for project name, AWS region, hosted zone, and
@@ -105,6 +103,18 @@ make plan
 make apply
 ```
 
+### Alternatively: run from the submodule source
+
+If you've already cloned the repo or prefer not to use the release asset:
+
+```bash
+git clone git@github.com:you/your-private-games.git
+cd your-private-games
+git submodule add https://github.com/CoderCoco/game-server-deploy.git
+(cd game-server-deploy && npm install)
+npm run scripts:init-parent -w @gsd/scripts --prefix game-server-deploy
+```
+
 ## What the wrapper Makefile does
 
 The generated wrapper is a thin layer over the submodule's own Makefile.
@@ -115,7 +125,7 @@ Five targets, no surprises:
 | `make setup` | One-time bootstrap. Runs `git submodule update --init --recursive`, executes `game-server-deploy/setup.sh` (installs Node/Terraform/AWS CLI on Debian/Ubuntu, npm-installs all workspaces, builds Lambda bundles, runs `terraform init` and bootstraps the S3 backend), then records the sha256 of `setup.sh` in `.make/setup.stamp`. |
 | `make plan` | Copies `terraform.tfvars` into `game-server-deploy/terraform/terraform.tfvars`, then runs `make -C game-server-deploy tf-plan` — which itself rebuilds the Lambda bundles before `terraform plan`. |
 | `make apply` | Same as `plan`, but delegates to `tf-apply`. The submodule's `tf-apply` recipe prints a post-deploy checklist with the Discord interactions URL when it finishes. |
-| `make update` | Bumps the submodule to the tip of `main` (`git submodule update --remote --merge`). If the new `setup.sh` differs from the recorded sha, clears `.terraform/` and re-runs `setup.sh` automatically; otherwise leaves it alone. Reminds you to commit the new submodule pointer. |
+| `make update` | Bumps the submodule to the tip of `main` (`git submodule update --remote --merge`). If the new `setup.sh` differs from the recorded sha, clears `.terraform/` and re-runs `setup.sh` automatically. Then fetches the latest `init-parent.mjs` release asset and runs `--migrate` to rewrite `Makefile` and `.gitignore` against the new templates. Reminds you to commit the submodule pointer when done. |
 | `make dev` | Pulls live tfstate into `.make/tfstate.json` (so the embed step has something to read), wipes stale TS build info under the submodule's `app/packages/*/`, then runs `make -C game-server-deploy dev`, exporting `API_TOKEN` and `TF_STATE_PATH` to the child make. |
 
 The `tfvars` copy is **always fresh** on plan/apply — the recipe `cp`s
@@ -207,6 +217,36 @@ make apply       # if it looks right
 `make update` always reminds you about the commit step at the end. If
 `setup.sh` changed upstream, it'll have already re-run by the time `make
 plan` starts, so the next plan picks up any new tooling cleanly.
+
+`make update` also fetches the latest `init-parent.mjs` release asset and
+runs migrate mode automatically. If the `Makefile` or `.gitignore` templates
+changed in the new release, you'll see a diff and be asked to confirm before
+any files are overwritten. Pass `--force` to skip confirmation (useful in
+CI).
+
+## Migrate mode
+
+If you need to manually re-apply the latest wrapper templates without doing
+a full submodule bump — for example, after a hotfix to the Makefile template
+— run migrate mode directly:
+
+```bash
+# Using the release asset (no submodule needed)
+curl -fsSL https://github.com/CoderCoco/game-server-deploy/releases/latest/download/init-parent.mjs \
+  -o /tmp/init-parent.mjs
+node /tmp/init-parent.mjs --migrate
+
+# Or from the submodule source
+npm run scripts:init-parent -w @gsd/scripts --prefix game-server-deploy -- migrate
+```
+
+Migrate mode:
+- Reads your existing `Makefile` and `terraform.tfvars` to recover current
+  settings (submodule path, project name, region, hosted zone).
+- Re-renders `Makefile` and `.gitignore` against the latest templates.
+- Shows a `diff -u` preview and asks for confirmation before writing.
+- **Never touches `terraform.tfvars` or `.env`** — your hand-edited game
+  definitions and API token are always preserved.
 
 Things that tend to need attention after a bump:
 

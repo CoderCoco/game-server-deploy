@@ -77,6 +77,12 @@ update: | $(STAMP_DIR)
 \t else \\
 \t   echo "setup.sh unchanged — skipping."; \\
 \t fi
+\t@if curl -fsSL https://github.com/CoderCoco/game-server-deploy/releases/latest/download/init-parent.mjs \\
+\t     -o $(STAMP_DIR)/init-parent.mjs 2>/dev/null; then \\
+\t   node $(STAMP_DIR)/init-parent.mjs --migrate; \\
+\t else \\
+\t   echo "Note: could not fetch init-parent.mjs — wrapper migration skipped."; \\
+\t fi
 \t@echo ""
 \t@echo "Submodule updated. Commit the new pointer when ready:"
 \t@echo "  git add ${a.submoduleDir} && git commit -m 'chore: bump ${a.submoduleDir}'"

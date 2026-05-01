@@ -44,18 +44,26 @@ function printHelp(): void {
   stdout.write('\n');
 }
 
-async function main(): Promise<void> {
-  const [,, rawSub, ...rest] = argv;
+/** Maps legacy-style flags to their subcommand equivalents for make update. */
+const FLAG_ALIASES: Record<string, string> = {
+  '--migrate':   'migrate',
+  '--bootstrap': 'bootstrap',
+};
 
-  if (rawSub === '--help' || rawSub === '-h') {
+async function main(): Promise<void> {
+  const [,, rawArg, ...rest] = argv;
+
+  if (rawArg === '--help' || rawArg === '-h') {
     printHelp();
     return;
   }
 
-  const sub = rawSub && COMMANDS.has(rawSub) ? rawSub : 'init';
-  // If rawSub wasn't a known subcommand, treat it as the first arg to `init`
-  // so flags like `--force` passed without a subcommand still work.
-  const args = rawSub && COMMANDS.has(rawSub) ? rest : (rawSub ? [rawSub, ...rest] : rest);
+  // Normalise --migrate / --bootstrap flag aliases to subcommand names.
+  const normalized = rawArg ? (FLAG_ALIASES[rawArg] ?? rawArg) : undefined;
+  const sub  = normalized && COMMANDS.has(normalized) ? normalized : 'init';
+  // If rawArg wasn't a known subcommand or alias, pass it through as an arg
+  // so flags like `--force` used without a subcommand still reach `init`.
+  const args = normalized && COMMANDS.has(normalized) ? rest : (rawArg ? [rawArg, ...rest] : rest);
 
   await COMMANDS.get(sub)!.run(args);
 }

@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g. 1.2.3). Leave empty to auto-derive from Conventional Commits.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Compute version + draft notes without publishing a release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed for gh release create
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # full history for git log / git describe
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Version ──────────────────────────────────────────────────────────────
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(bash scripts/next-version.sh)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing v${VERSION}"
+
+      # ── Build ─────────────────────────────────────────────────────────────────
+      - name: Build init-parent bundle
+        run: npm run build -w @gsd/scripts
+
+      # ── Release notes ─────────────────────────────────────────────────────────
+      - name: Generate release notes
+        id: notes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -n "$LAST_TAG" ]; then
+            LOG=$(git log "${LAST_TAG}..HEAD" --pretty=format:"* %s (%h)" | head -100)
+          else
+            LOG=$(git log --pretty=format:"* %s (%h)" | head -100)
+          fi
+
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY not set — generating plain changelog."
+            {
+              echo "## v${VERSION}"
+              echo ""
+              echo "$LOG"
+            } > release-notes.md
+          else
+            PAYLOAD=$(jq -n \
+              --arg log "$LOG" \
+              --arg ver "$VERSION" \
+              '{
+                model: "claude-opus-4-7",
+                max_tokens: 1024,
+                messages: [{
+                  role: "user",
+                  content: ("Write a concise markdown changelog for release v" + $ver + " of game-server-deploy. Group entries by Conventional Commit type (Features, Bug Fixes, Documentation, Chores, etc). Use bullet points. Here are the commits:\n\n" + $log)
+                }]
+              }')
+
+            RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
+              -H "x-api-key: $ANTHROPIC_API_KEY" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "content-type: application/json" \
+              -d "$PAYLOAD")
+
+            echo "$RESPONSE" | jq -r '.content[0].text' > release-notes.md
+          fi
+
+          echo "--- release-notes.md ---"
+          cat release-notes.md
+
+      # ── Dry run summary ───────────────────────────────────────────────────────
+      - name: Dry-run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "::notice title=Dry run::Would release v${{ steps.version.outputs.version }}"
+          echo "Bundle size: $(du -sh scripts/dist/init-parent.mjs | cut -f1)"
+
+      # ── Publish ───────────────────────────────────────────────────────────────
+      - name: Publish release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file release-notes.md \
+            scripts/dist/init-parent.mjs
