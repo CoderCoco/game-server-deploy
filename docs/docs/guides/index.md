@@ -16,7 +16,8 @@ Role-oriented walkthroughs for the three people most likely to open this site:
 - **[Submodule guide](/guides/submodule)** — the
   recommended layout for running the stack for real: wrap this repo as a git
   submodule inside a private parent repo that holds `terraform.tfvars`,
-  `server_config.json`, state, and anything else secret.
+  state, and anything else secret. Includes an interactive scaffolder that
+  generates the wrapper Makefile and config files for you.
 
 The [Setup guide](/setup) is still the first stop if
 none of the above has happened yet.

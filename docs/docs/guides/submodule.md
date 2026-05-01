@@ -8,8 +8,8 @@ sidebar_position: 4
 This is the pattern we recommend if you're running the stack for real: a
 **private parent repo** you own, with this repo vendored as a git submodule,
 plus all the per-deployment secrets sitting alongside. Nothing sensitive ever
-lives in a public fork, and pulling upstream changes is `git submodule update
---remote`.
+lives in a public fork, and pulling upstream changes is one `make update`
+away.
 
 If you're just kicking the tyres, the plain
 [setup guide](/setup) is fine. Come back to this
@@ -18,11 +18,11 @@ page when you're ready to commit your config to source control.
 ## Why this layout
 
 `terraform.tfvars` (with your hosted zone, and optionally Discord
-credentials), `server_config.json` (watchdog knobs and the bearer token),
-and `terraform.tfstate` (raw infrastructure state including IAM role
-names and the DNS zone ID) are **yours**. None of them belong in this
-public repo. A submodule keeps upstream code cleanly separated from your
-deployment-specific configuration without forking.
+credentials), `terraform.tfstate` (raw infrastructure state including IAM
+role names and the DNS zone ID), and `API_TOKEN` for the management app
+are **yours**. None of them belong in this public repo. A submodule keeps
+upstream code cleanly separated from your deployment-specific configuration
+without forking.
 
 ```mermaid
 flowchart LR
@@ -31,12 +31,11 @@ flowchart LR
 
   subgraph Parent["your-private-games (private)"]
     direction TB
+    PMK["Makefile"]:::priv
     PTF["terraform.tfvars"]:::priv
-    PCFG["server_config.json"]:::priv
-    PSTATE["state/<br/>terraform.tfstate<br/>(or S3 backend config)"]:::priv
     PENV[".env<br/>API_TOKEN=…"]:::priv
-    PSCRIPT["scripts/<br/>apply.sh, dev.sh, …"]:::priv
-    PSUB["gsd/<br/>→ submodule"]:::priv
+    PSTAMP[".make/<br/>setup.stamp, tfstate.json"]:::priv
+    PSUB["game-server-deploy/<br/>→ submodule"]:::priv
   end
 
   subgraph Upstream["game-server-deploy (public)"]
@@ -44,233 +43,133 @@ flowchart LR
     UAPP["app/"]:::public
     UTF["terraform/*.tf"]:::public
     USET["setup.sh"]:::public
+    UMK["Makefile"]:::public
   end
 
   PSUB -- "git submodule" --> Upstream
-  PTF -. "symlinked or copied into" .-> UTF
-  PCFG -. "symlinked or bind-mounted into" .-> UAPP
-  PSTATE -. "tfstate (or remote backend)" .-> UTF
+  PMK  -- "delegates via 'make -C'" --> UMK
+  PTF  -. "copied into" .-> UTF
 ```
 
-The secret-bearing files stay in the parent; the submodule stays
-upstream-clean.
+The parent's wrapper Makefile copies `terraform.tfvars` into the submodule on
+every plan/apply, then delegates Terraform/dev work to the submodule's own
+`Makefile` targets (`tf-plan`, `tf-apply`, `dev`, …). The submodule checkout
+stays clean — only files inside its own `.gitignore` get touched.
 
 ## Reference layout
 
 ```text
 your-private-games/                 # private repo you own
 ├── .gitmodules
-├── .gitignore                      # ignores state/, .env, secrets/
-├── .env                            # API_TOKEN, AWS_PROFILE, etc. — gitignored
-├── README.md                       # your personal runbook
-├── gsd/                            # submodule → codercoco/game-server-deploy
-├── config/
-│   ├── terraform.tfvars            # YOUR copy; checked in
-│   └── server_config.json          # checked in (minus api_token)
-├── state/                          # tfstate if using local backend
-│   └── terraform.tfstate           # gitignored
-├── docker-compose.override.yml     # optional — custom mounts
-└── scripts/
-    ├── setup.sh                    # wrapper around gsd/setup.sh
-    ├── apply.sh
-    └── dev.sh
+├── .gitignore                      # ignores .env, .make/, *.tfstate
+├── .env                            # API_TOKEN — gitignored
+├── Makefile                        # wrapper — see "What the wrapper does" below
+├── terraform.tfvars                # YOUR copy; checked in (private repo)
+├── .make/                          # stamp dir (sha of submodule setup.sh, cached tfstate)
+└── game-server-deploy/             # submodule → CoderCoco/game-server-deploy
 ```
 
-## Step by step
+That's the whole shape. No `config/` directory, no symlinks, no
+`docker-compose.override.yml`. Everything driven from one Makefile.
 
-### 1. Create the private repo
+## Quick start (interactive scaffolder)
+
+The public repo ships an interactive TypeScript script that writes the four
+files above for you. It only needs Node.js 20+, which you already need for
+the rest of the project.
 
 ```bash
-# On GitHub, create `your-private-games` (or whatever) as a private repo.
+# 1. Create a private repo on GitHub, then clone it.
 git clone git@github.com:you/your-private-games.git
 cd your-private-games
+
+# 2. Add the submodule.
+git submodule add https://github.com/CoderCoco/game-server-deploy.git
+
+# 3. Install scaffolder deps and run it from the parent repo root.
+(cd game-server-deploy/scripts && npm install)
+npx --prefix game-server-deploy/scripts tsx \
+    game-server-deploy/scripts/init-parent.ts
 ```
 
-### 2. Add the submodule
+The script prompts for project name, AWS region, hosted zone, and
+(optionally) Discord credentials, then writes `Makefile`,
+`terraform.tfvars`, `.env`, and `.gitignore`. Existing files are skipped
+unless you pass `--force`.
+
+After it finishes:
 
 ```bash
-git submodule add https://github.com/codercoco/game-server-deploy.git gsd
-
-# Pin to a known-good commit (recommended):
-cd gsd && git checkout <sha-or-tag> && cd ..
-git add .gitmodules gsd
-git commit -m "chore: pin gsd submodule"
+$EDITOR terraform.tfvars            # add at least one entry under game_servers
+make setup                          # init submodule, run setup.sh, terraform init
+make plan
+make apply
 ```
 
-Using a pinned SHA/tag means upstream changes don't silently affect your
-next apply; you update explicitly with:
+## What the wrapper Makefile does
 
-```bash
-cd gsd && git fetch && git checkout <new-sha> && cd ..
-git add gsd && git commit -m "chore: bump gsd to <new-sha>"
+The generated wrapper is a thin layer over the submodule's own Makefile.
+Five targets, no surprises:
+
+| Target | What it does |
+|---|---|
+| `make setup` | One-time bootstrap. Runs `git submodule update --init --recursive`, executes `game-server-deploy/setup.sh` (installs Node/Terraform/AWS CLI on Debian/Ubuntu, npm-installs all workspaces, builds Lambda bundles, runs `terraform init` and bootstraps the S3 backend), then records the sha256 of `setup.sh` in `.make/setup.stamp`. |
+| `make plan` | Copies `terraform.tfvars` into `game-server-deploy/terraform/terraform.tfvars`, then runs `make -C game-server-deploy tf-plan` — which itself rebuilds the Lambda bundles before `terraform plan`. |
+| `make apply` | Same as `plan`, but delegates to `tf-apply`. The submodule's `tf-apply` recipe prints a post-deploy checklist with the Discord interactions URL when it finishes. |
+| `make update` | Bumps the submodule to the tip of `main` (`git submodule update --remote --merge`). If the new `setup.sh` differs from the recorded sha, clears `.terraform/` and re-runs `setup.sh` automatically; otherwise leaves it alone. Reminds you to commit the new submodule pointer. |
+| `make dev` | Pulls live tfstate into `.make/tfstate.json` (so the embed step has something to read), wipes stale TS build info under the submodule's `app/packages/*/`, then runs `make -C game-server-deploy dev`, exporting `API_TOKEN` and `TF_STATE_PATH` to the child make. |
+
+The `tfvars` copy is **always fresh** on plan/apply — the recipe `cp`s
+unconditionally, not just when the file is older than the destination. This
+prevents stale variables from sneaking into a deploy when you've edited the
+parent's `terraform.tfvars` between runs.
+
+## Submodule update with idempotent setup.sh re-run
+
+`make update` records `sha256sum game-server-deploy/setup.sh` in
+`.make/setup.stamp` after each successful setup. On every subsequent
+`update`, it compares the new file's sha against the stamp:
+
+- **Unchanged** → nothing to do; the existing `.terraform/` and installed
+  npm dependencies are still valid.
+- **Changed** → upstream tweaked the bootstrap (new tool version, S3 backend
+  config change, Lambda build step, …). The recipe wipes
+  `game-server-deploy/terraform/.terraform/` and re-runs `setup.sh`, then
+  records the new sha.
+
+You don't have to remember whether the bootstrap moved. The stamp file is
+cheap and gitignored.
+
+## .env and the API_TOKEN
+
+`API_TOKEN` is the bearer token the management app's Nest server requires
+on every `/api/*` request. The wrapper Makefile loads it from `.env` via
+`include`, so it's available for `make dev` and any docker-compose target
+without ever being baked into the Makefile itself:
+
+```makefile
+ifneq (,$(wildcard $(REPO_ROOT)/.env))
+include $(REPO_ROOT)/.env
+export
+endif
 ```
 
-### 3. `.gitignore` the things that must never leak
+`.env` is in the parent's `.gitignore`. Generate a fresh token with
+`openssl rand -hex 32` (or just re-run `init-parent.ts`) — there's no need
+to keep the same token across rebuilds.
 
-```gitignore
-# Local tfstate (if you don't use a remote backend)
-state/*.tfstate
-state/*.tfstate.backup
-state/.terraform/
-state/.terraform.lock.hcl
+## tfstate lives in S3 by default
 
-# Shell env with the bearer token and sometimes AWS creds
-.env
+`game-server-deploy/setup.sh` provisions an S3 bucket
+(`{project_name}-tf-state`) and a DynamoDB lock table
+(`{project_name}-tf-locks`) on first run, then `terraform init`s with the
+S3 backend pointing at them. The parent repo never holds `terraform.tfstate`
+on disk — the wrapper's `make dev` pulls a fresh copy into
+`.make/tfstate.json` for the management app to read.
 
-# Anything you keep outside config/ that's sensitive
-secrets/
-
-# Editor / OS noise
-.DS_Store
-.vscode/
-```
-
-### 4. Put your tfvars and server config in `config/`
-
-```bash
-mkdir -p config state
-cp gsd/terraform/terraform.tfvars.example config/terraform.tfvars
-# edit config/terraform.tfvars with your real values
-
-cat > config/server_config.json <<'JSON'
-{
-  "watchdog_interval_minutes": 15,
-  "watchdog_idle_checks": 4,
-  "watchdog_min_packets": 100
-}
-JSON
-```
-
-Now wire those into the submodule's expected paths. Two options:
-
-- **Symlinks** (simplest, works on Linux + macOS):
-
-  ```bash
-  ln -sf "$(pwd)/config/terraform.tfvars" gsd/terraform/terraform.tfvars
-  ln -sf "$(pwd)/config/server_config.json" gsd/app/server_config.json
-  ```
-
-  Both paths are gitignored inside `gsd/`, so the symlinks won't pollute the
-  submodule's working tree.
-
-- **Script-driven copies** (works on Windows, or if you dislike symlinks):
-  have `scripts/apply.sh` copy `config/*` into `gsd/terraform/` and
-  `gsd/app/` at the start of every run. The copy target is already
-  gitignored inside the submodule.
-
-### 5. Decide where tfstate lives
-
-Two reasonable choices:
-
-- **Local state in the parent repo** — simplest, fine for a single
-  operator. Add a backend override file inside the symlinked tfvars or
-  point `terraform init` at an explicit `-chdir` pattern:
-
-  ```bash
-  terraform -chdir=gsd/terraform init \
-    -backend-config="path=$(pwd)/state/terraform.tfstate"
-  ```
-
-- **S3 + DynamoDB remote backend** — better for teams, CI, or "don't
-  lose your laptop". Add a `backend.tf` in `config/` with:
-
-  ```hcl
-  terraform {
-    backend "s3" {
-      bucket         = "your-tf-state-bucket"
-      key            = "gsd/terraform.tfstate"
-      region         = "us-east-1"
-      dynamodb_table = "tf-state-lock"
-      encrypt        = true
-    }
-  }
-  ```
-
-  and symlink it into `gsd/terraform/backend.tf`. The bucket and lock
-  table need to be created once, either by hand or by a tiny bootstrap
-  terraform in its own directory.
-
-### 6. Put the bearer token in `.env`
-
-`app/server_config.json` can hold an `api_token` field, but if your
-`server_config.json` is committed to the parent repo you don't want the
-token in there. Put it in `.env` instead (gitignored):
-
-```bash
-# .env
-export API_TOKEN="$(openssl rand -hex 32)"
-export AWS_PROFILE="games"    # if you use named profiles
-```
-
-Source it before running anything:
-
-```bash
-source .env
-cd gsd/app && npm run dev
-# or
-cd gsd && docker compose up --build
-```
-
-`server_config.json` stays token-free and public to whoever reads the
-private parent; the actual secret comes from the environment at runtime.
-
-### 7. Write a thin wrapper script
-
-A minimal `scripts/apply.sh`:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")/.."
-
-# Ensure submodule is at the committed SHA
-git submodule update --init --recursive
-
-# (Re)link config into the submodule
-ln -sf "$(pwd)/config/terraform.tfvars" gsd/terraform/terraform.tfvars
-ln -sf "$(pwd)/config/server_config.json" gsd/app/server_config.json
-
-# Build Lambdas, then apply
-cd gsd/app && npm ci && npm run build:lambdas
-cd ../terraform && terraform init && terraform apply
-```
-
-Similar `dev.sh` for the management app:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")/.."
-source .env
-cd gsd/app
-npm ci
-npm run dev
-```
-
-Run `chmod +x scripts/*.sh` and you're one command away from each action.
-
-### 8. Docker: override mounts, don't rewrite the compose file
-
-If you're using `docker compose`, create a `docker-compose.override.yml` in
-the parent. Compose merges it with `gsd/docker-compose.yml`:
-
-```yaml
-# docker-compose.override.yml — kept in the parent repo
-services:
-  app:
-    volumes:
-      - ./config/server_config.json:/app/server_config.json
-      - ./state:/app/terraform/state:ro   # if using local tfstate outside gsd/
-    env_file:
-      - .env
-```
-
-Run it from inside the submodule:
-
-```bash
-cd gsd
-docker compose -f docker-compose.yml -f ../docker-compose.override.yml up --build
-```
+If you don't want a remote backend (single-operator, throwaway deployment),
+delete the S3 bootstrap from your fork of `setup.sh`. We don't recommend
+this for anything you care about.
 
 ## Discord credentials: pick a home
 
@@ -283,9 +182,9 @@ Public Key. Trade-offs:
 | **Environment at apply time** (`TF_VAR_discord_bot_token=…`) | Never on disk. | Every operator needs the token in their shell to apply. |
 | **Dashboard only** | Token only exists in Secrets Manager. | You have to paste it once per fresh environment, and the DDB `CONFIG#discord` row is seeded manually. |
 
-The tfvars route is what most people pick. `.tfvars` is gitignored in the
-*submodule*, and your parent repo is private, so it ends up covered by the
-same "private-repo trust boundary" as everything else.
+The tfvars route is what most people pick, and it's what `init-parent.ts`
+will offer to seed. Your parent repo is private, so it ends up covered by
+the same "private-repo trust boundary" as everything else.
 
 Rotation after the first apply (tfvars route):
 
@@ -293,29 +192,28 @@ Rotation after the first apply (tfvars route):
 terraform taint aws_secretsmanager_secret_version.discord_bot_token
 # or: aws_secretsmanager_secret_version.discord_public_key
 # or: aws_dynamodb_table_item.discord_config_seed
-terraform apply
+make apply
 ```
 
 ## Keeping up with upstream
 
 ```bash
-cd gsd
-git fetch
-git log --oneline HEAD..origin/main           # preview
-git checkout origin/main                      # or a new tag
-cd ..
-git add gsd && git commit -m "chore: bump gsd to $(git -C gsd rev-parse --short HEAD)"
+make update
+git add game-server-deploy
+git commit -m "chore: bump game-server-deploy to $(git -C game-server-deploy rev-parse --short HEAD)"
+make plan        # eyeball the diff
+make apply       # if it looks right
 ```
 
-Always run `npm run build:lambdas` + `terraform plan` after a bump and
-eyeball the plan diff before applying. Breaking changes in the upstream
-Lambda env-var shape or IAM policies will show up as Lambda changes in the
-plan.
+`make update` always reminds you about the commit step at the end. If
+`setup.sh` changed upstream, it'll have already re-run by the time `make
+plan` starts, so the next plan picks up any new tooling cleanly.
 
 Things that tend to need attention after a bump:
 
 - New or renamed Terraform variables → add them to your
-  `config/terraform.tfvars`.
+  `terraform.tfvars`. Compare against
+  `game-server-deploy/terraform/terraform.tfvars.example`.
 - New environment variables on the Lambdas → typically Terraform handles
   this automatically, but verify in the plan output.
 - Changes to the four slash-command descriptors → re-click **Register
@@ -348,10 +246,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: cd gsd/app && npm ci && npm run build:lambdas
-      - run: |
-          ln -sf "$(pwd)/config/terraform.tfvars" gsd/terraform/terraform.tfvars
-          cd gsd/terraform && terraform init && terraform plan -no-color
+      - run: make setup
+      - run: make plan
 ```
 
 Use OIDC → an IAM role for `aws-actions/configure-aws-credentials` rather
@@ -362,24 +258,28 @@ than stashing long-lived keys. The role's policy is the same
 
 - **Don't fork the public repo and edit it.** The submodule pattern gives
   you every pinning benefit of a fork without the merge conflicts. If you
-  need a real code change, contribute upstream and bump your submodule to
-  the new commit.
+  need a real code change, contribute upstream and `make update` to bump
+  to the new commit.
 - **Don't commit `terraform.tfvars` inside the submodule.** Even a private
   parent doesn't save you if someone later runs `git submodule foreach git
-  push origin HEAD`. Keep your config in `config/` in the parent and
-  symlink it in.
-- **Don't commit `terraform.tfstate` anywhere in the public repo path.**
-  Keep it in `state/` (gitignored) or in a remote backend.
-- **Don't expose `API_TOKEN` in `server_config.json` if that file is
-  committed.** Environment variable only, or commit the file without the
-  `api_token` field.
+  push origin HEAD`. Keep your tfvars in the *parent* — the wrapper copies
+  it into the submodule at apply time, and the submodule's own
+  `.gitignore` excludes `terraform/*.tfvars`.
+- **Don't hardcode `API_TOKEN` in the wrapper Makefile.** Use `.env` and
+  the `include`/`export` pattern. The Makefile lives in your private repo,
+  but a leaked clone is one careless `git push` away.
+- **Don't run plan/apply directly in the submodule.** Always go through
+  the parent's `make plan`/`make apply` so the freshly-edited
+  `terraform.tfvars` is copied in first. A plan against stale vars is a
+  plan against the wrong universe.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `terraform apply` inside the submodule can't find `terraform.tfvars` | Symlink missing or broken | Re-run `scripts/apply.sh` which recreates them, or `ln -sf ../../config/terraform.tfvars gsd/terraform/terraform.tfvars`. |
-| `docker compose` ignores your override | Running from the wrong directory | From `gsd/`, pass both files explicitly: `-f docker-compose.yml -f ../docker-compose.override.yml`. |
-| `git submodule update --remote` silently pulls main and breaks apply | You hadn't pinned; `remote` moves to origin/HEAD | Either pin to a SHA (`git -C gsd checkout <sha>`) or add `branch = main` in `.gitmodules` and review diffs before every bump. |
+| `make plan` says "No such file or directory" pointing at `game-server-deploy/` | Submodule wasn't initialised | `make setup` (or `git submodule update --init --recursive`). |
+| `make apply` runs against an old `terraform.tfvars` | You edited the parent's tfvars but ran terraform inside the submodule directly | Always run `make apply` from the parent — the `copy-tfvars` recipe forces a fresh copy. |
+| `make update` silently pulls main and breaks apply | Upstream changed something incompatible | The stamp file's job is to flag setup.sh changes; for non-bootstrap breakage, run `make plan` and read the diff. Pin to a SHA in `.gitmodules` if you want stricter control. |
 | After bumping upstream, Discord commands have wrong arguments | Descriptors in `@gsd/shared/commands.ts` changed | Click **Register commands** for each guild in the dashboard. |
-| CI plan shows a Lambda recreating every run | Bundle hash changes between builds | Run `npm ci` (not `npm install`) in CI to pin dependencies; commit `app/package-lock.json` via the submodule bump. |
+| `make dev` complains it can't read tfstate | First-time run before `make apply` | Ignore — the recipe writes `null` and the app degrades gracefully until the first apply succeeds. |
+| CI plan shows a Lambda recreating every run | Bundle hash changes between builds | Run `npm ci` (not `npm install`) in CI to pin dependencies; `setup.sh` already does this. |
