@@ -53,7 +53,7 @@ cd "$SCRIPT_DIR"
 npm ci
 echo ""
 echo "🧱  Building Lambda bundles..."
-npm run build:lambdas -w game-server-manager
+npm run app:build:lambdas
 
 # 3. Bootstrap S3 backend, then Terraform init
 echo ""

@@ -22,7 +22,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run lint -w game-server-manager
+      - run: npm run app:lint
 
   tflint:
     runs-on: ubuntu-latest
