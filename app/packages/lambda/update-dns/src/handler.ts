@@ -240,11 +240,14 @@ async function patchOriginal(
 /**
  * If a Discord interaction is pending for this task, PATCH it with the
  * resolved hostname/IP and delete the pending row.
+ *
+ * `publicIp` is omitted for HTTPS games because only the private IP is known
+ * at this point — the public entry point is always the ALB hostname.
  */
 async function notifyDiscordIfPending(
   taskArn: string,
   game: string,
-  publicIp: string,
+  publicIp?: string,
 ): Promise<void> {
   if (!TABLE_NAME) return;
   try {
@@ -319,7 +322,7 @@ async function handleHttps(
     const ip = await resolveIp(taskArn, clusterArn, 'private');
     if (!ip) return { status: 'error', reason: 'no_ip' };
     await registerAlb(tgArn, ip);
-    await notifyDiscordIfPending(taskArn, game, ip);
+    await notifyDiscordIfPending(taskArn, game); // private IP intentionally omitted — use hostname only
     return { status: 'registered', game, ip };
   }
   if (lastStatus === 'STOPPED') {
