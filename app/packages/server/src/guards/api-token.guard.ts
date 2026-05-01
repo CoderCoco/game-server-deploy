@@ -66,6 +66,9 @@ export class ApiTokenGuard implements CanActivate {
       if (typeof queryToken !== 'string') {
         throw new UnauthorizedException({ error: 'missing bearer token' });
       }
+      // Remove the token from req.query so RequestLoggerMiddleware doesn't
+      // log it — the finish handler fires after this guard runs.
+      delete (req.query as Record<string, unknown>)['token'];
       presented = queryToken;
     }
     if (presented !== configured) {
