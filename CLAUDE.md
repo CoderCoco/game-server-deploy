@@ -129,7 +129,7 @@ Lambda env vars named `AWS_REGION` are reserved by the runtime. All four Lambdas
 
 ## AWS IAM Policy
 
-The full deploy IAM policy (`GameServerDeployAll`) lives in **`docs/setup.md`** — that is the single source of truth. Any time a new AWS service or action is needed (e.g. a new Terraform resource), update the policy JSON there and nowhere else. The policy already covers EventBridge tagging (`events:*`) and CloudFront (`cloudfront:*`), both of which are required by `terraform apply` and are not included in the AWS-managed policies used in this setup.
+The full deploy IAM policy (`GameServerDeployAll`) lives in **`docs/docs/setup.md`** — that is the single source of truth. Any time a new AWS service or action is needed (e.g. a new Terraform resource), update the policy JSON there and nowhere else. The policy already covers EventBridge tagging (`events:*`) and CloudFront (`cloudfront:*`), both of which are required by `terraform apply` and are not included in the AWS-managed policies used in this setup.
 
 ## Reference Documents
 
@@ -137,9 +137,9 @@ When working in a specific area, read the relevant doc rather than relying on wh
 
 | Area | File |
 |------|------|
-| AWS IAM deploy policy | `docs/setup.md` |
+| AWS IAM deploy policy | `docs/docs/setup.md` |
 | Terraform variables reference | `docs/docs/components/terraform.md` |
-| Full setup walkthrough | `docs/setup.md` |
+| Full setup walkthrough | `docs/docs/setup.md` |
 | Copilot review tuning | `.github/copilot-instructions.md` |
 | PR creation command | `.claude/commands/pr.md` |
 
