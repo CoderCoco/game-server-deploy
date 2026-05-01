@@ -91,10 +91,16 @@ export function LogsPanel({ games }: Props) {
     setPaused(false);
 
     let cancelled = false;
-    void api.logs(selectedGame).then((data) => {
-      if (!cancelled) setLines(data.lines);
-    });
-    startStream(selectedGame);
+    void (async () => {
+      try {
+        const data = await api.logs(selectedGame);
+        if (cancelled) return;
+        setLines(data.lines);
+        startStream(selectedGame);
+      } catch {
+        if (!cancelled) startStream(selectedGame);
+      }
+    })();
 
     return () => {
       cancelled = true;

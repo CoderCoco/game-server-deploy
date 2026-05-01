@@ -18,12 +18,16 @@ function sleepInterruptible(ms: number, signal: AbortSignal): Promise<void> {
       reject(new DOMException('Aborted', 'AbortError'));
       return;
     }
-    const timer = setTimeout(resolve, ms);
     const onAbort = () => {
       clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
       reject(new DOMException('Aborted', 'AbortError'));
     };
-    signal.addEventListener('abort', onAbort, { once: true });
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort);
   });
 }
 
@@ -68,6 +72,7 @@ export class LogsService {
       try {
         const resp = await this.getClient().send(
           new FilterLogEventsCommand({ logGroupName: logGroup, startTime, limit: 100 }),
+          { abortSignal: signal },
         );
         for (const e of resp.events ?? []) {
           const id = e.eventId ?? `${e.timestamp}-${e.message}`;
