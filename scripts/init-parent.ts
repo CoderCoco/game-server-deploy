@@ -215,8 +215,9 @@ discord_public_key     = "${a.discordPublicKey}"
 `;
 
   return `# ${a.projectName} — Terraform variables.
-# This file is gitignored at the parent-repo level; the Makefile copies it into
-# ${a.submoduleDir}/terraform/terraform.tfvars on every plan/apply.
+# Commit this file to your private parent repo. The wrapper Makefile copies it
+# into ${a.submoduleDir}/terraform/terraform.tfvars on every plan/apply, where
+# the submodule's own .gitignore prevents it from being committed back.
 
 aws_region   = "${a.awsRegion}"
 project_name = "${a.projectName}"
