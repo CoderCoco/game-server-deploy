@@ -1,7 +1,7 @@
 {
   "name": "game-server-deploy",
   "private": true,
-  "workspaces": ["app", "app/packages/*", "scripts"],
+  "workspaces": ["app", "app/packages/*", "app/packages/lambda/*", "scripts"],
   "engines": { "node": ">=20" },
   "scripts": {
     "app:dev":           "npm run dev            -w game-server-manager",

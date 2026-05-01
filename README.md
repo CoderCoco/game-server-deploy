@@ -62,7 +62,7 @@ $EDITOR terraform/terraform.tfvars        # game_servers, hosted_zone_name, ...
 cd terraform && terraform apply
 
 # 4a. Run the management app in dev mode
-cd app && npm run dev
+cd .. && npm run app:dev
 #     http://localhost:5173  (Nest on :3001, Vite proxy)
 
 # 4b. …or in Docker (production mode — requires a bearer token)

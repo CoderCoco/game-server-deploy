@@ -18,9 +18,7 @@ COPY app/packages/lambda/update-dns/package.json app/packages/lambda/update-dns/
 COPY app/packages/lambda/watchdog/package.json app/packages/lambda/watchdog/
 COPY app/packages/lambda/efs-seeder/package.json app/packages/lambda/efs-seeder/
 
-# Stub out the scripts workspace so npm ci doesn't pull in tsx or other
-# maintainer-only dev tools that have no place in the production image.
-RUN mkdir -p scripts && printf '{"name":"@gsd/scripts","version":"0.0.0","private":true}' > scripts/package.json
+COPY scripts/package.json scripts/
 
 RUN npm ci --ignore-scripts
 

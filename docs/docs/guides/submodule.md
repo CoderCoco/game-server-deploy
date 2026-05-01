@@ -86,9 +86,9 @@ cd your-private-games
 # 2. Add the submodule.
 git submodule add https://github.com/CoderCoco/game-server-deploy.git
 
-# 3. Install all deps (one install covers the app and the scripts workspace).
+# 3. Install all deps and run the scaffolder.
 (cd game-server-deploy && npm install)
-npm run init-parent -w @gsd/scripts --prefix game-server-deploy
+(cd game-server-deploy && npm run scripts:init-parent)
 ```
 
 The script prompts for project name, AWS region, hosted zone, and
