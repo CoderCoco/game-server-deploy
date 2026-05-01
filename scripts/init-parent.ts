@@ -44,7 +44,6 @@ interface Answers {
 }
 
 const FORCE = argv.includes('--force');
-const NON_INTERACTIVE = argv.includes('--non-interactive') || argv.includes('-y');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Path detection
@@ -357,9 +356,7 @@ async function main(): Promise<void> {
 
   const rl = createInterface({ input, output });
   try {
-    const parentDir = NON_INTERACTIVE
-      ? guessedParent
-      : await ask(rl, 'Parent repo path', guessedParent);
+    const parentDir = await ask(rl, 'Parent repo path', guessedParent);
 
     if (!existsSync(parentDir) || !statSync(parentDir).isDirectory()) {
       output.write(`\n  ✗ ${parentDir} is not a directory.\n`);
@@ -392,14 +389,10 @@ async function main(): Promise<void> {
     }
 
     const generated = randomBytes(32).toString('hex');
-    const apiTokenChoice = NON_INTERACTIVE
-      ? generated
-      : await ask(rl, 'API_TOKEN for the management app (press Enter to generate)', generated);
+    const apiTokenChoice = await ask(rl, 'API_TOKEN for the management app (press Enter to generate)', generated);
     const apiToken = apiTokenChoice || generated;
 
-    const configureDiscord = NON_INTERACTIVE
-      ? false
-      : await askBool(rl, 'Seed Discord credentials in tfvars now?', false);
+    const configureDiscord = await askBool(rl, 'Seed Discord credentials in tfvars now?', false);
 
     let discordApplicationId: string | undefined;
     let discordBotToken: string | undefined;
@@ -453,8 +446,13 @@ async function main(): Promise<void> {
 }
 
 // Only run when this file is the entry point — keeps the renderers importable
-// from tests without auto-launching the prompt loop.
-if (import.meta.url === `file://${argv[1]}`) {
+// from tests without auto-launching the prompt loop. Compare normalized
+// absolute paths so relative invocations (e.g. `tsx init-parent.ts`) still
+// match.
+const isEntrypoint =
+  argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(argv[1]);
+
+if (isEntrypoint) {
   main().catch((err) => {
     process.stderr.write(`\n  ✗ ${err instanceof Error ? err.message : String(err)}\n`);
     exit(1);

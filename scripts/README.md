@@ -28,7 +28,6 @@ npx --prefix game-server-deploy/scripts tsx game-server-deploy/scripts/init-pare
 Flags:
 
 - `--force` — overwrite existing files instead of skipping them.
-- `--non-interactive` (`-y`) — accept all defaults; useful for CI smoke tests.
 
 The script never reads or modifies anything inside the submodule. Safe to
 re-run; without `--force` it leaves existing files alone.
