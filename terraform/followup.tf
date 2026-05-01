@@ -89,7 +89,7 @@ resource "aws_lambda_function" "followup" {
       DOMAIN_NAME       = var.hosted_zone_name
       GAME_NAMES        = join(",", keys(var.game_servers))
       CONNECT_MESSAGES  = jsonencode({ for g, cfg in var.game_servers : g => cfg.connect_message if cfg.connect_message != null })
-      GAME_PORTS        = jsonencode({ for g, cfg in var.game_servers : g => cfg.ports[0].container })
+      GAME_PORTS        = jsonencode({ for g, cfg in var.game_servers : g => cfg.ports[0].container if length(cfg.ports) > 0 })
     }
   }
 

@@ -113,6 +113,11 @@ describe('formatGameStatus', () => {
     expect(line).toBe('🟢 **palworld**: running\nconnect at palworld.example.com');
   });
 
+  it('should treat an empty connect message the same as absent and use the fallback format', () => {
+    const line = formatGameStatus({ game: 'palworld', state: 'running', hostname: 'palworld.example.com' }, '');
+    expect(line).toBe('🟢 **palworld**: running — `palworld.example.com`');
+  });
+
   it('should ignore the connect message when state is not running', () => {
     const stopped = formatGameStatus({ game: 'palworld', state: 'stopped' }, 'connect at {host}:8211');
     expect(stopped).toBe('⚫ **palworld**: stopped');

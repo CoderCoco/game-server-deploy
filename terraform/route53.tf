@@ -113,7 +113,7 @@ resource "aws_lambda_function" "dns_updater" {
       ALB_TARGET_GROUPS = jsonencode({ for name, _ in local.https_games : name => aws_lb_target_group.game[name].arn })
       TABLE_NAME        = aws_dynamodb_table.discord.name
       CONNECT_MESSAGES  = jsonencode({ for g, cfg in var.game_servers : g => cfg.connect_message if cfg.connect_message != null })
-      GAME_PORTS        = jsonencode({ for g, cfg in var.game_servers : g => cfg.ports[0].container })
+      GAME_PORTS        = jsonencode({ for g, cfg in var.game_servers : g => cfg.ports[0].container if length(cfg.ports) > 0 })
     }
   }
 

@@ -18,7 +18,7 @@ export function formatGameStatus(status: GameStatus, connectMessage?: string, po
   const host = status.hostname ?? status.publicIp;
   const statusLine = `${emoji} **${status.game}**: ${status.state}`;
 
-  if (connectMessage !== undefined && status.state === 'running') {
+  if (connectMessage && status.state === 'running') {
     const rendered = connectMessage
       .replace(/\{host\}/g, host ?? '')
       .replace(/\{ip\}/g, status.publicIp ?? '')
