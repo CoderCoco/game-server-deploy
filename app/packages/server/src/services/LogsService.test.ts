@@ -4,6 +4,7 @@ import { mockClient } from 'aws-sdk-client-mock';
 import {
   CloudWatchLogsClient,
   DescribeLogStreamsCommand,
+  FilterLogEventsCommand,
   GetLogEventsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 
@@ -102,5 +103,139 @@ describe('LogsService', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/error fetching logs for minecraft/i);
     expect(lines[0]).toContain('denied');
+  });
+});
+
+describe('LogsService.streamLogs', () => {
+  /** Service under test, freshly constructed per test. */
+  let service: LogsService;
+
+  beforeEach(() => {
+    cwMock.reset();
+    service = new LogsService(makeConfig());
+  });
+
+  it('should terminate immediately when signal is already aborted before the first poll', async () => {
+    const ac = new AbortController();
+    ac.abort();
+
+    const lines: string[] = [];
+    for await (const line of service.streamLogs('minecraft', ac.signal, 0)) {
+      lines.push(line);
+    }
+
+    expect(lines).toEqual([]);
+    expect(cwMock.commandCalls(FilterLogEventsCommand)).toHaveLength(0);
+  });
+
+  it('should yield log lines from the first poll and terminate on abort', async () => {
+    cwMock.on(FilterLogEventsCommand).resolves({
+      events: [
+        { eventId: 'e1', timestamp: 1000, message: 'line1' },
+        { eventId: 'e2', timestamp: 2000, message: 'line2' },
+      ],
+    });
+
+    const ac = new AbortController();
+    const gen = service.streamLogs('minecraft', ac.signal, 0);
+
+    const { value: l1 } = await gen.next();
+    const { value: l2 } = await gen.next();
+    ac.abort();
+    const { done } = await gen.next();
+
+    expect(l1).toBe('line1');
+    expect(l2).toBe('line2');
+    expect(done).toBe(true);
+  });
+
+  it('should yield new events from successive polls', async () => {
+    cwMock
+      .on(FilterLogEventsCommand)
+      .resolvesOnce({ events: [{ eventId: 'e1', timestamp: 1000, message: 'first' }] })
+      .resolves({ events: [{ eventId: 'e2', timestamp: 2000, message: 'second' }] });
+
+    const ac = new AbortController();
+    const gen = service.streamLogs('minecraft', ac.signal, 0);
+
+    const { value: l1 } = await gen.next();
+    const { value: l2 } = await gen.next();
+    ac.abort();
+    await gen.return(undefined);
+
+    expect(l1).toBe('first');
+    expect(l2).toBe('second');
+  });
+
+  it('should de-duplicate events with the same eventId across polls', async () => {
+    cwMock
+      .on(FilterLogEventsCommand)
+      .resolvesOnce({ events: [{ eventId: 'e1', timestamp: 1000, message: 'line1' }] })
+      .resolvesOnce({
+        events: [
+          { eventId: 'e1', timestamp: 1000, message: 'line1' }, // already seen
+          { eventId: 'e2', timestamp: 2000, message: 'line2' }, // new
+        ],
+      });
+
+    const ac = new AbortController();
+    const gen = service.streamLogs('minecraft', ac.signal, 0);
+
+    const { value: l1 } = await gen.next(); // first poll yields 'line1'
+    const { value: l2 } = await gen.next(); // second poll skips duplicate, yields 'line2'
+    ac.abort();
+    await gen.return(undefined);
+
+    expect(l1).toBe('line1');
+    expect(l2).toBe('line2');
+  });
+
+  it('should query the /ecs/{game}-server log group', async () => {
+    cwMock.on(FilterLogEventsCommand).resolves({
+      events: [{ eventId: 'e1', timestamp: 1000, message: 'hello' }],
+    });
+
+    const ac = new AbortController();
+    const gen = service.streamLogs('valheim', ac.signal, 0);
+
+    await gen.next(); // first poll runs and yields 'hello'
+    ac.abort();
+    await gen.return(undefined);
+
+    const calls = cwMock.commandCalls(FilterLogEventsCommand);
+    expect(calls[0]!.args[0].input.logGroupName).toBe('/ecs/valheim-server');
+  });
+
+  it('should yield a stream-error sentinel and continue when a poll throws', async () => {
+    cwMock
+      .on(FilterLogEventsCommand)
+      .rejectsOnce(new Error('throttled'))
+      .resolves({ events: [{ eventId: 'e1', timestamp: 1000, message: 'recovered' }] });
+
+    const ac = new AbortController();
+    const gen = service.streamLogs('minecraft', ac.signal, 0);
+
+    const { value: errLine } = await gen.next(); // first poll throws
+    const { value: okLine } = await gen.next(); // second poll succeeds
+    ac.abort();
+    await gen.return(undefined);
+
+    expect(errLine).toMatch(/\[stream error\].*throttled/);
+    expect(okLine).toBe('recovered');
+  });
+
+  it('should map a missing event.message to an empty string', async () => {
+    cwMock.on(FilterLogEventsCommand).resolves({
+      events: [{ eventId: 'e1', timestamp: 1000 }], // no message field
+    });
+
+    const ac = new AbortController();
+    const gen = service.streamLogs('minecraft', ac.signal, 0);
+
+    const { value: line } = await gen.next();
+    ac.abort();
+    await gen.return(undefined);
+
+    expect(line).toBe('');
   });
 });

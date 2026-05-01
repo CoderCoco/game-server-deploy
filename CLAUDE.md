@@ -154,6 +154,7 @@ Any time you add or remove Terraform variables, update **all four** of these in 
 - **Always use `/pr` to create pull requests.** The `.claude/commands/pr.md` skill validates the title format before calling the API. Never call `mcp__github__create_pull_request` directly without running this check first.
 - **PR titles MUST use Conventional Commits.** We squash-merge, so the PR title becomes the commit subject on `main` verbatim — a badly-formed title produces a badly-formed commit that can't be fixed after merge. Format: `<type>(<optional-scope>): <imperative summary>`, where `<type>` is one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style`. Keep the subject under ~70 characters; put details in the PR body. Examples: `refactor(app): migrate server from Express+tsyringe to Nest.js`, `docs: reflect Nest.js migration in CLAUDE.md`, `fix(watchdog): stop leaking tags on failed runs`, `chore: add ESLint flat config`.
 - **Pre-flight check (mandatory):** before any `create_pull_request` call, verify the title matches `^(feat|fix|refactor|docs|test|chore|perf|build|ci|style)(\([^)]+\))?: .+$`. If it doesn't, fix it first. `Add ESLint configuration` fails (no type prefix); `chore: add ESLint configuration` passes.
+- **Always include `Closes #N`** in the PR body when the PR resolves a GitHub issue. Place it as the first line so GitHub auto-closes the issue on merge.
 
 ## PR Review Workflow
 

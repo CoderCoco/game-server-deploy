@@ -1,0 +1,14 @@
+{
+  "name": "@gsd/lambda-efs-seeder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/handler.cjs",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0"
+  }
+}

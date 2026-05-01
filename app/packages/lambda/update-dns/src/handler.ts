@@ -50,6 +50,12 @@ const ALB_TARGET_GROUPS: Record<string, string> = JSON.parse(
 );
 const TABLE_NAME = process.env['TABLE_NAME'] ?? '';
 
+/** Per-game connect message templates from Terraform, keyed by game name. */
+const CONNECT_MESSAGES: Record<string, string> = JSON.parse(process.env['CONNECT_MESSAGES'] ?? '{}');
+
+/** First container port per game, used to resolve the `{port}` placeholder. */
+const GAME_PORTS: Record<string, number> = JSON.parse(process.env['GAME_PORTS'] ?? '{}');
+
 const FAMILY_TO_GAME = new Map<string, string>(GAME_NAMES.map((g) => [`${g}-server`, g]));
 
 function requireEnv(name: string): string {
@@ -234,18 +240,25 @@ async function patchOriginal(
 /**
  * If a Discord interaction is pending for this task, PATCH it with the
  * resolved hostname/IP and delete the pending row.
+ *
+ * `publicIp` is omitted for HTTPS games because only the private IP is known
+ * at this point — the public entry point is always the ALB hostname.
  */
 async function notifyDiscordIfPending(
   taskArn: string,
   game: string,
-  publicIp: string,
+  publicIp?: string,
 ): Promise<void> {
   if (!TABLE_NAME) return;
   try {
     const pending = await getPending(TABLE_NAME, taskArn);
     if (!pending) return;
     const hostname = `${game}.${DOMAIN_NAME}`;
-    const message = formatGameStatus({ game, state: 'running', publicIp, hostname, taskArn });
+    const message = formatGameStatus(
+      { game, state: 'running', publicIp, hostname, taskArn },
+      CONNECT_MESSAGES[game],
+      GAME_PORTS[game],
+    );
     await patchOriginal(pending.applicationId, pending.interactionToken, message);
     await deletePending(TABLE_NAME, taskArn);
   } catch (err) {
@@ -309,7 +322,7 @@ async function handleHttps(
     const ip = await resolveIp(taskArn, clusterArn, 'private');
     if (!ip) return { status: 'error', reason: 'no_ip' };
     await registerAlb(tgArn, ip);
-    await notifyDiscordIfPending(taskArn, game, ip);
+    await notifyDiscordIfPending(taskArn, game); // private IP intentionally omitted — use hostname only
     return { status: 'registered', game, ip };
   }
   if (lastStatus === 'STOPPED') {

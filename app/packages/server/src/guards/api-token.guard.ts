@@ -55,11 +55,22 @@ export class ApiTokenGuard implements CanActivate {
       return true;
     }
 
+    // Prefer the Authorization header; fall back to ?token= query param for
+    // SSE endpoints where the browser's native EventSource cannot set headers.
     const header = req.headers['authorization'];
-    if (typeof header !== 'string' || !header.startsWith('Bearer ')) {
-      throw new UnauthorizedException({ error: 'missing bearer token' });
+    let presented: string;
+    if (typeof header === 'string' && header.startsWith('Bearer ')) {
+      presented = header.slice('Bearer '.length).trim();
+    } else {
+      const queryToken = (req.query as Record<string, unknown> | undefined)?.['token'];
+      if (typeof queryToken !== 'string') {
+        throw new UnauthorizedException({ error: 'missing bearer token' });
+      }
+      // Remove the token from req.query so RequestLoggerMiddleware doesn't
+      // log it — the finish handler fires after this guard runs.
+      delete (req.query as Record<string, unknown>)['token'];
+      presented = queryToken;
     }
-    const presented = header.slice('Bearer '.length).trim();
     if (presented !== configured) {
       logger.warn('Rejected /api request with bad bearer token', {
         path: req.path,

@@ -42,4 +42,90 @@ describe('formatGameStatus', () => {
     expect(line).toContain('palworld.example.com');
     expect(line).not.toContain('1.2.3.4');
   });
+
+  it('should render a connect message on a second line when provided', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', hostname: 'palworld.example.com' },
+      'connect in game at palworld.example.com:8211',
+    );
+    expect(line).toBe('🟢 **palworld**: running\nconnect in game at palworld.example.com:8211');
+  });
+
+  it('should substitute {host} placeholder with the resolved hostname', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', hostname: 'palworld.example.com' },
+      'connect at {host}:8211',
+    );
+    expect(line).toBe('🟢 **palworld**: running\nconnect at palworld.example.com:8211');
+  });
+
+  it('should substitute {ip} placeholder with the public IP', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', publicIp: '1.2.3.4' },
+      'direct IP: {ip}',
+    );
+    expect(line).toBe('🟢 **palworld**: running\ndirect IP: 1.2.3.4');
+  });
+
+  it('should substitute {port} placeholder when a port is supplied', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', hostname: 'palworld.example.com' },
+      'connect at {host}:{port}',
+      8211,
+    );
+    expect(line).toBe('🟢 **palworld**: running\nconnect at palworld.example.com:8211');
+  });
+
+  it('should substitute {game} placeholder with the game name', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', hostname: 'palworld.example.com' },
+      '{game} server at {host}',
+    );
+    expect(line).toBe('🟢 **palworld**: running\npalworld server at palworld.example.com');
+  });
+
+  it('should leave {port} empty when no port is supplied', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', hostname: 'palworld.example.com' },
+      'connect at {host}:{port}',
+    );
+    expect(line).toBe('🟢 **palworld**: running\nconnect at palworld.example.com:');
+  });
+
+  it('should allow multi-line connect messages', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', hostname: 'palworld.example.com' },
+      'host: {host}\nport: 8211',
+    );
+    expect(line).toBe('🟢 **palworld**: running\nhost: palworld.example.com\nport: 8211');
+  });
+
+  it('should fall back to the inline address format when connect message is absent', () => {
+    const line = formatGameStatus({ game: 'palworld', state: 'running', hostname: 'palworld.example.com' });
+    expect(line).toBe('🟢 **palworld**: running — `palworld.example.com`');
+  });
+
+  it('should prefer hostname over publicIp when substituting {host}', () => {
+    const line = formatGameStatus(
+      { game: 'palworld', state: 'running', hostname: 'palworld.example.com', publicIp: '1.2.3.4' },
+      'connect at {host}',
+    );
+    expect(line).toBe('🟢 **palworld**: running\nconnect at palworld.example.com');
+  });
+
+  it('should treat an empty connect message the same as absent and use the fallback format', () => {
+    const line = formatGameStatus({ game: 'palworld', state: 'running', hostname: 'palworld.example.com' }, '');
+    expect(line).toBe('🟢 **palworld**: running — `palworld.example.com`');
+  });
+
+  it('should ignore the connect message when state is not running', () => {
+    const stopped = formatGameStatus({ game: 'palworld', state: 'stopped' }, 'connect at {host}:8211');
+    expect(stopped).toBe('⚫ **palworld**: stopped');
+
+    const starting = formatGameStatus({ game: 'palworld', state: 'starting' }, 'connect at {host}:8211');
+    expect(starting).toBe('🟡 **palworld**: starting');
+
+    const error = formatGameStatus({ game: 'palworld', state: 'error' }, 'connect at {host}:8211');
+    expect(error).toBe('⚠️ **palworld**: error');
+  });
 });
