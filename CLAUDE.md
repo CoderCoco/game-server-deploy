@@ -4,32 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Commands
 
-The management app is a TypeScript **npm-workspaces** monorepo under `app/`. Dependencies are installed once at the workspace root. The workspaces are:
+The repo uses a single **npm-workspaces** tree rooted at the repo root. Workspaces are:
 
 - `@gsd/shared` — types, `canRun`, sanitizers, status formatter, command descriptors, DynamoDB + Secrets Manager helpers (used by both the server and the Lambdas).
 - `@gsd/server` — Nest.js management API.
 - `@gsd/web` — React + Vite client.
 - `@gsd/lambda-interactions`, `@gsd/lambda-followup`, `@gsd/lambda-update-dns`, `@gsd/lambda-watchdog` — four Lambda packages, each bundled to a single `dist/handler.cjs` by esbuild.
+- `@gsd/scripts` — maintainer helper scripts (`init-parent.ts` scaffolder).
 
 ```bash
-# Install all workspaces in one go
-cd app && npm install
+# Install all workspaces in one go (run from repo root)
+npm install
 
 # Run the dev servers (Nest on 3001, Vite on 5173 with /api proxy)
-cd app && npm run dev
+npm run app:dev
 
 # Production build (shared → server → web)
-cd app && npm run build && npm start    # http://localhost:3001
+npm run app:build && npm run app:start  # http://localhost:3001
 
 # Build all Lambda bundles (required before `terraform apply`)
-cd app && npm run build:lambdas
+npm run app:build:lambdas
+
+# Unit tests (vitest + aws-sdk-client-mock) — discovered across every workspace
+npm run app:test             # one-off run
+npm run app:test:watch       # watch mode
+
+# Lint / autofix
+npm run app:lint
+npm run app:lint:fix
+
+# Run the scaffolder script
+npm run scripts:init-parent
 
 # Run the app in Docker (mounts ./terraform ro, ./app/server_config.json, ~/.aws)
 docker compose up --build               # http://localhost:5000
 
 # Terraform (all infra lives under terraform/). NOTE: terraform apply reads
 # the Lambda bundles from app/packages/lambda/*/dist/handler.cjs — run
-# `npm run build:lambdas` first or the archive_file data sources will fail.
+# `npm run app:build:lambdas` first or the archive_file data sources will fail.
 cd terraform
 terraform init
 terraform plan
@@ -39,13 +51,9 @@ terraform destroy
 # First-time environment bootstrap (installs terraform + aws CLI if missing,
 # runs npm ci, builds Lambdas, runs terraform init)
 ./setup.sh
-
-# Unit tests (vitest + aws-sdk-client-mock) — discovered across every workspace
-cd app && npm test             # one-off run
-cd app && npm run test:watch   # watch mode
 ```
 
-ESLint (flat config) lives at `app/eslint.config.js` using `@eslint/js` + `typescript-eslint` recommended presets, plus `eslint-plugin-react` and `eslint-plugin-react-hooks` recommended for the web package. Run `npm run lint` (or `npm run lint:fix`) from `app/`.
+ESLint (flat config) lives at `app/eslint.config.js` using `@eslint/js` + `typescript-eslint` recommended presets, plus `eslint-plugin-react` and `eslint-plugin-react-hooks` recommended for the web package. Run `npm run app:lint` (or `npm run app:lint:fix`) from the repo root.
 
 Terraform linting uses [tflint](https://github.com/terraform-linters/tflint) with its `recommended` preset and the AWS ruleset plugin. Config lives at `terraform/.tflint.hcl`. Run `tflint --init` once to install the plugin, then `tflint` from `terraform/`. `terraform fmt -check -recursive` and `terraform validate` cover formatting and syntax.
 

@@ -49,11 +49,11 @@ echo "✅  Prerequisites found (node, terraform, aws cli)"
 # `terraform apply` can run. `npm run build:lambdas` does exactly that.
 echo ""
 echo "📦  Installing Node dependencies..."
-cd "$SCRIPT_DIR/app"
+cd "$SCRIPT_DIR"
 npm ci
 echo ""
 echo "🧱  Building Lambda bundles..."
-npm run build:lambdas
+npm run app:build:lambdas
 
 # 3. Bootstrap S3 backend, then Terraform init
 echo ""

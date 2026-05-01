@@ -5,7 +5,7 @@ services:
       - "5000:3001"
     volumes:
       # Makes terraform.tfstate readable by the app
-      - ./terraform:/app/terraform:ro
+      - ./terraform:/workspace/terraform:ro
       # Persists server_config.json across container restarts.
       # NOTE: the host file must exist before `docker compose up` — create it with
       #       `touch app/server_config.json` on first run. With
@@ -15,7 +15,7 @@ services:
       #       default short-syntax mounts would otherwise cause.
       - type: bind
         source: ./app/server_config.json
-        target: /app/server_config.json
+        target: /workspace/app/server_config.json
         bind:
           create_host_path: false
       # AWS credentials — remove if using env vars instead
