@@ -70,5 +70,28 @@ watchdog_min_packets      = 100
 #       { name = "saves", container_path = "/palworld" },
 #     ]
 #     https = false
+#
+#     # Optional: pre-seed files onto the EFS volume before the server starts.
+#     # path is the in-container path; the container_path prefix is stripped to
+#     # resolve the location within the EFS access point.
+#     # Use content for UTF-8 text files; use content_base64 for binary files
+#     # (e.g. mods) — base64-encode the file first: base64 -w0 mymod.pak
+#     # Re-runs only when seed content changes; removed entries are NOT deleted
+#     # from EFS (clean up via FileBrowser).  Do NOT store secrets here — seed
+#     # content is stored in Terraform state.
+#     # file_seeds = [
+#     #   {
+#     #     path    = "/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini"
+#     #     content = <<-INI
+#     #       [/Script/Pal.PalGameWorldSettings]
+#     #       OptionSettings=(Difficulty=None,DayTimeSpeedRate=1.0,NightTimeSpeedRate=1.0)
+#     #     INI
+#     #   },
+#     #   {
+#     #     path           = "/palworld/Pal/Content/Paks/MyMod.pak"
+#     #     content_base64 = "UEsDBBQAAAAI..."  # base64 -w0 MyMod.pak
+#     #     mode           = "0644"
+#     #   },
+#     # ]
 #   }
 # }

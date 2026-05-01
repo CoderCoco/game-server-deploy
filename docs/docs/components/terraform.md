@@ -17,6 +17,7 @@ step 3 of the [setup guide](/setup) for details.
 | `alb.tf` | Conditional on any game having `https = true`: ACM certificate (DNS-validated), ALB + target groups per HTTPS game, HTTPS listener + HTTP→HTTPS redirect, Route 53 ALIAS records. |
 | `route53.tf` | Route 53 zone **data source** (zone must exist); the `update-dns` Lambda with its IAM, EventBridge rule on `ECS Task State Change`. |
 | `watchdog.tf` | `watchdog` Lambda with its IAM, EventBridge schedule at `rate(${watchdog_interval_minutes} minute(s))`. |
+| `efs-seeder.tf` | Conditional on any game having `file_seeds`: shared seeder SG, per-game IAM role + policy, CloudWatch log group, Lambda (VPC + EFS mount), and `aws_lambda_invocation` that re-triggers only when seed content changes. |
 | `interactions.tf` | `interactions` Lambda with IAM + Function URL (`auth_type = NONE`, CORS for `https://discord.com`). Exposes `interactions_invoke_url`. |
 | `followup.tf` | `followup` Lambda with IAM (`ecs:RunTask`, `StopTask`, `DescribeTasks`, `iam:PassRole`, `dynamodb:GetItem`/`PutItem`, `ec2:DescribeNetworkInterfaces`). Async-invoked by interactions. |
 | `discord_store.tf` | DynamoDB table (pk+sk, TTL on `expiresAt`), two Secrets Manager secrets (`${project_name}/discord/bot-token`, `/discord/public-key`) with `recovery_window_in_days = 0` and `lifecycle.ignore_changes` on seeded secret values. Optional `CONFIG#discord` DynamoDB item seeded from tfvars. Optional `BASE#discord` item holding the Terraform-managed base allowlist/admins (see `base_allowed_guilds` / `base_admin_*` variables). When `discord_bot_token`, `discord_application_id`, and at least one `base_allowed_guilds` entry are set, a `null_resource` runs `curl` to register slash commands in each base guild during apply; re-runs on token rotation or command-descriptor changes. |
@@ -31,7 +32,7 @@ step 3 of the [setup guide](/setup) for details.
 | `aws_region` | `string` | `us-east-1` | AWS region for all resources. |
 | `project_name` | `string` | `game-servers` | Prefix for named resources and the Secrets Manager paths. |
 | `vpc_cidr` | `string` | `10.0.0.0/16` | Parent CIDR; subnets are /24s within it. |
-| `game_servers` | `map(object)` | — | The single source of truth. Per-game: `image`, `cpu`, `memory`, `ports[]`, `environment[]`, `volumes[]` (`name` + `container_path`), `https`. Each `volumes` entry creates its own EFS access point rooted at `/${game}/${name}`. |
+| `game_servers` | `map(object)` | — | The single source of truth. Per-game: `image`, `cpu`, `memory`, `ports[]`, `environment[]`, `volumes[]` (`name` + `container_path`), `https`, `file_seeds[]` (optional). Each `volumes` entry creates its own EFS access point rooted at `/${game}/${name}`. See `game_servers[].file_seeds` below. |
 | `hosted_zone_name` | `string` | _(required)_ | Existing Route 53 zone looked up as a data source (e.g. `example.com`). |
 | `acm_certificate_domain` | `string` | `null` → `*.{hosted_zone_name}` | Wildcard ACM cert for the ALB listener. |
 | `dns_ttl` | `number` | `30` | TTL on Route 53 A records the update-dns Lambda writes. Keep low for fast task churn. |
@@ -45,6 +46,22 @@ step 3 of the [setup guide](/setup) for details.
 | `base_admin_user_ids` | `list(string)` | `[]` | Discord user IDs with permanent server-wide admin rights. Same Terraform-managed floor as above. |
 | `base_admin_role_ids` | `list(string)` | `[]` | Discord role IDs with permanent server-wide admin rights. Same Terraform-managed floor as above. |
 | `tags` | `map(string)` | defaults | Merged into `default_tags` for cost allocation (`Project`). |
+
+### `game_servers[].file_seeds` (optional)
+
+Declare files to be written to a game's EFS volume during `terraform apply`.
+Each entry in the list is:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `path` | `string` | _(required)_ | In-container path (e.g. `/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini`). The first volume's `container_path` is stripped to resolve the EFS-relative destination. |
+| `content` | `string` | `null` | UTF-8 text content. Mutually exclusive with `content_base64`. |
+| `content_base64` | `string` | `null` | Base64-encoded binary content — use for non-UTF-8 files such as mod `.pak` files (`base64 -w0 MyMod.pak`). |
+| `mode` | `string` | `"0644"` | chmod octal string applied to the written file. |
+
+When `file_seeds` is non-empty, `efs-seeder.tf` creates a seeder Lambda for the game and invokes it immediately. The invocation re-runs only when the sha256 of `file_seeds` changes, making re-applies with unchanged seeds a no-op. Removed seed entries are **not** deleted from EFS — clean them up via FileBrowser.
+
+> **Do not store secrets in `file_seeds`** — content is written verbatim into Terraform state.
 
 ## Outputs
 
@@ -95,6 +112,14 @@ step 3 of the [setup guide](/setup) for details.
 - **`events:TagResource` / `UntagResource` / `ListTagsForResource`** aren't
   in any AWS-managed policy — you need `events:*` (or at least those three)
   on the deploy user. The setup guide's inline policy already covers this.
+- **`file_seeds` targets the first volume only.** The seeder Lambda mounts the
+  EFS access point for `volumes[0]`, so all seed `path` values must use that
+  volume's `container_path` as a prefix. Multi-volume games with seeds across
+  different volumes are not supported in this release.
+- **`file_seeds` content lives in Terraform state.** Suitable for config files
+  and small binary assets (mods). Do not put passwords or tokens here.
+- **Removed seed entries are not deleted from EFS.** They are simply no longer
+  managed. Delete stale files via the FileBrowser task.
 - **Removing a game from the map deletes its task definition** but does not
   stop running tasks. Stop the game from the dashboard first, then remove
   the key.

@@ -212,6 +212,31 @@ Rules worth knowing before you save:
   `container_path` inside the container. Most games need one entry; add more
   if the image expects multiple distinct paths. All access points use UID/GID
   1000 ownership — game images that run as a different UID will fail to mount.
+- **`file_seeds`** (optional) pre-populates files on the EFS volume during
+  `terraform apply`. Each seed needs an in-container `path` and either `content`
+  (UTF-8 text) or `content_base64` (binary, e.g. mod `.pak` files — encode
+  with `base64 -w0 MyMod.pak`). An optional `mode` sets the file permissions
+  (default `"0644"`). The seeder runs once per unique seed content and is a
+  no-op on re-apply when nothing changes. Removed entries are **not** deleted
+  from EFS. **Do not put secrets in `file_seeds`** — content is stored in
+  Terraform state.
+
+  ```hcl
+  file_seeds = [
+    {
+      path    = "/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini"
+      content = <<-INI
+        [/Script/Pal.PalGameWorldSettings]
+        OptionSettings=(Difficulty=None,DayTimeSpeedRate=1.0,NightTimeSpeedRate=1.0)
+      INI
+    },
+    {
+      path           = "/palworld/Pal/Content/Paks/MyMod.pak"
+      content_base64 = "UEsDBBQAAAAI..."  # base64 -w0 MyMod.pak
+    },
+  ]
+  ```
+
 - **`https = true`** routes the game through an ALB + ACM + Route 53 ALIAS.
   Only set it on games that actually serve HTTP(S); UDP games (most game
   servers) must stay `false`. The ALB is only created if at least one game
@@ -414,6 +439,8 @@ hitting "already scheduled for deletion".
 |---|---|---|
 | `terraform apply` fails with "data source not found for zone" | `hosted_zone_name` doesn't exist in Route 53 | Create the hosted zone first (or delegate your registrar's NS records). |
 | `archive_file` fails during `terraform apply` | You didn't run `npm run build:lambdas` | `cd app && npm run build:lambdas`, then re-apply. |
+| EFS seeder Lambda times out or returns `EFS mount failed` | Mount targets not ready or security group misconfigured | Ensure `terraform apply` completed fully (mount targets take ~30 s); check the seeder Lambda's CloudWatch log group `/aws/lambda/${project_name}-efs-seeder-{game}`. |
+| `file_seeds` path error: "does not start with container_path" | Seed path doesn't share the first volume's `container_path` prefix | Check that `path` begins with `volumes[0].container_path` (e.g. `/palworld/…`). |
 | App refuses to start under `NODE_ENV=production` | No bearer token configured | `export API_TOKEN=$(openssl rand -hex 32)` or set `api_token` in `app/server_config.json`. |
 | Dashboard says **terraform not applied** in the Discord panel | `interactions_invoke_url` output missing | Re-run `cd app && npm run build:lambdas && cd ../terraform && terraform apply`. |
 | Dashboard says **awaiting credentials** | Secrets still contain the Terraform `"placeholder"` seed | Paste the real bot token + public key in the Credentials tab and Save. |
