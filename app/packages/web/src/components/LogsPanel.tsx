@@ -1,37 +1,119 @@
-import { useState, useEffect, useRef } from 'react';
-import { api } from '../api.js';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { api, getStoredApiToken } from '../api.js';
+
+const MAX_LINES = 1000;
 
 interface Props {
   games: string[];
 }
 
 /**
- * Bottom-of-dashboard panel that tails CloudWatch logs for the currently-selected
- * game. Fetches a fixed number of recent lines from `/api/logs/:game` on game
- * change and on explicit refresh; auto-scrolls to the newest entry.
+ * Bottom-of-dashboard panel that tails CloudWatch logs for the selected game.
+ * On game change it fetches a snapshot of recent lines, then opens an SSE
+ * stream (`/api/logs/:game/stream`) to append new events as they arrive.
+ * The auth token is passed as `?token=` because the browser's native
+ * `EventSource` cannot set custom headers.
+ *
+ * Pause buffers incoming lines without scrolling; Resume flushes the buffer.
+ * Lines are capped at MAX_LINES to keep the DOM light.
  */
 export function LogsPanel({ games }: Props) {
   const [selectedGame, setSelectedGame] = useState<string>('');
   const [lines, setLines] = useState<string[]>([]);
+  const [paused, setPaused] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const esRef = useRef<EventSource | null>(null);
+  const pausedRef = useRef(false);
+  const bufferRef = useRef<string[]>([]);
 
-  const fetchLogs = async (game: string) => {
-    if (!game) return;
-    const data = await api.logs(game);
-    setLines(data.lines);
-  };
+  const appendLine = useCallback((line: string) => {
+    if (pausedRef.current) {
+      bufferRef.current.push(line);
+      return;
+    }
+    setLines((prev) => {
+      const next = [...prev, line];
+      return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next;
+    });
+  }, []);
+
+  const stopStream = useCallback(() => {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+  }, []);
+
+  const startStream = useCallback(
+    (game: string) => {
+      stopStream();
+      const token = getStoredApiToken();
+      const url = `/api/logs/${game}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      const es = new EventSource(url);
+
+      es.onmessage = (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data as string) as { line: string };
+          appendLine(data.line);
+        } catch {
+          // ignore malformed events
+        }
+      };
+
+      esRef.current = es;
+    },
+    [stopStream, appendLine],
+  );
+
+  const handlePauseToggle = useCallback(() => {
+    const nowPaused = !pausedRef.current;
+    pausedRef.current = nowPaused;
+    setPaused(nowPaused);
+    if (!nowPaused && bufferRef.current.length > 0) {
+      const buffered = bufferRef.current;
+      bufferRef.current = [];
+      setLines((prev) => {
+        const next = [...prev, ...buffered];
+        return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next;
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (games.length && !selectedGame) setSelectedGame(games[0]!);
   }, [games, selectedGame]);
 
   useEffect(() => {
-    if (selectedGame) void fetchLogs(selectedGame);
-  }, [selectedGame]);
+    if (!selectedGame) return;
+    setLines([]);
+    bufferRef.current = [];
+    pausedRef.current = false;
+    setPaused(false);
 
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await api.logs(selectedGame);
+        if (cancelled) return;
+        setLines(data.lines);
+        startStream(selectedGame);
+      } catch {
+        if (!cancelled) startStream(selectedGame);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopStream();
+    };
+  }, [selectedGame, startStream, stopStream]);
+
+  // Auto-scroll to bottom when new lines arrive and not paused
   useEffect(() => {
-    if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
-  }, [lines]);
+    if (!paused && boxRef.current) {
+      boxRef.current.scrollTop = boxRef.current.scrollHeight;
+    }
+  }, [lines, paused]);
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
@@ -57,8 +139,8 @@ export function LogsPanel({ games }: Props) {
         }
       </div>
       <div style={{ marginTop: '0.6rem' }}>
-        <button className="btn-secondary btn-sm" onClick={() => void fetchLogs(selectedGame)}>
-          Refresh Logs
+        <button className="btn-secondary btn-sm" onClick={handlePauseToggle}>
+          {paused ? 'Resume' : 'Pause'}
         </button>
       </div>
     </div>

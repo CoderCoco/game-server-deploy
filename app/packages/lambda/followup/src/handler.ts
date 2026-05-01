@@ -69,6 +69,12 @@ function gameListFromEnv(): string[] {
   return (process.env['GAME_NAMES'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 }
 
+/** Per-game connect message templates from Terraform, keyed by game name. */
+const CONNECT_MESSAGES: Record<string, string> = JSON.parse(process.env['CONNECT_MESSAGES'] ?? '{}');
+
+/** First container port per game, used to resolve the `{port}` placeholder. */
+const GAME_PORTS: Record<string, number> = JSON.parse(process.env['GAME_PORTS'] ?? '{}');
+
 function extractEniId(task: Task): string | null {
   for (const att of task.attachments ?? []) {
     if (att.type !== 'ElasticNetworkInterface') continue;
@@ -199,13 +205,13 @@ async function handleList(event: FollowupEvent, cfg: DiscordConfig): Promise<str
   );
   if (!visible.length) return "You don't have permission to view any server statuses.";
   const statuses = await Promise.all(visible.map((g) => getStatus(g)));
-  return statuses.map((s) => formatGameStatus(s)).join('\n');
+  return statuses.map((s) => formatGameStatus(s, CONNECT_MESSAGES[s.game], GAME_PORTS[s.game])).join('\n');
 }
 
 async function handleStatus(event: FollowupEvent): Promise<string> {
   if (!event.game) return 'Game is required.';
   const status = await getStatus(event.game);
-  return formatGameStatus(status);
+  return formatGameStatus(status, CONNECT_MESSAGES[event.game], GAME_PORTS[event.game]);
 }
 
 async function handleStart(event: FollowupEvent): Promise<string> {
@@ -222,6 +228,18 @@ async function handleStart(event: FollowupEvent): Promise<string> {
       game: event.game,
       action: 'start',
     });
+    const connectMsg = CONNECT_MESSAGES[event.game];
+    if (connectMsg) {
+      const port = GAME_PORTS[event.game];
+      const domain = process.env['DOMAIN_NAME'] ?? '';
+      const host = domain ? `${event.game}.${domain}` : '';
+      const rendered = connectMsg
+        .replace(/\{host\}/g, host)
+        .replace(/\{ip\}/g, '')
+        .replace(/\{port\}/g, port !== undefined ? String(port) : '')
+        .replace(/\{game\}/g, event.game);
+      return `${message}\n${rendered}`;
+    }
   }
   return message;
 }

@@ -213,6 +213,17 @@ resource "aws_security_group" "efs" {
     security_groups = [aws_security_group.game_servers.id, aws_security_group.file_manager.id]
   }
 
+  dynamic "ingress" {
+    for_each = length(local.games_with_seeds) > 0 ? [1] : []
+    content {
+      description     = "NFS from EFS seeder Lambdas"
+      from_port       = 2049
+      to_port         = 2049
+      protocol        = "tcp"
+      security_groups = [aws_security_group.efs_seeder[0].id]
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
