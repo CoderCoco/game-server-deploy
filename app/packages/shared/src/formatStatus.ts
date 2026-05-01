@@ -3,11 +3,11 @@ import type { GameStatus } from './types.js';
 /**
  * Render a game's status as a Discord-ready message.
  *
- * When `connectMessage` is provided it is rendered on a second line with
- * `{host}`, `{ip}`, `{port}`, and `{game}` placeholders substituted.
- * When absent, falls back to the original `— \`{host}\`` inline suffix.
+ * When `connectMessage` is provided and state is `running`, it is rendered on
+ * a second line with host, ip, port, and game placeholders substituted.
+ * When absent, falls back to the original single-line address suffix.
  *
- * @param port - First exposed port for the `{port}` placeholder (optional).
+ * @param port - First exposed port for the port placeholder (optional).
  */
 export function formatGameStatus(status: GameStatus, connectMessage?: string, port?: number): string {
   const emoji =
