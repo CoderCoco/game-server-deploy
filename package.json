@@ -1,17 +1,27 @@
 {
   "name": "game-server-deploy",
   "private": true,
-  "workspaces": ["app", "app/packages/*", "app/packages/lambda/*", "scripts"],
-  "engines": { "node": ">=20" },
+  "workspaces": [
+    "app",
+    "app/packages/*",
+    "app/packages/lambda/*",
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "app:dev":           "npm run dev            -w game-server-manager",
-    "app:build":         "npm run build          -w game-server-manager",
-    "app:start":         "npm run start          -w game-server-manager",
+    "app:dev": "npm run dev            -w game-server-manager",
+    "app:build": "npm run build          -w game-server-manager",
+    "app:start": "npm run start          -w game-server-manager",
     "app:build:lambdas": "npm run build:lambdas  -w game-server-manager",
-    "app:test":          "npm run test           -w game-server-manager",
-    "app:test:watch":    "npm run test:watch     -w game-server-manager",
-    "app:lint":          "npm run lint           -w game-server-manager",
-    "app:lint:fix":      "npm run lint:fix       -w game-server-manager",
+    "app:test": "npm run test           -w game-server-manager",
+    "app:test:watch": "npm run test:watch     -w game-server-manager",
+    "app:lint": "npm run lint           -w game-server-manager",
+    "app:lint:fix": "npm run lint:fix       -w game-server-manager",
     "scripts:init-parent": "npm run init-parent  -w @gsd/scripts"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "4.2.4"
   }
 }
