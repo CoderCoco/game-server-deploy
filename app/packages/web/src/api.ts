@@ -100,6 +100,13 @@ export interface DiscordMutationResult {
   message: string;
 }
 
+/** Environment context returned by `GET /api/env`. */
+export interface EnvInfo {
+  region: string;
+  domain: string;
+  environment: string;
+}
+
 const TOKEN_STORAGE_KEY = 'apiToken';
 
 /** Read the stored API bearer token from localStorage (returns empty string if unset). */
@@ -142,6 +149,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  env: () => request<EnvInfo>('/api/env'),
   games: () => request<{ games: string[] }>('/api/games'),
   status: () => request<GameStatus[]>('/api/status'),
   statusGame: (game: string) => request<GameStatus>(`/api/status/${game}`),
