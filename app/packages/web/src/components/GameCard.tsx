@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { Copy, RefreshCw, FolderOpen } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  Copy,
+  FolderOpen,
+  ScrollText,
+  CircleCheck,
+  CircleX,
+  Loader2,
+  AlertTriangle,
+  PowerOff,
+} from 'lucide-react';
 import { api, type GameStatus, type GameEstimate } from '../api.js';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -13,43 +23,103 @@ interface Props {
   onOpenFiles: (game: string) => void;
 }
 
-const STATE_LABELS: Record<string, string> = {
-  running:      'Online',
-  starting:     'Starting…',
-  stopped:      'Offline',
-  not_deployed: 'Not Deployed',
-  error:        'Error',
+type ServerState = GameStatus['state'];
+
+const STATE_LABELS: Record<ServerState, string> = {
+  running:      'RUNNING',
+  starting:     'STARTING',
+  stopped:      'STOPPED',
+  not_deployed: 'NOT DEPLOYED',
+  error:        'ERROR',
 };
 
-/** Returns the badge variant that maps to the server state. */
-function stateBadgeVariant(state: string): 'success' | 'warning' | 'destructive' | 'secondary' {
+/** Map a server state to the badge color variant. */
+function badgeVariant(state: ServerState): 'success' | 'warning' | 'destructive' | 'secondary' {
   switch (state) {
     case 'running':      return 'success';
-    case 'starting':
-    case 'not_deployed': return 'warning';
-    case 'stopped':
+    case 'starting':     return 'warning';
+    case 'not_deployed': return 'secondary';
+    case 'stopped':      return 'secondary';
     case 'error':        return 'destructive';
-    default:             return 'secondary';
   }
 }
 
-/** Returns a Tailwind color class for the status indicator dot. */
-function dotColorClass(state: string): string {
+/** Map a server state to the icon shown next to the badge text. */
+function StateIcon({ state, className }: { state: ServerState; className?: string }) {
+  const cls = cn('size-3', className);
   switch (state) {
-    case 'running':      return 'bg-[var(--color-green)] shadow-[0_0_6px_var(--color-green)]';
-    case 'starting':
-    case 'not_deployed': return 'bg-[var(--color-amber)]';
-    case 'stopped':
-    case 'error':        return 'bg-[var(--color-red)]';
-    default:             return 'bg-[var(--color-muted-foreground)]';
+    case 'running':      return <CircleCheck     className={cls} />;
+    case 'starting':     return <Loader2         className={cn(cls, 'animate-spin')} />;
+    case 'stopped':      return <PowerOff        className={cls} />;
+    case 'not_deployed': return <CircleX         className={cls} />;
+    case 'error':        return <AlertTriangle   className={cls} />;
   }
+}
+
+/** Tailwind classes for the gradient accent rule that runs along the top of the card. */
+function accentRuleClass(state: ServerState): string {
+  switch (state) {
+    case 'running':
+      return 'bg-gradient-to-r from-[var(--color-cyan)] to-[var(--color-green)]';
+    case 'starting':
+      return 'bg-gradient-to-r from-[var(--color-orange)] to-[var(--color-amber)]';
+    case 'error':
+      return 'bg-[var(--color-red)]';
+    case 'stopped':
+    case 'not_deployed':
+      return 'bg-[var(--color-border)]';
+  }
+}
+
+/** Class for the small status dot in the badge — pulses when running, animates when starting. */
+function dotClass(state: ServerState): string {
+  switch (state) {
+    case 'running':      return 'size-1.5 rounded-full bg-[var(--color-green)] shadow-[0_0_6px_var(--color-green)] animate-pulse';
+    case 'starting':     return 'size-1.5 rounded-full bg-[var(--color-amber)] animate-pulse';
+    case 'error':        return 'size-1.5 rounded-full bg-[var(--color-red)]';
+    default:             return 'size-1.5 rounded-full bg-[var(--color-muted-foreground)]';
+  }
+}
+
+/** Trim an ECS task ARN down to its 8-char short id (last segment of the ARN). */
+function taskShortId(taskArn: string | undefined): string {
+  if (!taskArn) return '—';
+  const tail = taskArn.split('/').pop() ?? taskArn;
+  return tail.slice(0, 8);
+}
+
+interface StatRowProps {
+  label: string;
+  value: string;
+  mono?: boolean;
+}
+
+function Stat({ label, value, mono }: StatRowProps) {
+  return (
+    <div>
+      <div className="text-[0.65rem] uppercase tracking-wider text-[var(--color-muted-foreground)] mb-1">
+        {label}
+      </div>
+      <div className={cn('text-sm text-[var(--color-foreground)]', mono && 'font-[var(--font-mono)]')}>
+        {value}
+      </div>
+    </div>
+  );
 }
 
 /**
- * Card for a single game in the dashboard grid: status dot, connect string,
- * cost estimate, and Start/Stop/Files/Refresh buttons. After a start/stop the
- * card schedules a `onRefresh` call 3s later so the backend has time to pick
- * up the ECS state change before we poll `/api/status/:game`.
+ * Card for a single game in the dashboard grid. Layout (top to bottom):
+ *
+ * 1. Gradient top-accent rule colored by state.
+ * 2. Header — game name (Outfit 17/700) + hostname (DM Mono) and right-aligned
+ *    status badge (icon + text + pulsing dot).
+ * 3. Connect string with copy button.
+ * 4. 2×2 stats grid — Last run, Players, $/hr, Task short-id.
+ * 5. Actions — Start / Stop primary (gradient) + Files / Logs secondary.
+ *
+ * After Start/Stop the card schedules a 3-second `onRefresh` to give the
+ * backend time to pick up the ECS state change before re-polling
+ * `/api/status/:game`.
  */
 export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
   const { game, state } = status;
@@ -71,63 +141,97 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
   }
 
   const connectStr = status.hostname ?? status.publicIp ?? null;
+  const lastRunLabel = state === 'running' ? 'Live' : state === 'starting' ? 'Booting' : '—';
+  const playersLabel = '—';
+  const costPerHourLabel = estimate ? `$${estimate.costPerHour.toFixed(3)}` : '—';
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2.5">
-          <span className={cn('size-2.5 rounded-full shrink-0', dotColorClass(state))} />
-          <CardTitle className="capitalize">{game}</CardTitle>
-          <Badge variant={stateBadgeVariant(state)} className="ml-auto text-[0.65rem]">
-            {STATE_LABELS[state] ?? state}
-          </Badge>
-        </div>
-      </CardHeader>
+    <Card className="relative overflow-hidden p-0 flex flex-col">
+      {/* Top gradient accent rule */}
+      <div className={cn('h-0.5 w-full', accentRuleClass(state))} />
 
-      <CardContent className="space-y-3">
-        <div className="font-[var(--font-mono)] text-xs text-[var(--color-green)] min-h-[1.2rem] flex items-center gap-1.5">
-          {connectStr && (
-            <>
-              <span>{connectStr}</span>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-5 px-1.5 py-0 text-[0.6rem]"
-                onClick={() => void navigator.clipboard.writeText(connectStr)}
-              >
-                <Copy className="size-3" />
-                copy
-              </Button>
-              {status.publicIp && status.hostname && (
-                <span className="text-[var(--color-muted-foreground)]">({status.publicIp})</span>
-              )}
-            </>
+      {/* Header */}
+      <div className="px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-[var(--font-ui)] text-[17px] font-bold capitalize leading-tight text-[var(--color-foreground)]">
+            {game}
+          </h3>
+          <div className="mt-1 font-[var(--font-mono)] text-xs text-[var(--color-muted-foreground)] truncate">
+            {connectStr ?? 'no hostname'}
+          </div>
+        </div>
+        <Badge variant={badgeVariant(state)} className="shrink-0 gap-1.5 text-[0.65rem]">
+          <span className={dotClass(state)} aria-hidden="true" />
+          <StateIcon state={state} />
+          {STATE_LABELS[state]}
+        </Badge>
+      </div>
+
+      {/* Connect string + copy */}
+      {connectStr && (
+        <div className="px-5 pb-3 flex items-center gap-2">
+          <span className="font-[var(--font-mono)] text-xs text-[var(--color-green)] truncate">
+            {connectStr}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            onClick={() => void navigator.clipboard.writeText(connectStr)}
+            aria-label="Copy connect string"
+          >
+            <Copy className="size-3" />
+          </Button>
+          {status.publicIp && status.hostname && (
+            <span className="font-[var(--font-mono)] text-[0.65rem] text-[var(--color-muted-foreground)] truncate">
+              ({status.publicIp})
+            </span>
           )}
         </div>
+      )}
 
-        {estimate && (
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            <span className="text-[var(--color-primary-light)] font-medium">${estimate.costPerHour}/hr</span>
-            {' · '}~${estimate.costPerMonth4hpd}/mo at 4 hrs/day
-          </p>
+      {/* 2x2 stats grid */}
+      <div className="px-5 pb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[var(--color-border)] pt-4">
+        <Stat label="Last run" value={lastRunLabel} />
+        <Stat label="Players" value={playersLabel} />
+        <Stat label="$ per hour" value={costPerHourLabel} />
+        <Stat label="Task" value={taskShortId(status.taskArn)} mono />
+      </div>
+
+      {/* Actions */}
+      <div className="px-5 pb-4 mt-auto flex flex-wrap gap-2">
+        {canStart || !canStop ? (
+          <Button
+            variant="start"
+            size="sm"
+            onClick={() => void handleStart()}
+            disabled={!canStart || busy}
+            className="flex-1 min-w-[6rem] bg-gradient-to-r from-[var(--color-green)] to-[var(--color-cyan)] hover:brightness-110"
+          >
+            Start
+          </Button>
+        ) : (
+          <Button
+            variant="stop"
+            size="sm"
+            onClick={() => void handleStop()}
+            disabled={!canStop || busy}
+            className="flex-1 min-w-[6rem] bg-gradient-to-r from-[var(--color-red)] to-[var(--color-pink)] hover:brightness-110"
+          >
+            Stop
+          </Button>
         )}
-      </CardContent>
-
-      <CardFooter className="flex flex-wrap gap-2">
-        <Button variant="start" size="sm" onClick={() => void handleStart()} disabled={!canStart || busy}>
-          Start
-        </Button>
-        <Button variant="stop" size="sm" onClick={() => void handleStop()} disabled={!canStop || busy}>
-          Stop
-        </Button>
         <Button variant="secondary" size="sm" onClick={() => onOpenFiles(game)}>
           <FolderOpen className="size-3.5" />
           Files
         </Button>
-        <Button variant="secondary" size="sm" onClick={() => onRefresh(game)} aria-label="Refresh">
-          <RefreshCw className="size-3.5" />
+        <Button variant="secondary" size="sm" asChild>
+          <Link to="/logs" state={{ game }} aria-label={`View logs for ${game}`}>
+            <ScrollText className="size-3.5" />
+            Logs
+          </Link>
         </Button>
-      </CardFooter>
+      </div>
     </Card>
   );
 }
