@@ -2,15 +2,13 @@ import { useGameStatus } from '../hooks/useGameStatus.js';
 import { useFileManager } from '../hooks/useFileManager.js';
 import { GameCard } from '../components/GameCard.js';
 import { FileManagerModal } from '../components/FileManagerModal.js';
-import { CostPanel } from '../components/CostPanel.js';
 import { DiscordPanel } from '../components/DiscordPanel.js';
 import { LogsPanel } from '../components/LogsPanel.js';
 
 /**
- * Dashboard route (`/`) — game cards + KPI strip + Discord/Logs panels.
- * This is a transitional state; panels will move to dedicated routes in
- * subsequent issues (CoderCoco/game-server-deploy#61–63). The watchdog
- * panel has moved to `/settings` per the issue spec.
+ * Dashboard route (`/`) — game cards + Discord/Logs panels. The cost view
+ * lives at `/costs` and the watchdog at `/settings`; the dashboard is now
+ * status-forward only.
  */
 export function DashboardPage() {
   const { statuses, estimates, loading, refreshGame } = useGameStatus();
@@ -42,11 +40,6 @@ export function DashboardPage() {
               />
             ))
           )}
-        </div>
-
-        {/* Bottom panels — cost only (watchdog moved to /settings) */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <CostPanel estimates={estimates} />
         </div>
 
         {/* Discord bot panel */}
