@@ -1,10 +1,11 @@
-import { useGameStatus } from '../hooks/useGameStatus.js';
+import { useGameStatus } from '../polling/GameStatusProvider.js';
 import { useFileManager } from '../hooks/useFileManager.js';
 import { GameCard } from '../components/GameCard.js';
 import { FileManagerModal } from '../components/FileManagerModal.js';
 import { CostPanel } from '../components/CostPanel.js';
 import { DiscordPanel } from '../components/DiscordPanel.js';
 import { LogsPanel } from '../components/LogsPanel.js';
+import { PollingIndicator } from '../polling/PollingIndicator.js';
 
 /**
  * Dashboard route (`/`) — game cards + KPI strip + Discord/Logs panels.
@@ -21,6 +22,10 @@ export function DashboardPage() {
   return (
     <>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold">Servers</h2>
+          <PollingIndicator />
+        </div>
         {/* Game cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
           {loading ? (

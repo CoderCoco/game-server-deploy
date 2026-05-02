@@ -1,45 +1,49 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type FileMgrStatus } from '../api.js';
+import { usePollingContext } from '../polling/PollingProvider.js';
+
+/** Name under which the file-manager helper poll registers in the polling registry. */
+export const FILE_MANAGER_POLLER = 'filemgr';
+/** Reactive cadence while a helper task is starting — matches the previous in-hook timer. */
+export const FILE_MANAGER_INTERVAL_MS = 5000;
 
 /**
  * Manages the FileBrowser helper-task lifecycle for the file-manager modal.
  * Owns the currently-active game, the latest `FileMgrStatus`, and a user-facing
  * message, plus start/stop/close actions that drive `/api/files/:game/*`.
  *
- * Polling is reactive rather than interval-based: while the task is `starting`
- * we chain `setTimeout`s (5s) until it reaches `running` or the modal closes,
- * so there's no background polling when nothing is in flight.
+ * Polling is reactive rather than interval-based: while the helper task is
+ * `starting` we register a 5-second poller with the shared
+ * {@link PollingProvider}. That makes the file-manager's progress visible to
+ * the LIVE indicator and the top-bar Refresh button while still leaving no
+ * background polling once the task has settled or the modal is closed.
  */
 export function useFileManager() {
+  const ctx = usePollingContext();
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [status, setStatus] = useState<FileMgrStatus | null>(null);
   const [message, setMessage] = useState('');
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearPoll = () => {
-    if (pollRef.current) clearTimeout(pollRef.current);
-  };
+  // Latest `activeGame` used inside the registered poller closure — keeps
+  // the registration stable when the consumer toggles between games.
+  const gameRef = useRef<string | null>(null);
+  gameRef.current = activeGame;
 
-  const poll = useCallback(async (game: string) => {
+  const fetchOnce = useCallback(async (game: string) => {
     const s = await api.filesMgrStatus(game);
     setStatus(s);
-    if (s.state === 'starting') {
-      pollRef.current = setTimeout(() => void poll(game), 5000);
-    }
   }, []);
 
   const open = useCallback(
     (game: string) => {
-      clearPoll();
       setActiveGame(game);
       setMessage('');
-      void poll(game);
+      void fetchOnce(game);
     },
-    [poll],
+    [fetchOnce],
   );
 
   const close = useCallback(() => {
-    clearPoll();
     setActiveGame(null);
     setStatus(null);
     setMessage('');
@@ -50,19 +54,32 @@ export function useFileManager() {
     setMessage('Launching…');
     const result = await api.filesMgrStart(activeGame);
     setMessage(result.message);
-    if (result.success) {
-      pollRef.current = setTimeout(() => void poll(activeGame), 5000);
-    }
-  }, [activeGame, poll]);
+    if (result.success) void fetchOnce(activeGame);
+  }, [activeGame, fetchOnce]);
 
   const stop = useCallback(async () => {
     if (!activeGame) return;
     const result = await api.filesMgrStop(activeGame);
     setMessage(result.message);
-    pollRef.current = setTimeout(() => void poll(activeGame), 3000);
-  }, [activeGame, poll]);
+    void fetchOnce(activeGame);
+  }, [activeGame, fetchOnce]);
 
-  useEffect(() => () => clearPoll(), []);
+  // Register the reactive poller only while the helper task is still spinning
+  // up. Unregisters automatically when the state transitions to running/stopped
+  // or the modal closes — that keeps the polling registry honest about which
+  // pollers are currently live.
+  useEffect(() => {
+    if (!activeGame || status?.state !== 'starting') return;
+    return ctx.register(
+      FILE_MANAGER_POLLER,
+      async () => {
+        const game = gameRef.current;
+        if (!game) return;
+        await fetchOnce(game);
+      },
+      FILE_MANAGER_INTERVAL_MS,
+    );
+  }, [ctx, activeGame, status?.state, fetchOnce]);
 
   return { activeGame, status, message, open, close, start, stop };
 }

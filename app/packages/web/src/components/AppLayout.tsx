@@ -2,6 +2,8 @@ import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api, type EnvInfo } from '../api.js';
 import { cn } from '../lib/utils.js';
+import { Button } from '@/components/ui/button';
+import { isStale, usePollingContext } from '../polling/PollingProvider.js';
 import {
   LayoutDashboard,
   Server,
@@ -10,6 +12,7 @@ import {
   Bell,
   MessageSquare,
   Settings,
+  RefreshCw,
 } from 'lucide-react';
 
 interface NavItem {
@@ -114,11 +117,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
               />
             </div>
 
-            {/* LIVE indicator */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded border border-border">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span className="text-xs font-medium text-muted-foreground">LIVE</span>
-            </div>
+            <RefreshAllButton />
+            <LiveIndicator />
 
             {/* Avatar placeholder */}
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
@@ -132,6 +132,56 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Top-bar Refresh button — triggers every active poller in the registry. The
+ * icon spins while at least one poll is in flight so the operator gets a brief
+ * loading affordance even if the underlying call returns instantly.
+ */
+function RefreshAllButton() {
+  const { pollers, refreshAll } = usePollingContext();
+  const anyLoading = Object.values(pollers).some((p) => p.loading);
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => void refreshAll()}
+      aria-label="Refresh all"
+      disabled={Object.keys(pollers).length === 0}
+    >
+      <RefreshCw className={cn('size-3.5', anyLoading && 'animate-spin')} />
+      Refresh
+    </Button>
+  );
+}
+
+/**
+ * Top-bar LIVE indicator — pulses cyan while at least one poller has a fresh
+ * success, dims gray when every poller is past 2× its interval, and goes
+ * neutral when no pollers are registered yet.
+ */
+function LiveIndicator() {
+  const { pollers, tick } = usePollingContext();
+  void tick;
+  const now = Date.now();
+  const entries = Object.values(pollers);
+  const anyFresh = entries.some((p) => p.lastSuccessAt !== null && !isStale(p, now));
+  const allStale = entries.length > 0 && entries.every((p) => isStale(p, now));
+  const dotClass = anyFresh
+    ? 'bg-[var(--color-cyan)] animate-pulse'
+    : allStale
+      ? 'bg-[var(--color-muted-foreground)]/60'
+      : 'bg-[var(--color-muted-foreground)]/40';
+  const labelClass = allStale
+    ? 'text-[var(--color-muted-foreground)]/60'
+    : 'text-muted-foreground';
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded border border-border">
+      <div className={cn('w-2 h-2 rounded-full', dotClass)} />
+      <span className={cn('text-xs font-medium', labelClass)}>LIVE</span>
     </div>
   );
 }
