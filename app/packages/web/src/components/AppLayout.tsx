@@ -9,26 +9,25 @@ import {
   Bell,
   MessageSquare,
   Settings,
-  Eye,
 } from 'lucide-react';
 
 interface NavItem {
   to: string;
   icon: typeof LayoutDashboard;
   label: string;
+  disabled?: boolean;
 }
 
 const monitoringItems: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/', icon: Server, label: 'Servers' },
+  { to: '/servers', icon: Server, label: 'Servers', disabled: true },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
-  { to: '/', icon: BarChart3, label: 'Metrics' },
-  { to: '/', icon: Bell, label: 'Alerts' },
+  { to: '/metrics', icon: BarChart3, label: 'Metrics', disabled: true },
+  { to: '/alerts', icon: Bell, label: 'Alerts', disabled: true },
 ];
 
 const configItems: NavItem[] = [
   { to: '/discord', icon: MessageSquare, label: 'Discord' },
-  { to: '/settings', icon: Eye, label: 'Watchdog' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -138,17 +137,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
+  const className = `
+    relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors
+    ${item.disabled
+      ? 'text-muted-foreground/40 cursor-not-allowed'
+      : active
+        ? 'bg-gradient-to-r from-purple-500/10 to-transparent text-purple-400 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-purple-500 before:rounded-full'
+        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+    }
+  `;
+  if (item.disabled) {
+    return (
+      <span className={className}>
+        <Icon className="w-4 h-4" />
+        {item.label}
+      </span>
+    );
+  }
   return (
-    <Link
-      to={item.to}
-      className={`
-        relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors
-        ${active
-          ? 'bg-gradient-to-r from-purple-500/10 to-transparent text-purple-400 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-purple-500 before:rounded-full'
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-        }
-      `}
-    >
+    <Link to={item.to} className={className}>
       <Icon className="w-4 h-4" />
       {item.label}
     </Link>

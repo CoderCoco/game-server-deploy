@@ -20,8 +20,5 @@
     "app:lint": "npm run lint           -w game-server-manager",
     "app:lint:fix": "npm run lint:fix       -w game-server-manager",
     "scripts:init-parent": "npm run init-parent  -w @gsd/scripts"
-  },
-  "dependencies": {
-    "@tailwindcss/vite": "4.2.4"
   }
 }
