@@ -289,6 +289,30 @@ When it finishes, note two outputs:
 
 Pick one.
 
+### API token
+
+The dashboard API is gated behind a bearer token; `/api/*` requests without
+a matching `Authorization: Bearer …` header return 401. There are two ways
+to configure the value, in priority order:
+
+1. **`API_TOKEN` environment variable** — wins, even when set to empty (use
+   this to deliberately disable auth in scripts/CI). Required when running
+   under `NODE_ENV=production`; the server refuses to boot otherwise.
+2. **`api_token` field in `app/server_config.json`** — the persisted file
+   bind-mounted by `docker-compose.yml`. Edit it directly or let the
+   server write it via `/api/config`.
+
+Generate a fresh token with `openssl rand -hex 32`. The dashboard prompts
+for it on first load (and any time the server returns 401); paste the
+value and click **Save**. It is stored in your browser's `localStorage`
+under the key `apiToken` — clear browser data to revoke client-side, or
+rotate the value in `API_TOKEN` / `server_config.json` to invalidate
+every browser at once.
+
+In dev mode (`NODE_ENV` unset) the server logs a warning and allows
+unauthenticated requests when no token is configured — convenient for
+local iteration, not safe to expose.
+
 ### Option A — dev mode
 
 ```bash
@@ -315,8 +339,7 @@ docker compose up --build
 ```
 
 Opens on `http://localhost:5000`. The dashboard will prompt you for the
-token on first load; paste the value of `$API_TOKEN` and click
-**Save & reload**.
+token on first load; paste the value of `$API_TOKEN` and click **Save**.
 
 `docker-compose.yml` bind-mounts `./terraform` read-only (for
 `terraform.tfstate`), `./app/server_config.json` (persisted watchdog

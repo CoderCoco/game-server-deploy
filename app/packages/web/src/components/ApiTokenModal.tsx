@@ -1,81 +1,166 @@
 import { useState } from 'react';
-import { setStoredApiToken } from '../api.js';
+import { Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { retryPendingAfterAuth, setStoredApiToken } from '../api.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Button } from './ui/button';
+
+const MIN_TOKEN_LENGTH = 16;
+const DOCS_URL =
+  'https://codercoco.github.io/game-server-deploy/setup#api-token';
 
 /**
- * Blocking modal that collects the API bearer token from the operator and
- * stores it in `localStorage` for subsequent `/api/*` requests. Shown when
- * no token is stored yet or when the server returns 401.
+ * Blocking dialog shown when the API rejects a request with 401. The operator
+ * pastes the bearer token (`API_TOKEN` env var or `api_token` from
+ * `app/server_config.json`) and we retry every parked request with the new
+ * token. On success the dialog dismisses; on a second 401 we surface an inline
+ * error inside the modal instead of the user being silently re-prompted.
  *
- * On submit we reload the page — this is a deliberately simple UX choice:
- * it restarts all the `useEffect`-driven fetches cleanly instead of needing
- * each hook to know how to retry on auth success.
+ * Validation only catches obvious paste mistakes (empty / whitespace / too
+ * short) — token correctness is verified by the server's 401 response.
  */
-export function ApiTokenModal() {
+export function ApiTokenModal({ open, onSuccess }: { open: boolean; onSuccess: () => void }) {
   const [token, setToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function save(e: React.FormEvent) {
+  function validate(value: string): string | null {
+    if (!value) return 'Token cannot be empty.';
+    if (/\s/.test(value)) return 'Token cannot contain whitespace.';
+    if (value.length < MIN_TOKEN_LENGTH) {
+      return `Token must be at least ${MIN_TOKEN_LENGTH} characters.`;
+    }
+    return null;
+  }
+
+  function onTokenChange(value: string) {
+    setToken(value);
+    setServerError(null);
+    if (validationError) setValidationError(validate(value));
+  }
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!token.trim()) return;
-    setStoredApiToken(token.trim());
-    window.location.reload();
+    const error = validate(token);
+    setValidationError(error);
+    if (error) return;
+    setSubmitting(true);
+    setServerError(null);
+    setStoredApiToken(token);
+    try {
+      const ok = await retryPendingAfterAuth();
+      if (ok) {
+        setToken('');
+        onSuccess();
+      } else {
+        setServerError(
+          'Invalid token — check `app/server_config.json` or `API_TOKEN`.',
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
-    <div style={backdropStyle}>
-      <form onSubmit={save} style={modalStyle}>
-        <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>API token required</h2>
-        <p style={helpStyle}>
-          This dashboard&apos;s API is gated behind a bearer token. Paste the value of
-          <code> API_TOKEN </code> (or <code>api_token</code> from
-          <code> app/server_config.json</code>) to continue. It&apos;s stored in your
-          browser&apos;s local storage; clear the browser data to revoke.
-        </p>
-        <input
-          type="password"
-          autoFocus
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="API token"
-          style={inputStyle}
-        />
-        <button type="submit" className="btn-secondary btn-sm" disabled={!token.trim()}>
-          Save &amp; reload
-        </button>
-      </form>
-    </div>
+    <Dialog open={open}>
+      <DialogContent
+        className="max-w-md [&>button.absolute]:hidden"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>API token required</DialogTitle>
+            <DialogDescription>
+              The dashboard API is gated behind a bearer token. It&apos;s stored
+              in your browser&apos;s local storage; clear browser data to revoke.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2">
+            <Label htmlFor="api-token">Token</Label>
+            <div className="relative">
+              <Input
+                id="api-token"
+                type={showToken ? 'text' : 'password'}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                value={token}
+                onChange={(e) => onTokenChange(e.target.value)}
+                placeholder="Paste API token"
+                aria-invalid={Boolean(validationError || serverError)}
+                aria-describedby={
+                  validationError
+                    ? 'api-token-validation'
+                    : serverError
+                    ? 'api-token-server'
+                    : undefined
+                }
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken((s) => !s)}
+                aria-label={showToken ? 'Hide token' : 'Show token'}
+                aria-pressed={showToken}
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
+              >
+                {showToken ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            {validationError && (
+              <p
+                id="api-token-validation"
+                className="text-sm text-[var(--color-red)]"
+                role="alert"
+              >
+                {validationError}
+              </p>
+            )}
+            {serverError && (
+              <p
+                id="api-token-server"
+                className="text-sm text-[var(--color-red)]"
+                role="alert"
+              >
+                {serverError}
+              </p>
+            )}
+            <a
+              href={DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-[var(--color-primary-light)] underline-offset-4 hover:underline"
+            >
+              Where do I find this?
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+
+          <DialogFooter>
+            <Button type="submit" disabled={submitting || !token}>
+              {submitting ? 'Verifying…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-const backdropStyle: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0, 0, 0, 0.65)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-};
-const modalStyle: React.CSSProperties = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: '12px',
-  padding: '1.5rem',
-  width: 'min(420px, 90vw)',
-  display: 'grid',
-  gap: '0.75rem',
-};
-const helpStyle: React.CSSProperties = {
-  fontSize: '0.8rem',
-  color: 'var(--text-dim)',
-  margin: 0,
-};
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.7rem',
-  background: 'var(--bg)',
-  border: '1px solid var(--border)',
-  borderRadius: '6px',
-  color: 'var(--text)',
-  fontSize: '0.9rem',
-  fontFamily: 'monospace',
-};
