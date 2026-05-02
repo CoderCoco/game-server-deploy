@@ -16,6 +16,7 @@ import { CostsController } from './controllers/costs.controller.js';
 import { LogsController } from './controllers/logs.controller.js';
 import { FilesController } from './controllers/files.controller.js';
 import { DiscordController } from './controllers/discord.controller.js';
+import { EnvController } from './controllers/env.controller.js';
 import { ApiTokenGuard } from './guards/api-token.guard.js';
 import { logger } from './logger.js';
 
@@ -51,6 +52,7 @@ class RequestLoggerMiddleware implements NestMiddleware {
     LogsController,
     FilesController,
     DiscordController,
+    EnvController,
   ],
   providers: [
     {
