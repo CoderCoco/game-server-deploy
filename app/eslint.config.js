@@ -70,6 +70,11 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
+    // TypeScript already enforces prop types; disable the runtime-only rule.
+    files: ['packages/web/**/*.{ts,tsx}'],
+    rules: { 'react/prop-types': 'off' },
+  },
+  {
     files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts'],
     languageOptions: {
       globals: {
