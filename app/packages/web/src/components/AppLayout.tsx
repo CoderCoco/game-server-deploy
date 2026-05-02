@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api, type EnvInfo } from '../api.js';
+import { cn } from '../lib/utils.js';
 import {
   LayoutDashboard,
   Server,
@@ -137,15 +138,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
-  const className = `
-    relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors
-    ${item.disabled
-      ? 'text-muted-foreground/40 cursor-not-allowed'
-      : active
-        ? 'bg-gradient-to-r from-purple-500/10 to-transparent text-purple-400 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-purple-500 before:rounded-full'
-        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-    }
-  `;
+  const className = cn(
+    'relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+    item.disabled && 'text-muted-foreground/40 cursor-not-allowed',
+    !item.disabled && active && 'bg-gradient-to-r from-purple-500/10 to-transparent text-purple-400 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-purple-500 before:rounded-full',
+    !item.disabled && !active && 'text-muted-foreground hover:text-foreground hover:bg-accent',
+  );
   if (item.disabled) {
     return (
       <span className={className}>
