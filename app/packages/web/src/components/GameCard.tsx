@@ -1,5 +1,10 @@
 import { useState } from 'react';
+import { Copy, RefreshCw, FolderOpen } from 'lucide-react';
 import { api, type GameStatus, type GameEstimate } from '../api.js';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface Props {
   status: GameStatus;
@@ -9,12 +14,36 @@ interface Props {
 }
 
 const STATE_LABELS: Record<string, string> = {
-  running: 'Online',
-  starting: 'Starting…',
-  stopped: 'Offline',
+  running:      'Online',
+  starting:     'Starting…',
+  stopped:      'Offline',
   not_deployed: 'Not Deployed',
-  error: 'Error',
+  error:        'Error',
 };
+
+/** Returns the badge variant that maps to the server state. */
+function stateBadgeVariant(state: string): 'success' | 'warning' | 'destructive' | 'secondary' {
+  switch (state) {
+    case 'running':      return 'success';
+    case 'starting':
+    case 'not_deployed': return 'warning';
+    case 'stopped':
+    case 'error':        return 'destructive';
+    default:             return 'secondary';
+  }
+}
+
+/** Returns a Tailwind color class for the status indicator dot. */
+function dotColorClass(state: string): string {
+  switch (state) {
+    case 'running':      return 'bg-[var(--color-green)] shadow-[0_0_6px_var(--color-green)]';
+    case 'starting':
+    case 'not_deployed': return 'bg-[var(--color-amber)]';
+    case 'stopped':
+    case 'error':        return 'bg-[var(--color-red)]';
+    default:             return 'bg-[var(--color-muted-foreground)]';
+  }
+}
 
 /**
  * Card for a single game in the dashboard grid: status dot, connect string,
@@ -27,7 +56,7 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
   const [busy, setBusy] = useState(false);
 
   const canStart = state === 'stopped' || state === 'not_deployed';
-  const canStop = state === 'running' || state === 'starting';
+  const canStop  = state === 'running'  || state === 'starting';
 
   async function handleStart() {
     setBusy(true);
@@ -44,81 +73,61 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
   const connectStr = status.hostname ?? status.publicIp ?? null;
 
   return (
-    <div className={`game-card ${state}`} style={cardStyle}>
-      <div style={headerStyle}>
-        <span className={`status-dot ${state}`} style={dotStyle(state)} />
-        <span style={{ fontWeight: 600, fontSize: '1rem', textTransform: 'capitalize' }}>{game}</span>
-        <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-          {STATE_LABELS[state] ?? state}
-        </span>
-      </div>
-
-      <div style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--green)', minHeight: '1.2rem', marginBottom: '0.75rem' }}>
-        {connectStr && (
-          <>
-            {connectStr}
-            <button className="btn-secondary btn-sm" style={{ marginLeft: '0.4rem', fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}
-              onClick={() => void navigator.clipboard.writeText(connectStr)}>
-              copy
-            </button>
-            {status.publicIp && status.hostname && (
-              <span style={{ color: 'var(--text-dim)', marginLeft: '0.3rem' }}>({status.publicIp})</span>
-            )}
-          </>
-        )}
-      </div>
-
-      {estimate && (
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
-          <span style={{ color: 'var(--accent)', fontWeight: 500 }}>${estimate.costPerHour}/hr</span>
-          {' · '}~${estimate.costPerMonth4hpd}/mo at 4 hrs/day
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2.5">
+          <span className={cn('size-2.5 rounded-full shrink-0', dotColorClass(state))} />
+          <CardTitle className="capitalize">{game}</CardTitle>
+          <Badge variant={stateBadgeVariant(state)} className="ml-auto text-[0.65rem]">
+            {STATE_LABELS[state] ?? state}
+          </Badge>
         </div>
-      )}
+      </CardHeader>
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' as const }}>
-        <button className="btn-start btn-sm" onClick={() => void handleStart()} disabled={!canStart || busy}>
+      <CardContent className="space-y-3">
+        <div className="font-[var(--font-mono)] text-xs text-[var(--color-green)] min-h-[1.2rem] flex items-center gap-1.5">
+          {connectStr && (
+            <>
+              <span>{connectStr}</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-5 px-1.5 py-0 text-[0.6rem]"
+                onClick={() => void navigator.clipboard.writeText(connectStr)}
+              >
+                <Copy className="size-3" />
+                copy
+              </Button>
+              {status.publicIp && status.hostname && (
+                <span className="text-[var(--color-muted-foreground)]">({status.publicIp})</span>
+              )}
+            </>
+          )}
+        </div>
+
+        {estimate && (
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            <span className="text-[var(--color-primary-light)] font-medium">${estimate.costPerHour}/hr</span>
+            {' · '}~${estimate.costPerMonth4hpd}/mo at 4 hrs/day
+          </p>
+        )}
+      </CardContent>
+
+      <CardFooter className="flex flex-wrap gap-2">
+        <Button variant="start" size="sm" onClick={() => void handleStart()} disabled={!canStart || busy}>
           Start
-        </button>
-        <button className="btn-stop btn-sm" onClick={() => void handleStop()} disabled={!canStop || busy}>
+        </Button>
+        <Button variant="stop" size="sm" onClick={() => void handleStop()} disabled={!canStop || busy}>
           Stop
-        </button>
-        <button className="btn-secondary btn-sm" onClick={() => onOpenFiles(game)}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => onOpenFiles(game)}>
+          <FolderOpen className="size-3.5" />
           Files
-        </button>
-        <button className="btn-secondary btn-sm" onClick={() => onRefresh(game)}>↻</button>
-      </div>
-    </div>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => onRefresh(game)} aria-label="Refresh">
+          <RefreshCw className="size-3.5" />
+        </Button>
+      </CardFooter>
+    </Card>
   );
-}
-
-const cardStyle: React.CSSProperties = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: '12px',
-  padding: '1.25rem',
-};
-
-const headerStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.6rem',
-  marginBottom: '1rem',
-};
-
-function dotStyle(state: string): React.CSSProperties {
-  const colors: Record<string, string> = {
-    running: 'var(--green)',
-    starting: 'var(--yellow)',
-    stopped: 'var(--red)',
-    not_deployed: 'var(--yellow)',
-    error: 'var(--red)',
-  };
-  return {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    background: colors[state] ?? 'var(--text-dim)',
-    flexShrink: 0,
-    boxShadow: state === 'running' ? `0 0 6px var(--green)` : undefined,
-  };
 }
