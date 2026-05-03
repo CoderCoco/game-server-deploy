@@ -154,10 +154,28 @@ Any time you add or remove Terraform variables, update **all four** of these in 
 
 ## Code & Test Conventions
 
-- **Test names**: every `it(...)` case must read as a natural-language sentence starting with "should" — e.g. `it('should return null when state file is missing')`, not `it('returns null...')`.
+- **Test names**: every `it(...)` / `test(...)` case must read as a natural-language sentence starting with "should" — e.g. `it('should return null when state file is missing')`, not `it('returns null...')`.
 - **TSDoc comments**: document non-trivial functions, helpers, and notable constants/variables with TSDoc (`/** ... */`) so their intent is clear later. This applies to test-file helpers (stub factories, fixtures) as well as production code.
 - **Typing in tests**: avoid `as unknown as SomeType` casts. Prefer `vi.mocked(fn)` for mocked modules and `Partial<T>` + a single `as T` for service-shaped stubs.
 - **No raw `process.env` in business logic**: wrap environment access behind a service method so tests can stub it via `vi.spyOn` instead of mutating `process.env` (which is flaky and leaks across tests).
+
+### Two-tier browser testing strategy
+
+The test suite has two complementary tiers:
+
+| Tier | Command | What runs | When to add specs |
+|------|---------|-----------|-------------------|
+| **Unit / integration** | `npm run app:test` | Vitest — server-side logic, hooks, helpers. No browser, no real network. AWS SDK mocked via `aws-sdk-client-mock`. | Pure logic, hook behaviour, server controllers. |
+| **E2E (tier 1 — #74)** | `npm run app:test:e2e` | Playwright against `vite build` + `vite preview`. Nest server never runs; every `/api/*` call is stubbed at the network layer via `page.route()`. | User-visible flows: routing, auth gate, button interactions, status-badge rendering, optimistic updates. |
+
+A planned **tier 2** (#75) will add full-stack specs (real Nest + mocked AWS SDK) for scenarios that require real HTTP contract validation between the client and server. Until that lands, all browser-facing specs belong in tier 1.
+
+**Playwright conventions:**
+- Specs live under `app/packages/web/e2e/specs/`.
+- Shared stub helpers and fixtures are in `app/packages/web/e2e/fixtures/`.
+- Import `{ test, expect, stubApis }` from `../fixtures/index.js` for authenticated specs; use `@playwright/test` directly for auth-gate specs.
+- Use the `authedPage` fixture (token pre-seeded in localStorage) for any spec that is not testing the auth flow itself.
+- Stubs must cover every `/api/*` endpoint the page hits, or the catch-all returns 404 and the test will surface the missing stub quickly.
 
 ## Git & Branch Workflow
 
