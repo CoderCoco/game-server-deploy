@@ -188,6 +188,29 @@ All calls go through `request<T>()`, which:
 `http://localhost:3001`. Production builds to `dist/` which the Nest server
 serves as static files at `/`.
 
+### Running e2e tests
+
+The web package ships a [Playwright](https://playwright.dev/) harness that runs specs against the **production build** (`vite build` + `vite preview`). Every `/api/*` call is stubbed at the network layer — the Nest server never starts.
+
+```bash
+# One-off (builds the app, starts vite preview, runs specs, exits)
+npm run app:test:e2e
+
+# Keep vite preview running between runs (set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD if already installed)
+cd app/packages/web
+npm run build && npm run preview &   # leave running
+npx playwright test                   # fast re-run without rebuilding
+```
+
+First-time setup — install the Chromium browser binary:
+
+```bash
+cd app/packages/web
+npx playwright install chromium
+```
+
+Specs live under `app/packages/web/e2e/specs/`. Shared stubs and fixtures are in `app/packages/web/e2e/fixtures/`. On CI, Playwright uploads traces and videos as artifacts when a spec fails; see `.github/workflows/e2e.yml`.
+
 ## Docker
 
 `Dockerfile` is node:20-slim:
