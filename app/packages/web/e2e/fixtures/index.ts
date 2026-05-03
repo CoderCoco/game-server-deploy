@@ -1,9 +1,34 @@
 import { test as base, type Page } from '@playwright/test';
-import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig } from '../../src/api.js';
-import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
+import type {
+  GameStatus,
+  CostEstimates,
+  EnvInfo,
+  ActionResult,
+  WatchdogConfig,
+  DiscordConfigRedacted,
+} from '../../src/api.js';
+import {
+  ENV_DATA,
+  STOPPED_GAME,
+  COST_DATA,
+  WATCHDOG_CONFIG,
+  CONFIGURED_DISCORD_CONFIG,
+} from './game-data.js';
 
-export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig };
-export { ENV_DATA, STOPPED_GAME, RUNNING_GAME, MULTI_GAME_STATUSES, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
+export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig, DiscordConfigRedacted };
+export {
+  ENV_DATA,
+  STOPPED_GAME,
+  RUNNING_GAME,
+  MULTI_GAME_STATUSES,
+  COST_DATA,
+  WATCHDOG_CONFIG,
+  FIRST_RUN_DISCORD_CONFIG,
+  CONFIGURED_DISCORD_CONFIG,
+  VALID_GUILD_ID,
+  VALID_GUILD_ID_2,
+  VALID_USER_ID,
+} from './game-data.js';
 
 /** Per-spec overrides for the default `/api/*` stubs registered by `stubApis`. */
 export interface StubOptions {
@@ -17,6 +42,13 @@ export interface StubOptions {
   config?: WatchdogConfig;
   /** Override for `POST /api/start/:game` response. */
   startResult?: ActionResult;
+  /**
+   * Discord config returned by `GET /api/discord/config`. Defaults to
+   * `CONFIGURED_DISCORD_CONFIG` so non-Discord specs hitting `/discord` (e.g.
+   * sidebar nav) don't trip the catch-all 404 handler. Pass
+   * `FIRST_RUN_DISCORD_CONFIG` to exercise the setup wizard.
+   */
+  discord?: DiscordConfigRedacted;
 }
 
 /**
@@ -35,6 +67,8 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
   const env = opts.env ?? ENV_DATA;
   const config = opts.config ?? WATCHDOG_CONFIG;
   const startResult: ActionResult = opts.startResult ?? { success: true, message: 'Started' };
+  const discord = opts.discord ?? CONFIGURED_DISCORD_CONFIG;
+  const games = statuses.map((s) => s.game);
 
   await page.route('**/api/**', (route) =>
     route.fulfill({ status: 404, json: { error: 'not stubbed' } })
@@ -50,6 +84,8 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
     return route.fulfill({ json: s });
   });
 
+  await page.route('**/api/games', (route) => route.fulfill({ json: { games } }));
+
   await page.route('**/api/costs/estimate', (route) => route.fulfill({ json: costs }));
 
   await page.route('**/api/config', (route) => {
@@ -63,6 +99,30 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
 
   await page.route('**/api/stop/*', (route) =>
     route.fulfill({ json: { success: true, message: 'Stopped' } as ActionResult })
+  );
+
+  // Discord — read endpoint plus permissive write endpoints. Specs that need
+  // to assert request bodies should override these with their own page.route().
+  await page.route('**/api/discord/config', (route) => {
+    if (route.request().method() === 'PUT') {
+      return route.fulfill({ json: { success: true, config: discord } });
+    }
+    return route.fulfill({ json: discord });
+  });
+  await page.route('**/api/discord/guilds', (route) =>
+    route.fulfill({ json: { success: true, guilds: discord.allowedGuilds } }),
+  );
+  await page.route('**/api/discord/guilds/*', (route) =>
+    route.fulfill({ json: { success: true, guilds: discord.allowedGuilds } }),
+  );
+  await page.route('**/api/discord/guilds/*/register-commands', (route) =>
+    route.fulfill({ json: { success: true, message: 'Registered' } }),
+  );
+  await page.route('**/api/discord/admins', (route) =>
+    route.fulfill({ json: { success: true, admins: discord.admins } }),
+  );
+  await page.route('**/api/discord/permissions/*', (route) =>
+    route.fulfill({ json: { success: true, permissions: discord.gamePermissions } }),
   );
 }
 
