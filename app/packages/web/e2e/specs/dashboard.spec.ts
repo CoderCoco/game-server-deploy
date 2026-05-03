@@ -63,6 +63,9 @@ test.describe('dashboard', () => {
 
     await page.getByRole('link', { name: 'Logs' }).click();
     await expect(page).toHaveURL('/logs');
+    // The /logs route is no longer a placeholder — verify the redesigned
+    // page actually renders so a regression to the placeholder breaks here.
+    await expect(page.getByRole('heading', { name: 'Server Logs' })).toBeVisible();
   });
 
   test('should navigate to the Discord page via sidebar', async ({ authedPage: page }) => {

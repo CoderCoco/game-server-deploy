@@ -48,3 +48,16 @@ export const COST_DATA: CostEstimates = {
   },
   totalPerHourIfAllOn: 0.08,
 };
+
+/**
+ * A handful of CloudWatch lines with mixed log levels — used by the LogsPage
+ * specs to exercise level-badge detection, search highlighting, and the
+ * Levels filter.
+ */
+export const SAMPLE_LOG_LINES: string[] = [
+  '2026-05-03T12:00:00Z INFO Server started on port 25565',
+  '2026-05-03T12:00:01Z DEBUG Loaded world "world" in 1.2s',
+  '2026-05-03T12:00:02Z WARN Deprecated config option "max-tick-time"',
+  '2026-05-03T12:00:03Z ERROR Connection refused from 10.0.0.5',
+  '2026-05-03T12:00:04Z Player joined the game',
+];
