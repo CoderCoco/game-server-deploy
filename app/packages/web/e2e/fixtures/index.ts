@@ -1,9 +1,18 @@
 import { test as base, type Page } from '@playwright/test';
-import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig } from '../../src/api.js';
-import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
+import type { GameStatus, CostEstimates, ActualCosts, EnvInfo, ActionResult, WatchdogConfig } from '../../src/api.js';
+import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG, makeActualCosts } from './game-data.js';
 
-export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig };
-export { ENV_DATA, STOPPED_GAME, RUNNING_GAME, MULTI_GAME_STATUSES, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
+export type { GameStatus, CostEstimates, ActualCosts, EnvInfo, WatchdogConfig };
+export {
+  ENV_DATA,
+  STOPPED_GAME,
+  RUNNING_GAME,
+  MULTI_GAME_STATUSES,
+  COST_DATA,
+  MULTI_GAME_COST_DATA,
+  WATCHDOG_CONFIG,
+  makeActualCosts,
+} from './game-data.js';
 
 /** Per-spec overrides for the default `/api/*` stubs registered by `stubApis`. */
 export interface StubOptions {
@@ -11,6 +20,13 @@ export interface StubOptions {
   statuses?: GameStatus[];
   /** Cost estimates returned by `GET /api/costs/estimate`. */
   costs?: CostEstimates;
+  /**
+   * Either a fixed `ActualCosts` payload returned for every `GET /api/costs/actual`
+   * call, or a builder receiving the `days` query param so the spec can return
+   * different totals per window (the Costs page calls both `days` and `days*2`).
+   * Defaults to `makeActualCosts(days)`.
+   */
+  actualCosts?: ActualCosts | ((days: number) => ActualCosts);
   /** Env info returned by `GET /api/env`. */
   env?: EnvInfo;
   /** Watchdog config returned by `GET /api/config`. */
@@ -35,6 +51,12 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
   const env = opts.env ?? ENV_DATA;
   const config = opts.config ?? WATCHDOG_CONFIG;
   const startResult: ActionResult = opts.startResult ?? { success: true, message: 'Started' };
+  const actualCostsFn: (days: number) => ActualCosts =
+    typeof opts.actualCosts === 'function'
+      ? opts.actualCosts
+      : opts.actualCosts !== undefined
+        ? () => opts.actualCosts as ActualCosts
+        : (days) => makeActualCosts(days);
 
   await page.route('**/api/**', (route) =>
     route.fulfill({ status: 404, json: { error: 'not stubbed' } })
@@ -51,6 +73,13 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
   });
 
   await page.route('**/api/costs/estimate', (route) => route.fulfill({ json: costs }));
+
+  // Use a regex so the `?days=N` query string is matched — globs are compared
+  // against the full URL and would otherwise require a literal trailing wildcard.
+  await page.route(/\/api\/costs\/actual/, (route) => {
+    const days = parseInt(new URL(route.request().url()).searchParams.get('days') ?? '7', 10);
+    return route.fulfill({ json: actualCostsFn(days) });
+  });
 
   await page.route('**/api/config', (route) => {
     if (route.request().method() === 'POST') {
