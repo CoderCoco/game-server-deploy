@@ -1,4 +1,4 @@
-import type { GameStatus, CostEstimates, EnvInfo } from '../../src/api.js';
+import type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig } from '../../src/api.js';
 
 /** Stub response for `GET /api/env`. */
 export const ENV_DATA: EnvInfo = {
@@ -27,6 +27,13 @@ export const MULTI_GAME_STATUSES: GameStatus[] = [
   STOPPED_GAME,
   { game: 'valheim', state: 'running', publicIp: '5.6.7.8' },
 ];
+
+/** Stub response for `GET /api/config` (the watchdog tuning panel). */
+export const WATCHDOG_CONFIG: WatchdogConfig = {
+  watchdog_interval_minutes: 15,
+  watchdog_idle_checks: 4,
+  watchdog_min_packets: 100,
+};
 
 /** Stub response for `GET /api/costs/estimate`. */
 export const COST_DATA: CostEstimates = {

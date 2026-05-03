@@ -27,6 +27,12 @@ test.describe('auth gate', () => {
   });
 
   test('should save token and show dashboard after reload', async ({ page }) => {
+    // Playwright matches routes in REVERSE registration order, so register the
+    // catch-all 404 FIRST and the specific 401/200 handlers after — otherwise
+    // the catch-all takes precedence and the modal never triggers.
+    await page.route('**/api/**', (route) =>
+      route.fulfill({ status: 404, json: { error: 'not stubbed' } })
+    );
     // Return 401 for unauthenticated requests, 200 once the token is present.
     await page.route('**/api/env', async (route) => {
       const auth = route.request().headers()['authorization'] ?? '';
@@ -52,9 +58,6 @@ test.describe('auth gate', () => {
         await route.fulfill({ status: 401, body: 'Unauthorized' });
       }
     });
-    await page.route('**/api/**', (route) =>
-      route.fulfill({ status: 404, json: { error: 'not stubbed' } })
-    );
 
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'API token required' })).toBeVisible();

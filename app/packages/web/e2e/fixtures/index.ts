@@ -1,10 +1,11 @@
-import { test as base, expect, type Page } from '@playwright/test';
-import type { GameStatus, CostEstimates, EnvInfo, ActionResult } from '../../src/api.js';
-import { ENV_DATA, STOPPED_GAME, COST_DATA } from './game-data.js';
+import { test as base, type Page } from '@playwright/test';
+import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig } from '../../src/api.js';
+import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
 
-export type { GameStatus, CostEstimates, EnvInfo };
-export { ENV_DATA, STOPPED_GAME, RUNNING_GAME, MULTI_GAME_STATUSES, COST_DATA } from './game-data.js';
+export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig };
+export { ENV_DATA, STOPPED_GAME, RUNNING_GAME, MULTI_GAME_STATUSES, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
 
+/** Per-spec overrides for the default `/api/*` stubs registered by `stubApis`. */
 export interface StubOptions {
   /** Game statuses returned by `GET /api/status`. Defaults to `[STOPPED_GAME]`. */
   statuses?: GameStatus[];
@@ -12,6 +13,8 @@ export interface StubOptions {
   costs?: CostEstimates;
   /** Env info returned by `GET /api/env`. */
   env?: EnvInfo;
+  /** Watchdog config returned by `GET /api/config`. */
+  config?: WatchdogConfig;
   /** Override for `POST /api/start/:game` response. */
   startResult?: ActionResult;
 }
@@ -20,15 +23,22 @@ export interface StubOptions {
  * Registers Playwright route intercepts for all `/api/*` endpoints used by the
  * dashboard. Call before `page.goto()` in each spec that needs a running UI.
  *
- * Routes are registered most-specific first; the catch-all at the end returns
- * 404 for any endpoint not explicitly stubbed so specs fail fast rather than
- * hanging on unhandled requests.
+ * Playwright matches routes in REVERSE registration order (last-registered
+ * wins), so we register the catch-all FIRST and the specific stubs after —
+ * that way `/api/status` hits the specific handler, while `/api/anything-else`
+ * falls through to the catch-all 404 so missing stubs surface as fast failures
+ * instead of hangs.
  */
 export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void> {
   const statuses = opts.statuses ?? [STOPPED_GAME];
   const costs = opts.costs ?? COST_DATA;
   const env = opts.env ?? ENV_DATA;
+  const config = opts.config ?? WATCHDOG_CONFIG;
   const startResult: ActionResult = opts.startResult ?? { success: true, message: 'Started' };
+
+  await page.route('**/api/**', (route) =>
+    route.fulfill({ status: 404, json: { error: 'not stubbed' } })
+  );
 
   await page.route('**/api/env', (route) => route.fulfill({ json: env }));
 
@@ -42,15 +52,17 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
 
   await page.route('**/api/costs/estimate', (route) => route.fulfill({ json: costs }));
 
+  await page.route('**/api/config', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ json: { success: true, config } });
+    }
+    return route.fulfill({ json: config });
+  });
+
   await page.route('**/api/start/*', (route) => route.fulfill({ json: startResult }));
 
   await page.route('**/api/stop/*', (route) =>
     route.fulfill({ json: { success: true, message: 'Stopped' } as ActionResult })
-  );
-
-  // Catch-all: return 404 for any not-yet-stubbed endpoint so tests fail fast.
-  await page.route('**/api/**', (route) =>
-    route.fulfill({ status: 404, json: { error: 'not stubbed' } })
   );
 }
 
