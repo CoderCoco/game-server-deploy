@@ -49,6 +49,7 @@ export default tseslint.config(
   },
   {
     files: ['packages/web/**/*.{ts,tsx}'],
+    ignores: ['packages/web/e2e/**'],
     ...react.configs.flat.recommended,
     languageOptions: {
       ...react.configs.flat.recommended.languageOptions,
@@ -62,16 +63,18 @@ export default tseslint.config(
   },
   {
     files: ['packages/web/**/*.{ts,tsx}'],
+    ignores: ['packages/web/e2e/**'],
     ...react.configs.flat['jsx-runtime'],
   },
   {
     files: ['packages/web/**/*.{ts,tsx}'],
+    ignores: ['packages/web/e2e/**'],
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
   {
-    // TypeScript already enforces prop types; disable the runtime-only rule.
     files: ['packages/web/**/*.{ts,tsx}'],
+    ignores: ['packages/web/e2e/**'],
     rules: { 'react/prop-types': 'off' },
   },
   {
