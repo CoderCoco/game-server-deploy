@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Server, DollarSign, TrendingUp, Bell } from 'lucide-react';
-import { api, type ActualCosts, type CostEstimates, type GameStatus } from '../api.js';
+import { type ActualCosts, type CostEstimates, type GameStatus } from '../api.js';
 import { cn } from '../lib/utils.js';
 
 interface Props {
   statuses: GameStatus[];
   estimates: CostEstimates | null;
+  /** 7-day actual spend, fetched once in `DashboardPage` and shared with `CostPanel`. */
+  actualCosts: ActualCosts | null;
 }
 
 type AccentColor = 'purple' | 'cyan' | 'orange' | 'pink';
@@ -47,12 +49,16 @@ function pad7(values: number[]): number[] {
   return [...new Array<number>(7 - trimmed.length).fill(0), ...trimmed];
 }
 
-/** Forecast a month-end total by extrapolating average-daily-spend over the rest of the calendar month. */
-function forecastMonthly(actual: ActualCosts | null): number | null {
+/** Calendar days in the current month — used by both forecast and budget calculations to keep them aligned. */
+function currentMonthDays(): number {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+}
+
+/** Forecast a month-end total by extrapolating average-daily-spend over the calendar month. */
+function forecastMonthly(actual: ActualCosts | null, daysInMonth: number): number | null {
   if (!actual?.daily?.length) return null;
   const avg = actual.total / Math.max(actual.days, 1);
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   return avg * daysInMonth;
 }
 
@@ -75,26 +81,21 @@ function pctChange(today: number, yesterday: number): { text: string; tone: 'goo
  * non-cost tiles reuse the same series as a coarse activity proxy because
  * we don't keep historical counts of running servers / alerts.
  */
-export function KpiStrip({ statuses, estimates }: Props) {
-  const [actual, setActual] = useState<ActualCosts | null>(null);
-
-  useEffect(() => {
-    void api.costsActual().then(setActual).catch(() => undefined);
-  }, []);
-
+export function KpiStrip({ statuses, estimates, actualCosts }: Props) {
   const tiles = useMemo<TileSpec[]>(() => {
     const total = statuses.length;
     const running = statuses.filter((s) => s.state === 'running').length;
     const errors  = statuses.filter((s) => s.state === 'error').length;
 
-    const dailySeries = pad7(actual?.daily?.map((d) => d.cost) ?? []);
+    const dailySeries = pad7(actualCosts?.daily?.map((d) => d.cost) ?? []);
     const today = dailySeries[dailySeries.length - 1] ?? 0;
     const yest  = dailySeries[dailySeries.length - 2] ?? 0;
-    const forecast = forecastMonthly(actual);
+    const daysInMonth = currentMonthDays();
+    const forecast = forecastMonthly(actualCosts, daysInMonth);
 
     const totalIfAllOn = estimates?.totalPerHourIfAllOn ?? 0;
     const budgetText = totalIfAllOn > 0 && forecast !== null
-      ? `$${(totalIfAllOn * 24 * 30).toFixed(0)} all-on cap`
+      ? `$${(totalIfAllOn * 24 * daysInMonth).toFixed(0)} all-on cap`
       : null;
 
     return [
@@ -135,7 +136,7 @@ export function KpiStrip({ statuses, estimates }: Props) {
         spark: errors === 0 ? new Array<number>(7).fill(0) : dailySeries,
       },
     ];
-  }, [statuses, estimates, actual]);
+  }, [statuses, estimates, actualCosts]);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

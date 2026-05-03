@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { useGameStatus } from '../hooks/useGameStatus.js';
 import { useFileManager } from '../hooks/useFileManager.js';
+import { api, type ActualCosts } from '../api.js';
 import { GameCard } from '../components/GameCard.js';
 import { KpiStrip } from '../components/KpiStrip.js';
 import { FileManagerModal } from '../components/FileManagerModal.js';
@@ -21,6 +22,13 @@ export function DashboardPage() {
   const { statuses, estimates, loading, refreshGame } = useGameStatus();
   const fileMgr = useFileManager();
   const [query, setQuery] = useState('');
+  // Single Cost Explorer fetch shared by KpiStrip + CostPanel — Cost Explorer
+  // bills per request, so don't double-call.
+  const [actualCosts, setActualCosts] = useState<ActualCosts | null>(null);
+
+  useEffect(() => {
+    void api.costsActual().then(setActualCosts).catch(() => undefined);
+  }, []);
 
   const gameNames = statuses.map((s) => s.game);
 
@@ -37,7 +45,7 @@ export function DashboardPage() {
     <>
       <div className="max-w-7xl mx-auto px-6 py-6">
         {/* KPI strip */}
-        <KpiStrip statuses={statuses} estimates={estimates} />
+        <KpiStrip statuses={statuses} estimates={estimates} actualCosts={actualCosts} />
 
         {/* Search filter */}
         <div className="mb-4 relative max-w-sm">
@@ -81,7 +89,7 @@ export function DashboardPage() {
 
         {/* Bottom panels — cost only (watchdog moved to /settings) */}
         <div className="mb-5">
-          <CostPanel estimates={estimates} />
+          <CostPanel estimates={estimates} actual={actualCosts} />
         </div>
 
         {/* Discord bot panel */}
