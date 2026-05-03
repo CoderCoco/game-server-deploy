@@ -111,11 +111,10 @@ function Stat({ label, value, mono }: StatRowProps) {
  * Card for a single game in the dashboard grid. Layout (top to bottom):
  *
  * 1. Gradient top-accent rule colored by state.
- * 2. Header — game name (Outfit 17/700) + hostname (DM Mono) and right-aligned
- *    status badge (icon + text + pulsing dot).
- * 3. Connect string with copy button.
- * 4. 2×2 stats grid — Last run, Players, $/hr, Task short-id.
- * 5. Actions — Start / Stop primary (gradient) + Files / Logs secondary.
+ * 2. Header — game name (Outfit 17/700) above hostname (DM Mono) with copy
+ *    button, right-aligned status badge (icon + text + pulsing dot).
+ * 3. 2×2 stats grid — Last run, Players, $/hr, Task short-id.
+ * 4. Actions — Start / Stop primary (gradient) + Files / Logs secondary.
  *
  * After Start/Stop the card schedules a 3-second `onRefresh` to give the
  * backend time to pick up the ECS state change before re-polling
@@ -151,13 +150,36 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
       <div className={cn('h-0.5 w-full', accentRuleClass(state))} />
 
       {/* Header */}
-      <div className="px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+      <div className="px-5 pt-4 pb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-[var(--font-ui)] text-[17px] font-bold capitalize leading-tight text-[var(--color-foreground)]">
             {game}
           </h3>
-          <div className="mt-1 font-[var(--font-mono)] text-xs text-[var(--color-muted-foreground)] truncate">
-            {connectStr ?? 'no hostname'}
+          <div className="mt-1 flex items-center gap-1.5 min-w-0">
+            <span
+              className={cn(
+                'font-[var(--font-mono)] text-xs truncate',
+                connectStr ? 'text-[var(--color-cyan-light)]' : 'text-[var(--color-muted-foreground)]',
+              )}
+            >
+              {connectStr ?? 'no hostname'}
+            </span>
+            {connectStr && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                onClick={() => void navigator.clipboard.writeText(connectStr)}
+                aria-label="Copy connect string"
+              >
+                <Copy className="size-3" />
+              </Button>
+            )}
+            {status.publicIp && status.hostname && (
+              <span className="font-[var(--font-mono)] text-[0.65rem] text-[var(--color-muted-foreground)] truncate">
+                ({status.publicIp})
+              </span>
+            )}
           </div>
         </div>
         <Badge variant={badgeVariant(state)} className="shrink-0 gap-1.5 text-[0.65rem]">
@@ -166,29 +188,6 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
           {STATE_LABELS[state]}
         </Badge>
       </div>
-
-      {/* Connect string + copy */}
-      {connectStr && (
-        <div className="px-5 pb-3 flex items-center gap-2">
-          <span className="font-[var(--font-mono)] text-xs text-[var(--color-green)] truncate">
-            {connectStr}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-            onClick={() => void navigator.clipboard.writeText(connectStr)}
-            aria-label="Copy connect string"
-          >
-            <Copy className="size-3" />
-          </Button>
-          {status.publicIp && status.hostname && (
-            <span className="font-[var(--font-mono)] text-[0.65rem] text-[var(--color-muted-foreground)] truncate">
-              ({status.publicIp})
-            </span>
-          )}
-        </div>
-      )}
 
       {/* 2x2 stats grid */}
       <div className="px-5 pb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[var(--color-border)] pt-4">

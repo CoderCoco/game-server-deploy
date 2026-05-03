@@ -1,9 +1,9 @@
 import { test as base, type Page } from '@playwright/test';
-import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig } from '../../src/api.js';
-import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
+import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig, ActualCosts } from '../../src/api.js';
+import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG, ACTUAL_COSTS } from './game-data.js';
 
-export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig };
-export { ENV_DATA, STOPPED_GAME, RUNNING_GAME, MULTI_GAME_STATUSES, COST_DATA, WATCHDOG_CONFIG } from './game-data.js';
+export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig, ActualCosts };
+export { ENV_DATA, STOPPED_GAME, RUNNING_GAME, MULTI_GAME_STATUSES, COST_DATA, WATCHDOG_CONFIG, ACTUAL_COSTS } from './game-data.js';
 
 /** Per-spec overrides for the default `/api/*` stubs registered by `stubApis`. */
 export interface StubOptions {
@@ -11,6 +11,8 @@ export interface StubOptions {
   statuses?: GameStatus[];
   /** Cost estimates returned by `GET /api/costs/estimate`. */
   costs?: CostEstimates;
+  /** Daily actual spend returned by `GET /api/costs/actual` (drives KPI sparklines). */
+  actualCosts?: ActualCosts;
   /** Env info returned by `GET /api/env`. */
   env?: EnvInfo;
   /** Watchdog config returned by `GET /api/config`. */
@@ -32,6 +34,7 @@ export interface StubOptions {
 export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void> {
   const statuses = opts.statuses ?? [STOPPED_GAME];
   const costs = opts.costs ?? COST_DATA;
+  const actualCosts = opts.actualCosts ?? ACTUAL_COSTS;
   const env = opts.env ?? ENV_DATA;
   const config = opts.config ?? WATCHDOG_CONFIG;
   const startResult: ActionResult = opts.startResult ?? { success: true, message: 'Started' };
@@ -51,6 +54,8 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
   });
 
   await page.route('**/api/costs/estimate', (route) => route.fulfill({ json: costs }));
+
+  await page.route('**/api/costs/actual*', (route) => route.fulfill({ json: actualCosts }));
 
   await page.route('**/api/config', (route) => {
     if (route.request().method() === 'POST') {
