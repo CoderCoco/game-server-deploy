@@ -34,4 +34,9 @@ Thumbs.db
 # be committed (contains AWS ARNs/account IDs).
 app/packages/server/src/generated/tfstate.ts
 
+# Playwright artifacts (traces, videos, screenshots) and HTML report.
+app/packages/web/test-results/
+app/packages/web/playwright-report/
+app/packages/web/playwright/.cache/
+
 .make
