@@ -109,8 +109,11 @@ function splitDailyByGame(
 }
 
 /**
- * Fetches the doubled window once and slices into current/prior halves to keep
- * Cost Explorer billing to one request per range change.
+ * Fetches the doubled actuals window once per range change (sliced into
+ * current/prior halves) and the per-game estimates once on mount. Estimates
+ * are kept across range changes — the backend hits ECS `getTaskDefinition()`
+ * per game and the values don't depend on `days`, so refetching on every
+ * range switch would be wasted AWS calls and cause table flicker.
  */
 function useCostsData(days: number): {
   actual: ActualCosts | null;
@@ -128,37 +131,42 @@ function useCostsData(days: number): {
     setLoading(true);
     setActual(null);
     setPrior(null);
-    setEstimates(null);
-    // allSettled so actuals still render if the estimates request fails independently.
-    Promise.allSettled([api.costsActual(days * 2), api.costsEstimate()])
-      .then(([doubledResult, estResult]) => {
+    api.costsActual(days * 2)
+      .then((doubled) => {
         if (cancelled) return;
-        if (doubledResult.status === 'fulfilled') {
-          const doubled = doubledResult.value;
-          const splitAt = Math.max(doubled.daily.length - days, 0);
-          const priorDaily = doubled.daily.slice(0, splitAt);
-          const currentDaily = doubled.daily.slice(splitAt);
-          setActual({
-            daily: currentDaily,
-            total: Math.round(sumDaily(currentDaily) * 100) / 100,
-            currency: doubled.currency,
-            days,
-            error: doubled.error,
-          });
-          setPrior({
-            daily: priorDaily,
-            total: Math.round(sumDaily(priorDaily) * 100) / 100,
-            currency: doubled.currency,
-            days,
-          });
-        }
-        if (estResult.status === 'fulfilled') {
-          setEstimates(estResult.value);
-        }
+        const splitAt = Math.max(doubled.daily.length - days, 0);
+        const priorDaily = doubled.daily.slice(0, splitAt);
+        const currentDaily = doubled.daily.slice(splitAt);
+        setActual({
+          daily: currentDaily,
+          total: Math.round(sumDaily(currentDaily) * 100) / 100,
+          currency: doubled.currency,
+          days,
+          error: doubled.error,
+        });
+        setPrior({
+          daily: priorDaily,
+          total: Math.round(sumDaily(priorDaily) * 100) / 100,
+          currency: doubled.currency,
+          days,
+        });
         setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
   }, [days]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.costsEstimate()
+      .then((est) => {
+        if (!cancelled) setEstimates(est);
+      })
+      .catch(() => { /* leave estimates null; the table renders an empty state */ });
+    return () => { cancelled = true; };
+  }, []);
 
   return { actual, prior, estimates, loading };
 }

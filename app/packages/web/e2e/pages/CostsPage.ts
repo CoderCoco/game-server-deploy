@@ -37,7 +37,7 @@ export class CostsPage {
 
   // ── Range selector ───────────────────────────────────────────────────
 
-  /** Time-range button by visible label — `1h` and `24h` are visual-only and disabled. */
+  /** Time-range button by visible label. Only `7d` / `30d` are rendered — sub-day ranges are intentionally omitted (Cost Explorer is daily-only). */
   rangeButton(label: CostsRangeLabel): Locator {
     return this.page.getByRole('button', { name: label, exact: true });
   }
