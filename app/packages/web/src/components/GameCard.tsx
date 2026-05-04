@@ -138,14 +138,22 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
 
   async function handleStart() {
     setBusy(true);
-    await api.start(game);
-    setTimeout(() => { void onRefresh(game); setBusy(false); }, 3000);
+    try {
+      await api.start(game);
+    } finally {
+      // Always release the busy flag, even if the request threw — otherwise a
+      // transient API failure would leave the card disabled until reload.
+      setTimeout(() => { void onRefresh(game); setBusy(false); }, 3000);
+    }
   }
 
   async function handleStop() {
     setBusy(true);
-    await api.stop(game);
-    setTimeout(() => { void onRefresh(game); setBusy(false); }, 3000);
+    try {
+      await api.stop(game);
+    } finally {
+      setTimeout(() => { void onRefresh(game); setBusy(false); }, 3000);
+    }
   }
 
   const connectStr = status.hostname ?? status.publicIp ?? null;

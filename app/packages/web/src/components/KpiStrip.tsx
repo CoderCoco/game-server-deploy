@@ -92,16 +92,25 @@ export function KpiStrip({ statuses, estimates, actualCosts }: Props) {
     const running = statuses.filter((s) => s.state === 'running').length;
     const errors  = statuses.filter((s) => s.state === 'error').length;
 
-    const dailySeries = pad7(actualCosts?.daily?.map((d) => d.cost) ?? []);
+    // Cost Explorer can be unavailable (no IAM permission, opt-in not enabled,
+    // or the call errored on the server). In any of those cases the API
+    // returns `{ daily: [], total: 0, error: '...' }` — treat that as "no
+    // data" and render `—` instead of misleading $0.00 values.
+    const costsAvailable = !!actualCosts && actualCosts.daily.length > 0 && !actualCosts.error;
+    const dailySeries = pad7(costsAvailable ? actualCosts.daily.map((d) => d.cost) : []);
     const today = dailySeries[dailySeries.length - 1] ?? 0;
     const yest  = dailySeries[dailySeries.length - 2] ?? 0;
     const daysInMonth = currentMonthDays();
-    const forecast = forecastMonthly(actualCosts, daysInMonth);
+    const forecast = costsAvailable ? forecastMonthly(actualCosts, daysInMonth) : null;
 
     const totalIfAllOn = estimates?.totalPerHourIfAllOn ?? 0;
     const budgetText = totalIfAllOn > 0 && forecast !== null
       ? `$${(totalIfAllOn * 24 * daysInMonth).toFixed(0)} all-on cap`
       : null;
+
+    // For non-cost tiles, fall back to flat zeros when costs are unavailable
+    // so the sparkline doesn't show a stale series from an earlier render.
+    const baselineSpark = costsAvailable ? dailySeries : new Array<number>(7).fill(0);
 
     return [
       {
@@ -112,15 +121,15 @@ export function KpiStrip({ statuses, estimates, actualCosts }: Props) {
         delta: total === 0
           ? null
           : { text: running === 0 ? 'all idle' : `${running} active`, tone: 'neutral' },
-        spark: dailySeries,
+        spark: baselineSpark,
       },
       {
         accent: 'cyan',
         label: 'Spend today',
         Icon: DollarSign,
-        value: actualCosts ? `$${today.toFixed(2)}` : '—',
-        delta: actualCosts ? pctChange(today, yest) : null,
-        spark: dailySeries,
+        value: costsAvailable ? `$${today.toFixed(2)}` : '—',
+        delta: costsAvailable ? pctChange(today, yest) : null,
+        spark: baselineSpark,
       },
       {
         accent: 'orange',
@@ -128,7 +137,7 @@ export function KpiStrip({ statuses, estimates, actualCosts }: Props) {
         Icon: TrendingUp,
         value: forecast !== null ? `$${forecast.toFixed(2)}` : '—',
         delta: budgetText ? { text: budgetText, tone: 'neutral' } : null,
-        spark: dailySeries,
+        spark: baselineSpark,
       },
       {
         accent: 'pink',
@@ -138,7 +147,7 @@ export function KpiStrip({ statuses, estimates, actualCosts }: Props) {
         delta: errors === 0
           ? { text: 'all healthy', tone: 'good' }
           : { text: `${errors} need attention`, tone: 'bad' },
-        spark: errors === 0 ? new Array<number>(7).fill(0) : dailySeries,
+        spark: errors === 0 ? new Array<number>(7).fill(0) : baselineSpark,
       },
     ];
   }, [statuses, estimates, actualCosts]);
