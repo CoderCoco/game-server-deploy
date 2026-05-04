@@ -19,8 +19,10 @@ test.describe('costs page', () => {
     await costs.goto();
 
     await expect(costs.totalLabel(7)).toBeVisible();
-    // Default `makeActualCosts(7)` totals $5.00 (4 × $0.50 + 3 × $1.00).
-    await expect(costs.page.getByText('$5.00').first()).toBeVisible();
+    // Page fetches `days*2 = 14` once and uses the newer 7 entries as the
+    // current window. `makeActualCosts(14)` puts $1.00/day in the second
+    // half, so the current total is 7 × $1.00 = $7.00.
+    await expect(costs.page.getByText('$7.00').first()).toBeVisible();
   });
 
   test('should render a delta-vs-prior pill', async ({ costs }) => {

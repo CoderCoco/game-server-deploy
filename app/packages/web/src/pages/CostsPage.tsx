@@ -79,9 +79,12 @@ function formatShortDate(iso: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
+  // Format in UTC so negative-offset timezones don't display the prior calendar
+  // day for the UTC-midnight Date we constructed above.
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   });
 }
 
@@ -129,16 +132,24 @@ export function CostsPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    // Cost Explorer is billed per request, so fetch the doubled window once
+    // and slice it into current/prior halves rather than firing two requests.
     Promise.all([
-      api.costsActual(days),
       api.costsActual(days * 2),
       api.costsEstimate(),
     ])
-      .then(([current, doubled, est]) => {
+      .then(([doubled, est]) => {
         if (cancelled) return;
-        setActual(current);
-        // Prior period = the older half of the doubled window.
-        const priorDaily = doubled.daily.slice(0, Math.max(doubled.daily.length - days, 0));
+        const splitAt = Math.max(doubled.daily.length - days, 0);
+        const priorDaily = doubled.daily.slice(0, splitAt);
+        const currentDaily = doubled.daily.slice(splitAt);
+        setActual({
+          daily: currentDaily,
+          total: Math.round(sumDaily(currentDaily) * 100) / 100,
+          currency: doubled.currency,
+          days,
+          error: doubled.error,
+        });
         setPrior({
           daily: priorDaily,
           total: Math.round(sumDaily(priorDaily) * 100) / 100,

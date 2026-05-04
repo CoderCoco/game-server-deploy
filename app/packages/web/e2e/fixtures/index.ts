@@ -1,6 +1,6 @@
 import { test as base, type Page } from '@playwright/test';
 import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig, ActualCosts } from '@/api.js';
-import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG, ACTUAL_COSTS, makeActualCosts } from './game-data.js';
+import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG, makeActualCosts } from './game-data.js';
 import { AppLayout, AuthGatePage, DashboardPage, CostsPage } from '../pages/index.js';
 
 export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig, ActualCosts };
@@ -27,7 +27,7 @@ export interface StubOptions {
    * Either a fixed `ActualCosts` payload returned for every `GET /api/costs/actual`
    * call, or a builder receiving the `days` query param so a spec can return
    * different totals per window (the Costs page calls both `days` and `days*2`).
-   * Defaults to the static `ACTUAL_COSTS` fixture.
+   * Defaults to `makeActualCosts(days)` so the prior-period delta is non-zero.
    */
   actualCosts?: ActualCosts | ((days: number) => ActualCosts);
   /** Env info returned by `GET /api/env`. */
@@ -59,7 +59,7 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
       ? opts.actualCosts
       : opts.actualCosts !== undefined
         ? () => opts.actualCosts as ActualCosts
-        : (days) => (days === ACTUAL_COSTS.days ? ACTUAL_COSTS : makeActualCosts(days));
+        : (days) => makeActualCosts(days);
 
   await page.route('**/api/**', (route) =>
     route.fulfill({ status: 404, json: { error: 'not stubbed' } })

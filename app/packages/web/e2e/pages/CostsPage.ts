@@ -76,7 +76,8 @@ export class CostsPage {
     // Anchor to the start of the label so `$/hour` doesn't match `$/hour` *and*
     // `$/hour` substrings inside other headers; `getByRole('button')` already
     // narrows to the table-header buttons so a regex anchor is enough.
-    return this.page.getByRole('button', { name: new RegExp(`^${label.replace(/[$/]/g, '\\$&')}`) });
+    const escaped = label.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    return this.page.getByRole('button', { name: new RegExp(`^${escaped}`) });
   }
 
   /** Click a sort header to toggle the active column / direction. */
