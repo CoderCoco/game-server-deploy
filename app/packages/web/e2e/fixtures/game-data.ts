@@ -1,4 +1,11 @@
-import type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig, ActualCosts } from '@/api.js';
+import type {
+  GameStatus,
+  CostEstimates,
+  EnvInfo,
+  WatchdogConfig,
+  ActualCosts,
+  DiscordConfigRedacted,
+} from '@/api.js';
 
 /** Stub response for `GET /api/env`. */
 export const ENV_DATA: EnvInfo = {
@@ -108,3 +115,42 @@ export function makeActualCosts(days: number): ActualCosts {
   const total = daily.reduce((sum, d) => sum + d.cost, 0);
   return { daily, total: Math.round(total * 100) / 100, currency: 'USD', days };
 }
+
+/** A valid Discord snowflake (17–20 digits) for use in test inputs. */
+export const VALID_GUILD_ID = '123456789012345678';
+/** A second valid snowflake — useful for multi-guild specs. */
+export const VALID_GUILD_ID_2 = '987654321098765432';
+/** A valid user-shaped snowflake for admin/permission specs. */
+export const VALID_USER_ID = '111122223333444455';
+
+/**
+ * First-run Discord config — no guilds, no admins, no secrets configured.
+ * Triggers the `/discord` setup-wizard render path.
+ */
+export const FIRST_RUN_DISCORD_CONFIG: DiscordConfigRedacted = {
+  clientId: '',
+  allowedGuilds: [],
+  admins: { userIds: [], roleIds: [] },
+  gamePermissions: {},
+  baseAllowedGuilds: [],
+  baseAdmins: { userIds: [], roleIds: [] },
+  botTokenSet: false,
+  publicKeySet: false,
+  interactionsEndpointUrl: null,
+};
+
+/**
+ * Fully-configured Discord config — bot token + public key set, one allowlisted
+ * guild, one admin user. Used to exercise the post-setup tabs.
+ */
+export const CONFIGURED_DISCORD_CONFIG: DiscordConfigRedacted = {
+  clientId: '111111111111111111',
+  allowedGuilds: [VALID_GUILD_ID],
+  admins: { userIds: [VALID_USER_ID], roleIds: [] },
+  gamePermissions: {},
+  baseAllowedGuilds: [],
+  baseAdmins: { userIds: [], roleIds: [] },
+  botTokenSet: true,
+  publicKeySet: true,
+  interactionsEndpointUrl: 'https://abc123.lambda-url.us-east-1.on.aws/',
+};
