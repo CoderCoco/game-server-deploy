@@ -484,13 +484,27 @@ function GuildsSection({
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [registered, setRegistered] = useState<Set<string>>(new Set());
-  const allGuilds = useMemo(
-    () => [
-      ...cfg.baseAllowedGuilds.map((g) => ({ id: g, locked: true })),
-      ...cfg.allowedGuilds.map((g) => ({ id: g, locked: false })),
-    ],
-    [cfg.allowedGuilds, cfg.baseAllowedGuilds],
-  );
+  // Merge the terraform-managed and dynamic allowlists, deduping by guild ID
+  // so a guild that appears in both never renders twice (which would collide
+  // React keys and produce conflicting per-row actions). The terraform entry
+  // wins so the row is shown as locked.
+  const allGuilds = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { id: string; locked: boolean }[] = [];
+    for (const g of cfg.baseAllowedGuilds) {
+      if (!seen.has(g)) {
+        seen.add(g);
+        out.push({ id: g, locked: true });
+      }
+    }
+    for (const g of cfg.allowedGuilds) {
+      if (!seen.has(g)) {
+        seen.add(g);
+        out.push({ id: g, locked: false });
+      }
+    }
+    return out;
+  }, [cfg.allowedGuilds, cfg.baseAllowedGuilds]);
 
   /** Add a new guild after running snowflake validation; show inline error if malformed. */
   function handleAdd() {
@@ -498,6 +512,10 @@ function GuildsSection({
     if (!id) return;
     if (!isSnowflake(id)) {
       setError('Guild IDs are 17–20 digit Discord snowflakes.');
+      return;
+    }
+    if (cfg.baseAllowedGuilds.includes(id) || cfg.allowedGuilds.includes(id)) {
+      setError('That guild is already allowlisted.');
       return;
     }
     setError(null);
@@ -888,18 +906,24 @@ function PermissionsSection({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {games.map((game) => (
-              <PermissionRow
-                key={game}
-                game={game}
-                initial={
-                  cfg.gamePermissions[game] ?? { userIds: [], roleIds: [], actions: [] }
-                }
-                busy={busy}
-                onSave={(perm) => onSave(game, perm)}
-                onDelete={() => onDelete(game)}
-              />
-            ))}
+            {games.map((game) => {
+              const initial =
+                cfg.gamePermissions[game] ?? { userIds: [], roleIds: [], actions: [] };
+              // Re-key the row whenever the server-side entry changes so the
+              // local userIds/roleIds/actions state reinitialises after Save
+              // or Clear — without this, clearing leaves the chips and
+              // checkboxes from the deleted entry on screen until reload.
+              return (
+                <PermissionRow
+                  key={`${game}:${JSON.stringify(initial)}`}
+                  game={game}
+                  initial={initial}
+                  busy={busy}
+                  onSave={(perm) => onSave(game, perm)}
+                  onDelete={() => onDelete(game)}
+                />
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

@@ -8,6 +8,8 @@ import {
   STOPPED_GAME,
   VALID_GUILD_ID,
   VALID_GUILD_ID_2,
+  VALID_USER_ID,
+  type DiscordConfigRedacted,
 } from '../fixtures/index.js';
 
 test.describe('discord settings', () => {
@@ -161,6 +163,31 @@ test.describe('discord settings', () => {
     await expect(row.getByText('not registered')).toHaveCount(0);
   });
 
+  test('should reject adding a guild that is already allowlisted', async ({
+    authedPage: page,
+  }) => {
+    await stubApis(page, { discord: CONFIGURED_DISCORD_CONFIG });
+
+    let addCalled = false;
+    await page.route('**/api/discord/guilds', (route) => {
+      if (route.request().method() === 'POST') addCalled = true;
+      return route.fulfill({
+        json: { success: true, guilds: CONFIGURED_DISCORD_CONFIG.allowedGuilds },
+      });
+    });
+
+    await page.goto('/discord');
+    await page.getByRole('tab', { name: 'Guilds' }).click();
+
+    // VALID_GUILD_ID is already in allowedGuilds — adding it again would
+    // create a duplicate row with a colliding React key.
+    await page.getByLabel('Add a guild').fill(VALID_GUILD_ID);
+    await page.getByRole('button', { name: 'Add' }).click();
+
+    await expect(page.getByText(/already allowlisted/i)).toBeVisible();
+    expect(addCalled).toBe(false);
+  });
+
   test('should leave a guild not-registered when register-commands fails', async ({
     authedPage: page,
   }) => {
@@ -204,6 +231,49 @@ test.describe('discord settings', () => {
     for (const s of MULTI_GAME_STATUSES) {
       await expect(page.getByRole('cell', { name: s.game, exact: true })).toBeVisible();
     }
+  });
+
+  test('should reset chips on a permission row after Clear', async ({ authedPage: page }) => {
+    const withPerms: DiscordConfigRedacted = {
+      ...CONFIGURED_DISCORD_CONFIG,
+      gamePermissions: {
+        minecraft: { userIds: [VALID_USER_ID], roleIds: [], actions: ['start'] },
+      },
+    };
+    const withoutPerms = CONFIGURED_DISCORD_CONFIG;
+
+    await stubApis(page, { discord: withPerms, statuses: [STOPPED_GAME] });
+
+    // After the DELETE lands, swap the GET stub so the next refresh() returns
+    // the cleared config — that's when the row's local state must reset.
+    let cleared = false;
+    await page.route('**/api/discord/permissions/*', (route) => {
+      if (route.request().method() === 'DELETE') cleared = true;
+      return route.fulfill({
+        json: {
+          success: true,
+          permissions: cleared ? withoutPerms.gamePermissions : withPerms.gamePermissions,
+        },
+      });
+    });
+    await page.route('**/api/discord/config', (route) => {
+      if (route.request().method() === 'PUT') {
+        return route.fulfill({ json: { success: true, config: cleared ? withoutPerms : withPerms } });
+      }
+      return route.fulfill({ json: cleared ? withoutPerms : withPerms });
+    });
+
+    await page.goto('/discord');
+    await page.getByRole('tab', { name: 'Per-Game Permissions' }).click();
+
+    const row = page.getByRole('row').filter({ hasText: 'minecraft' });
+    await expect(row.getByText(VALID_USER_ID)).toBeVisible();
+
+    await row.getByRole('button', { name: 'Clear' }).click();
+
+    // Without the re-key fix, the deleted user-ID chip would linger here
+    // because PermissionRow's local state is keyed only by game name.
+    await expect(row.getByText(VALID_USER_ID)).toHaveCount(0);
   });
 
   test('should show the not-deployed empty state when /api/discord/config 404s', async ({
