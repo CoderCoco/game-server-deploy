@@ -126,30 +126,36 @@ function useCostsData(days: number): {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([api.costsActual(days * 2), api.costsEstimate()])
-      .then(([doubled, est]) => {
+    setActual(null);
+    setPrior(null);
+    setEstimates(null);
+    // allSettled so actuals still render if the estimates request fails independently.
+    Promise.allSettled([api.costsActual(days * 2), api.costsEstimate()])
+      .then(([doubledResult, estResult]) => {
         if (cancelled) return;
-        const splitAt = Math.max(doubled.daily.length - days, 0);
-        const priorDaily = doubled.daily.slice(0, splitAt);
-        const currentDaily = doubled.daily.slice(splitAt);
-        setActual({
-          daily: currentDaily,
-          total: Math.round(sumDaily(currentDaily) * 100) / 100,
-          currency: doubled.currency,
-          days,
-          error: doubled.error,
-        });
-        setPrior({
-          daily: priorDaily,
-          total: Math.round(sumDaily(priorDaily) * 100) / 100,
-          currency: doubled.currency,
-          days,
-        });
-        setEstimates(est);
+        if (doubledResult.status === 'fulfilled') {
+          const doubled = doubledResult.value;
+          const splitAt = Math.max(doubled.daily.length - days, 0);
+          const priorDaily = doubled.daily.slice(0, splitAt);
+          const currentDaily = doubled.daily.slice(splitAt);
+          setActual({
+            daily: currentDaily,
+            total: Math.round(sumDaily(currentDaily) * 100) / 100,
+            currency: doubled.currency,
+            days,
+            error: doubled.error,
+          });
+          setPrior({
+            daily: priorDaily,
+            total: Math.round(sumDaily(priorDaily) * 100) / 100,
+            currency: doubled.currency,
+            days,
+          });
+        }
+        if (estResult.status === 'fulfilled') {
+          setEstimates(estResult.value);
+        }
         setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
   }, [days]);
