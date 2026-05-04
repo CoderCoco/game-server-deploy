@@ -263,7 +263,9 @@ function SetupWizard() {
         <p className="text-xs text-[var(--color-muted-foreground)]">
           Full walkthrough:{' '}
           <a
-            href="/docs/setup"
+            href="https://codercoco.github.io/game-server-deploy/setup"
+            target="_blank"
+            rel="noreferrer"
             className="text-[var(--color-primary-light)] underline-offset-4 hover:underline"
           >
             docs/docs/setup.md
@@ -291,14 +293,26 @@ function CredentialsSection({
   onSave: (body: { botToken?: string; clientId?: string; publicKey?: string }) => void;
 }) {
   const [clientId, setClientId] = useState(cfg.clientId);
+  const [clientIdError, setClientIdError] = useState<string | null>(null);
   const [token, setToken] = useState('');
   const [publicKey, setPublicKey] = useState('');
   const [copied, setCopied] = useState(false);
 
-  /** Submit the credentials form, omitting empty secrets so the server keeps its existing values. */
+  /**
+   * Validate Client ID as a Discord snowflake before submit. Empty is allowed
+   * so operators can save token/public-key updates without retyping the ID,
+   * but a non-empty value must match the snowflake shape — `DiscordCommandRegistrar`
+   * silently fails to register commands when the stored Client ID is malformed.
+   */
   function handleSave() {
+    const trimmed = clientId.trim();
+    if (trimmed && !isSnowflake(trimmed)) {
+      setClientIdError('Client ID must be a 17–20 digit Discord snowflake.');
+      return;
+    }
+    setClientIdError(null);
     onSave({
-      clientId,
+      clientId: trimmed,
       ...(token ? { botToken: token } : {}),
       ...(publicKey ? { publicKey } : {}),
     });
@@ -329,9 +343,19 @@ function CredentialsSection({
           <Input
             id="client-id"
             value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
+            onChange={(e) => {
+              setClientId(e.target.value);
+              if (clientIdError) setClientIdError(null);
+            }}
             placeholder="000000000000000000"
+            aria-invalid={clientIdError ? 'true' : 'false'}
           />
+          {clientIdError && (
+            <p className="text-xs text-[var(--color-red)] flex items-center gap-1">
+              <AlertCircle className="size-3.5" />
+              {clientIdError}
+            </p>
+          )}
         </div>
 
         <SecretField
@@ -455,7 +479,7 @@ function GuildsSection({
   busy: boolean;
   onAdd: (g: string) => void;
   onRemove: (g: string) => void;
-  onRegister: (g: string) => void;
+  onRegister: (g: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -481,15 +505,25 @@ function GuildsSection({
     onAdd(id);
   }
 
-  /** Mark a guild as registered-this-session and dispatch the API call. */
-  function handleRegister(guildId: string) {
-    setRegistered((prev) => new Set(prev).add(guildId));
-    onRegister(guildId);
+  /**
+   * Dispatch the register-commands API call, then mark the guild as
+   * registered-this-session only if the call resolved successfully. Failures
+   * leave the badge in the "not registered" state so the operator can retry.
+   */
+  async function handleRegister(guildId: string) {
+    try {
+      await onRegister(guildId);
+      setRegistered((prev) => new Set(prev).add(guildId));
+    } catch {
+      // Stay marked unregistered on failure — the operator can retry.
+    }
   }
 
-  /** Bulk-register every allowlisted guild — fires one request per guild. */
-  function handleRegisterAll() {
-    for (const g of allGuilds) handleRegister(g.id);
+  /** Bulk-register every allowlisted guild — sequential so partial failures are visible. */
+  async function handleRegisterAll() {
+    for (const g of allGuilds) {
+      await handleRegister(g.id);
+    }
   }
 
   return (
