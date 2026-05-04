@@ -1,4 +1,4 @@
-import type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig, ActualCosts } from '../../src/api.js';
+import type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig, ActualCosts } from '@app/api.js';
 
 /** Stub response for `GET /api/env`. */
 export const ENV_DATA: EnvInfo = {
