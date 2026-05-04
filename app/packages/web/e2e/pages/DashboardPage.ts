@@ -30,7 +30,9 @@ export class DashboardPage {
 
   /** Status badge by its rendered text label (RUNNING / STOPPED / etc.). */
   statusBadge(state: ServerStateLabel): Locator {
-    return this.page.getByText(state);
+    // exact: true prevents CSS-uppercase KPI labels ("SERVERS RUNNING") from
+    // substring-matching when Playwright evaluates innerText.
+    return this.page.getByText(state, { exact: true });
   }
 
   /** Empty-state when the operator hasn't configured any games at all. */

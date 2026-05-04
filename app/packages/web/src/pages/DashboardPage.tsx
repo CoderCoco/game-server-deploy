@@ -6,24 +6,23 @@ import { api, type ActualCosts } from '../api.js';
 import { GameCard } from '../components/GameCard.js';
 import { KpiStrip } from '../components/KpiStrip.js';
 import { FileManagerModal } from '../components/FileManagerModal.js';
-import { CostPanel } from '../components/CostPanel.js';
 import { DiscordPanel } from '../components/DiscordPanel.js';
 import { LogsPanel } from '../components/LogsPanel.js';
 import { Input } from '@/components/ui/input';
 
 /**
  * Dashboard route (`/`) — top KPI strip, then a search-filterable grid of
- * GameCards, then the legacy cost / Discord / logs panels (still here until
- * they move to their own routes in CoderCoco/game-server-deploy#61–63). The
- * search input narrows the grid by game name or hostname client-side; the
- * panels below the grid always show all games.
+ * GameCards, then the Discord and logs panels (the logs panel will move to
+ * its own route in CoderCoco/game-server-deploy#63). Cost analysis lives
+ * at `/costs`; the watchdog at `/settings`. The search input narrows the
+ * grid by game name or hostname client-side.
  */
 export function DashboardPage() {
   const { statuses, estimates, loading, refreshGame } = useGameStatus();
   const fileMgr = useFileManager();
   const [query, setQuery] = useState('');
-  // Single Cost Explorer fetch shared by KpiStrip + CostPanel — Cost Explorer
-  // bills per request, so don't double-call.
+  // Single Cost Explorer fetch shared with `KpiStrip` — Cost Explorer bills
+  // per request, so don't double-call.
   const [actualCosts, setActualCosts] = useState<ActualCosts | null>(null);
 
   useEffect(() => {
@@ -85,11 +84,6 @@ export function DashboardPage() {
               />
             ))
           )}
-        </div>
-
-        {/* Bottom panels — cost only (watchdog moved to /settings) */}
-        <div className="mb-5">
-          <CostPanel estimates={estimates} actual={actualCosts} />
         </div>
 
         {/* Discord bot panel */}
