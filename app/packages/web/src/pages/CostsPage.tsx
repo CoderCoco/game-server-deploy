@@ -26,19 +26,16 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-/** Time-range options for the cost view; the numeric value is the trailing-window length in days. */
-type RangeKey = '1h' | '24h' | '7d' | '30d';
+// Sub-day granularities (1h, 24h) are intentionally absent — AWS Cost Explorer
+// only exposes daily granularity. Add entries here when a finer-grain source lands.
+type RangeKey = '7d' | '30d';
 interface RangeOption {
   key: RangeKey;
   label: string;
-  /** Backend `days` parameter; `null` means the option is visual-only (no backend support yet). */
-  days: number | null;
-  unsupportedReason?: string;
+  days: number;
 }
 
 const RANGES: RangeOption[] = [
-  { key: '1h', label: '1h', days: null, unsupportedReason: 'Cost Explorer only exposes daily granularity.' },
-  { key: '24h', label: '24h', days: null, unsupportedReason: 'Cost Explorer only exposes daily granularity.' },
   { key: '7d', label: '7d', days: 7 },
   { key: '30d', label: '30d', days: 30 },
 ];
@@ -112,32 +109,24 @@ function splitDailyByGame(
 }
 
 /**
- * Cost analysis route (`/costs`). Renders the headline 7-day stacked-by-game
- * spend chart, a sortable per-game estimates table, the trailing-window total
- * with a delta-vs-prior pill, and a time-range selector.
- *
- * Per-game split for the historical chart is currently a uniform fallback
- * because `/api/costs/actual` only returns daily totals — see CoderCoco/game-server-deploy#61.
+ * Fetches the doubled window once and slices into current/prior halves to keep
+ * Cost Explorer billing to one request per range change.
  */
-export function CostsPage() {
-  const [range, setRange] = useState<RangeKey>('7d');
+function useCostsData(days: number): {
+  actual: ActualCosts | null;
+  prior: ActualCosts | null;
+  estimates: CostEstimates | null;
+  loading: boolean;
+} {
   const [actual, setActual] = useState<ActualCosts | null>(null);
   const [prior, setPrior] = useState<ActualCosts | null>(null);
   const [estimates, setEstimates] = useState<CostEstimates | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const activeRange = RANGES.find((r) => r.key === range) ?? RANGES[2]!;
-  const days = activeRange.days ?? 7;
-
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    // Cost Explorer is billed per request, so fetch the doubled window once
-    // and slice it into current/prior halves rather than firing two requests.
-    Promise.all([
-      api.costsActual(days * 2),
-      api.costsEstimate(),
-    ])
+    Promise.all([api.costsActual(days * 2), api.costsEstimate()])
       .then(([doubled, est]) => {
         if (cancelled) return;
         const splitAt = Math.max(doubled.daily.length - days, 0);
@@ -162,10 +151,26 @@ export function CostsPage() {
       .catch(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [days]);
+
+  return { actual, prior, estimates, loading };
+}
+
+/**
+ * Cost analysis route (`/costs`). Renders the headline 7-day stacked-by-game
+ * spend chart, a sortable per-game estimates table, the trailing-window total
+ * with a delta-vs-prior pill, and a time-range selector.
+ *
+ * Per-game split for the historical chart is currently a uniform fallback
+ * because `/api/costs/actual` only returns daily totals — see CoderCoco/game-server-deploy#61.
+ */
+export function CostsPage() {
+  const [range, setRange] = useState<RangeKey>('7d');
+
+  const activeRange = RANGES.find((r) => r.key === range) ?? RANGES[0]!;
+  const days = activeRange.days;
+  const { actual, prior, estimates, loading } = useCostsData(days);
 
   const games = useMemo(
     () => (estimates ? Object.keys(estimates.games).sort() : []),
@@ -261,7 +266,7 @@ export function CostsPage() {
   );
 }
 
-/** Segmented selector for the active time range. Visual-only options surface a tooltip explaining why they're disabled. */
+/** Segmented selector for the active time range. */
 function RangeSelector({
   active,
   onChange,
@@ -271,35 +276,21 @@ function RangeSelector({
 }) {
   return (
     <div className="inline-flex rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1">
-      {RANGES.map((r) => {
-        const isActive = r.key === active;
-        const disabled = r.days === null;
-        const button = (
-          <button
-            key={r.key}
-            type="button"
-            onClick={() => !disabled && onChange(r.key)}
-            disabled={disabled}
-            className={cn(
-              'px-3 py-1 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-              isActive && 'bg-[var(--color-surface)] text-[var(--color-foreground)] shadow',
-              !isActive && !disabled && 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
-              disabled && 'text-[var(--color-muted-foreground)]/40 cursor-not-allowed',
-            )}
-          >
-            {r.label}
-          </button>
-        );
-        if (!disabled) return button;
-        return (
-          <Tooltip key={r.key}>
-            <TooltipTrigger asChild>
-              <span>{button}</span>
-            </TooltipTrigger>
-            <TooltipContent>{r.unsupportedReason}</TooltipContent>
-          </Tooltip>
-        );
-      })}
+      {RANGES.map((r) => (
+        <button
+          key={r.key}
+          type="button"
+          onClick={() => onChange(r.key)}
+          className={cn(
+            'px-3 py-1 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+            r.key === active
+              ? 'bg-[var(--color-surface)] text-[var(--color-foreground)] shadow'
+              : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
+          )}
+        >
+          {r.label}
+        </button>
+      ))}
     </div>
   );
 }

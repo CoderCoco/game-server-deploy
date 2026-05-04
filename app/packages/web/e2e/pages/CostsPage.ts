@@ -1,7 +1,7 @@
 import type { Page, Locator } from '@playwright/test';
 
 /** Time-range selector options shown above the Costs page header. */
-export type CostsRangeLabel = '1h' | '24h' | '7d' | '30d';
+export type CostsRangeLabel = '7d' | '30d';
 
 /**
  * Page object for the `/costs` route added in CoderCoco/game-server-deploy#61.
@@ -61,7 +61,7 @@ export class CostsPage {
    * screen readers without needing to hover the Radix tooltip.
    */
   chartSegment(game: string): Locator {
-    return this.page.getByLabel(new RegExp(`^${game}: \\$`));
+    return this.page.locator(`[aria-label^="${game}: $"]`);
   }
 
   // ── Estimates table ──────────────────────────────────────────────────

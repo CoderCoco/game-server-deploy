@@ -80,14 +80,6 @@ test.describe('costs page', () => {
     await expect(costs.page.getByRole('cell', { name: /palworld/ })).toHaveCount(0);
   });
 
-  test('should disable the 1h and 24h range options', async ({ costs }) => {
-    await stubApis(costs.page);
-    await costs.goto();
-
-    await expect(costs.rangeButton('1h')).toBeDisabled();
-    await expect(costs.rangeButton('24h')).toBeDisabled();
-  });
-
   test('should switch the active window when clicking 30d', async ({ costs }) => {
     await stubApis(costs.page);
     await costs.goto();
