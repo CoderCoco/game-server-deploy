@@ -1,8 +1,9 @@
 import { test as base, type Page } from '@playwright/test';
-import type { GameStatus, CostEstimates, ActualCosts, EnvInfo, ActionResult, WatchdogConfig } from '../../src/api.js';
-import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG, makeActualCosts } from './game-data.js';
+import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig, ActualCosts } from '@/api.js';
+import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG, ACTUAL_COSTS, makeActualCosts } from './game-data.js';
+import { AppLayout, AuthGatePage, DashboardPage, CostsPage } from '../pages/index.js';
 
-export type { GameStatus, CostEstimates, ActualCosts, EnvInfo, WatchdogConfig };
+export type { GameStatus, CostEstimates, EnvInfo, WatchdogConfig, ActualCosts };
 export {
   ENV_DATA,
   STOPPED_GAME,
@@ -11,8 +12,10 @@ export {
   COST_DATA,
   MULTI_GAME_COST_DATA,
   WATCHDOG_CONFIG,
+  ACTUAL_COSTS,
   makeActualCosts,
 } from './game-data.js';
+export { AppLayout, AuthGatePage, DashboardPage, CostsPage } from '../pages/index.js';
 
 /** Per-spec overrides for the default `/api/*` stubs registered by `stubApis`. */
 export interface StubOptions {
@@ -22,9 +25,9 @@ export interface StubOptions {
   costs?: CostEstimates;
   /**
    * Either a fixed `ActualCosts` payload returned for every `GET /api/costs/actual`
-   * call, or a builder receiving the `days` query param so the spec can return
+   * call, or a builder receiving the `days` query param so a spec can return
    * different totals per window (the Costs page calls both `days` and `days*2`).
-   * Defaults to `makeActualCosts(days)`.
+   * Defaults to the static `ACTUAL_COSTS` fixture.
    */
   actualCosts?: ActualCosts | ((days: number) => ActualCosts);
   /** Env info returned by `GET /api/env`. */
@@ -56,7 +59,7 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
       ? opts.actualCosts
       : opts.actualCosts !== undefined
         ? () => opts.actualCosts as ActualCosts
-        : (days) => makeActualCosts(days);
+        : (days) => (days === ACTUAL_COSTS.days ? ACTUAL_COSTS : makeActualCosts(days));
 
   await page.route('**/api/**', (route) =>
     route.fulfill({ status: 404, json: { error: 'not stubbed' } })
@@ -74,9 +77,10 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
 
   await page.route('**/api/costs/estimate', (route) => route.fulfill({ json: costs }));
 
-  // Use a regex so the `?days=N` query string is matched — globs are compared
-  // against the full URL and would otherwise require a literal trailing wildcard.
-  await page.route(/\/api\/costs\/actual/, (route) => {
+  // Trailing `*` matches the `?days=N` query string — Playwright globs are
+  // matched against the full URL, and `*` (= `[^/]*`) covers query payloads
+  // that never contain a slash.
+  await page.route('**/api/costs/actual*', (route) => {
     const days = parseInt(new URL(route.request().url()).searchParams.get('days') ?? '7', 10);
     return route.fulfill({ json: actualCostsFn(days) });
   });
@@ -98,9 +102,19 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
 type E2EFixtures = {
   /**
    * A page with `apiToken` pre-seeded in localStorage so every navigation
-   * starts authenticated. Use this in all specs except auth-gate tests.
+   * starts authenticated. Use this in specs that need raw page access (e.g.
+   * to call `stubApis` or `addInitScript`); prefer `dashboard` / `costs` /
+   * `layout` for higher-level interactions.
    */
   authedPage: Page;
+  /** Page object for the dashboard route — use in any authed-dashboard spec. */
+  dashboard: DashboardPage;
+  /** Page object for the `/costs` route — use in any authed-costs spec. */
+  costs: CostsPage;
+  /** Page object for the persistent nav shell (sidebar + top bar). */
+  layout: AppLayout;
+  /** Page object for the API-token modal — use in auth-gate specs. */
+  authGate: AuthGatePage;
 };
 
 export const test = base.extend<E2EFixtures>({
@@ -109,6 +123,22 @@ export const test = base.extend<E2EFixtures>({
       localStorage.setItem('apiToken', 'test-token');
     });
     await use(page);
+  },
+  // `dashboard` and `costs` depend on `authedPage` because every authed-route
+  // spec wants the token pre-seeded. `layout` and `authGate` depend on the raw
+  // `page` so auth-gate specs (which exercise the unauthenticated state) can
+  // use them without dragging the init script along.
+  dashboard: async ({ authedPage }, use) => {
+    await use(new DashboardPage(authedPage));
+  },
+  costs: async ({ authedPage }, use) => {
+    await use(new CostsPage(authedPage));
+  },
+  layout: async ({ page }, use) => {
+    await use(new AppLayout(page));
+  },
+  authGate: async ({ page }, use) => {
+    await use(new AuthGatePage(page));
   },
 });
 
