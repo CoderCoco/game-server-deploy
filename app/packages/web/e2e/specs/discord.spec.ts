@@ -6,6 +6,7 @@ import {
   FIRST_RUN_DISCORD_CONFIG,
   MULTI_GAME_STATUSES,
   STOPPED_GAME,
+  VALID_GUILD_ID,
   VALID_GUILD_ID_2,
 } from '../fixtures/index.js';
 
@@ -142,6 +143,52 @@ test.describe('discord settings', () => {
     for (const id of CONFIGURED_DISCORD_CONFIG.allowedGuilds) {
       await expect(page.getByRole('cell', { name: id })).toBeVisible();
     }
+  });
+
+  test('should mark a guild as registered after a successful register-commands call', async ({
+    authedPage: page,
+  }) => {
+    await stubApis(page, { discord: CONFIGURED_DISCORD_CONFIG });
+    await page.goto('/discord');
+    await page.getByRole('tab', { name: 'Guilds' }).click();
+
+    const row = page.getByRole('row').filter({ hasText: VALID_GUILD_ID });
+    await expect(row.getByText('not registered')).toBeVisible();
+
+    await row.getByRole('button', { name: 'Register' }).click();
+
+    await expect(row.getByText('registered', { exact: true })).toBeVisible();
+    await expect(row.getByText('not registered')).toHaveCount(0);
+  });
+
+  test('should leave a guild not-registered when register-commands fails', async ({
+    authedPage: page,
+  }) => {
+    await stubApis(page, { discord: CONFIGURED_DISCORD_CONFIG });
+
+    // Override the success stub from stubApis so the register-commands call
+    // returns 500 and the wrap()-driven Promise rejects. Tracks the call so
+    // the assertion can wait until after the failure resolves.
+    let registerCalled = false;
+    await page.route('**/api/discord/guilds/*/register-commands', (route) => {
+      registerCalled = true;
+      return route.fulfill({ status: 500, json: { error: 'discord rejected' } });
+    });
+
+    await page.goto('/discord');
+    await page.getByRole('tab', { name: 'Guilds' }).click();
+
+    const row = page.getByRole('row').filter({ hasText: VALID_GUILD_ID });
+    await expect(row.getByText('not registered')).toBeVisible();
+
+    await row.getByRole('button', { name: 'Register' }).click();
+
+    await expect.poll(() => registerCalled).toBe(true);
+
+    // Badge must stay in the not-registered state — the optimistic-success
+    // flip would otherwise lie about a registration that never happened.
+    await expect(row.getByText('not registered')).toBeVisible();
+    await expect(row.getByText('registered', { exact: true })).toHaveCount(0);
   });
 
   test('should render a row per game in the per-game permissions table', async ({
