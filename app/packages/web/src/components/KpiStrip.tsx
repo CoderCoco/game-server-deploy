@@ -21,25 +21,30 @@ interface TileSpec {
   spark: number[];
 }
 
-const ACCENT_RULE: Record<AccentColor, string> = {
-  purple: 'bg-[var(--color-primary)]',
-  cyan:   'bg-[var(--color-cyan)]',
-  orange: 'bg-[var(--color-orange)]',
-  pink:   'bg-[var(--color-pink)]',
-};
-
-const ACCENT_BAR: Record<AccentColor, string> = {
-  purple: 'bg-[var(--color-primary)]',
-  cyan:   'bg-[var(--color-cyan)]',
-  orange: 'bg-[var(--color-orange)]',
-  pink:   'bg-[var(--color-pink)]',
-};
-
-const ACCENT_ICON: Record<AccentColor, string> = {
-  purple: 'text-[var(--color-primary-light)]',
-  cyan:   'text-[var(--color-cyan-light)]',
-  orange: 'text-[var(--color-orange)]',
-  pink:   'text-[var(--color-pink)]',
+/**
+ * Tailwind class lookup keyed by accent color and the visual element it
+ * styles. Grouped so each tile pulls its rule / bar / icon classes from the
+ * same place — `ACCENT.rule[accent]`, `ACCENT.bar[accent]`, etc.
+ */
+const ACCENT: Record<'rule' | 'bar' | 'icon', Record<AccentColor, string>> = {
+  rule: {
+    purple: 'bg-[var(--color-primary)]',
+    cyan:   'bg-[var(--color-cyan)]',
+    orange: 'bg-[var(--color-orange)]',
+    pink:   'bg-[var(--color-pink)]',
+  },
+  bar: {
+    purple: 'bg-[var(--color-primary)]',
+    cyan:   'bg-[var(--color-cyan)]',
+    orange: 'bg-[var(--color-orange)]',
+    pink:   'bg-[var(--color-pink)]',
+  },
+  icon: {
+    purple: 'text-[var(--color-primary-light)]',
+    cyan:   'text-[var(--color-cyan-light)]',
+    orange: 'text-[var(--color-orange)]',
+    pink:   'text-[var(--color-pink)]',
+  },
 };
 
 /** Pad a daily-cost array to 7 entries (most recent last) so the sparkline has a stable bar count. */
@@ -141,26 +146,25 @@ export function KpiStrip({ statuses, estimates, actualCosts }: Props) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       {tiles.map((t) => (
-        <KpiTile key={t.label} spec={t} />
+        <KpiTile key={t.label} {...t} />
       ))}
     </div>
   );
 }
 
-function KpiTile({ spec }: { spec: TileSpec }) {
-  const { accent, label, Icon, value, delta, spark } = spec;
+function KpiTile({ accent, label, Icon, value, delta, spark }: TileSpec) {
   const max = Math.max(...spark, 0.001);
 
   return (
     <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       {/* Top accent rule */}
-      <div className={cn('absolute top-0 left-0 right-0 h-0.5', ACCENT_RULE[accent])} />
+      <div className={cn('absolute top-0 left-0 right-0 h-0.5', ACCENT.rule[accent])} />
 
       <div className="flex items-center justify-between mb-3">
         <span className="text-[0.7rem] font-medium uppercase tracking-wider text-[var(--color-muted-foreground)]">
           {label}
         </span>
-        <Icon className={cn('size-4', ACCENT_ICON[accent])} />
+        <Icon className={cn('size-4', ACCENT.icon[accent])} />
       </div>
 
       <div className="font-[var(--font-ui)] text-2xl font-bold leading-none mb-2 text-[var(--color-foreground)]">
@@ -185,7 +189,7 @@ function KpiTile({ spec }: { spec: TileSpec }) {
         {spark.map((v, i) => (
           <div
             key={i}
-            className={cn('flex-1 rounded-t-sm opacity-60', ACCENT_BAR[accent])}
+            className={cn('flex-1 rounded-t-sm opacity-60', ACCENT.bar[accent])}
             style={{ height: `${Math.max((v / max) * 100, 6)}%` }}
           />
         ))}

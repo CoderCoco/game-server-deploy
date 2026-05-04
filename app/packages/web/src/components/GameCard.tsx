@@ -88,6 +88,15 @@ function taskShortId(taskArn: string | undefined): string {
   return tail.slice(0, 8);
 }
 
+/** Human-readable label for the "Last run" stat: "Live" while running, "Booting" while starting, em-dash otherwise. */
+function lastRunLabel(state: ServerState): string {
+  switch (state) {
+    case 'running':  return 'Live';
+    case 'starting': return 'Booting';
+    default:         return '—';
+  }
+}
+
 interface StatRowProps {
   label: string;
   value: string;
@@ -140,7 +149,6 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
   }
 
   const connectStr = status.hostname ?? status.publicIp ?? null;
-  const lastRunLabel = state === 'running' ? 'Live' : state === 'starting' ? 'Booting' : '—';
   const playersLabel = '—';
   const costPerHourLabel = estimate ? `$${estimate.costPerHour.toFixed(3)}` : '—';
 
@@ -191,7 +199,7 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
 
       {/* 2x2 stats grid */}
       <div className="px-5 pb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[var(--color-border)] pt-4">
-        <Stat label="Last run" value={lastRunLabel} />
+        <Stat label="Last run" value={lastRunLabel(state)} />
         <Stat label="Players" value={playersLabel} />
         <Stat label="$ per hour" value={costPerHourLabel} />
         <Stat label="Task" value={taskShortId(status.taskArn)} mono />
