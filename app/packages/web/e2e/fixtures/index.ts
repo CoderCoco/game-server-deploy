@@ -1,5 +1,5 @@
 import { test as base, type Page } from '@playwright/test';
-import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig, ActualCosts } from '@app/api.js';
+import type { GameStatus, CostEstimates, EnvInfo, ActionResult, WatchdogConfig, ActualCosts } from '@/api.js';
 import { ENV_DATA, STOPPED_GAME, COST_DATA, WATCHDOG_CONFIG, ACTUAL_COSTS } from './game-data.js';
 import { AppLayout, AuthGatePage, DashboardPage } from '../pages/index.js';
 
