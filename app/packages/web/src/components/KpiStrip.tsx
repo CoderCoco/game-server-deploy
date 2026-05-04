@@ -113,8 +113,8 @@ export function KpiStrip({ statuses, estimates, actualCosts }: Props) {
         accent: 'cyan',
         label: 'Spend today',
         Icon: DollarSign,
-        value: actual ? `$${today.toFixed(2)}` : '—',
-        delta: actual ? pctChange(today, yest) : null,
+        value: actualCosts ? `$${today.toFixed(2)}` : '—',
+        delta: actualCosts ? pctChange(today, yest) : null,
         spark: dailySeries,
       },
       {
