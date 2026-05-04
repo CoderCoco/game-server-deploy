@@ -1,22 +1,17 @@
-import { useState, useEffect } from 'react';
-import { api, type ActualCosts, type CostEstimates } from '../api.js';
+import { type ActualCosts, type CostEstimates } from '../api.js';
 
 interface Props {
   estimates: CostEstimates | null;
+  actual: ActualCosts | null;
 }
 
 /**
  * Bottom-left dashboard panel. Renders the 7-day actual-spend bar chart from
- * Cost Explorer (fetched once on mount) plus the per-game hourly estimates
- * passed in as props from the parent dashboard.
+ * Cost Explorer plus the per-game hourly estimates. Both data sources are
+ * fetched once in `DashboardPage` and shared with `KpiStrip` so we don't
+ * double-bill Cost Explorer for the same data on every dashboard load.
  */
-export function CostPanel({ estimates }: Props) {
-  const [actual, setActual] = useState<ActualCosts | null>(null);
-
-  useEffect(() => {
-    void api.costsActual().then(setActual);
-  }, []);
-
+export function CostPanel({ estimates, actual }: Props) {
   const maxCost = Math.max(...(actual?.daily?.map((d) => d.cost) ?? [0]), 0.001);
 
   return (
