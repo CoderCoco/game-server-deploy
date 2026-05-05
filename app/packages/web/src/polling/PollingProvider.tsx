@@ -79,6 +79,13 @@ export function PollingProvider({ children }: { children: ReactNode }) {
         timerId: ReturnType<typeof setInterval>;
         /** True while a fetch is in flight; guards against concurrent runs of the same poller. */
         inFlight: boolean;
+        /**
+         * Stable identifier set once per `register()` call and never touched by
+         * `runOne()`. Used by the cleanup closure instead of `timerId` so the
+         * cleanup remains correct even after `runOne` replaces the initial timer
+         * with a rescheduled one before `register()` returns.
+         */
+        regId: symbol;
       }
     >
   >({});
@@ -141,8 +148,14 @@ export function PollingProvider({ children }: { children: ReactNode }) {
       const previous = fnsRef.current[name];
       if (previous) clearInterval(previous.timerId);
 
+      // `regId` is set once here and never touched by `runOne()`. The cleanup
+      // closure captures it so it can distinguish "I own this registration" from
+      // "a newer call to register() has already taken over" — even after
+      // `runOne()` replaces the initial `timerId` with a rescheduled one before
+      // this call returns.
+      const regId = Symbol();
       const timerId = setInterval(() => void runOne(name), intervalMs);
-      fnsRef.current[name] = { fn, intervalMs, timerId, inFlight: false };
+      fnsRef.current[name] = { fn, intervalMs, timerId, inFlight: false, regId };
 
       setPollers((p) => ({
         ...p,
@@ -160,7 +173,7 @@ export function PollingProvider({ children }: { children: ReactNode }) {
 
       return () => {
         const cur = fnsRef.current[name];
-        if (cur && cur.timerId === timerId) {
+        if (cur && cur.regId === regId) {
           clearInterval(cur.timerId);
           delete fnsRef.current[name];
           setPollers((p) => {

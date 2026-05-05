@@ -57,6 +57,40 @@ describe('PollingIndicator', () => {
     expect(screen.getByText(/^Updated\b/)).toBeInTheDocument();
   });
 
+  it('should remove the poller from the registry when the registering component unmounts', async () => {
+    // Regression: the cleanup closure used to check `cur.timerId === timerId`,
+    // but runOne() replaces the initial timer before register() returns, so
+    // the check was always false and cleanups were silently no-ops, leaking
+    // pollers indefinitely. Now register() uses a stable Symbol (regId) that
+    // runOne() never touches, so the cleanup always fires correctly.
+    function ConditionalPoller({ show }: { show: boolean }) {
+      return show ? <PollerSeed name="cleanup-test" intervalMs={20_000} /> : null;
+    }
+
+    const { rerender } = render(
+      <PollingProvider>
+        <ConditionalPoller show={true} />
+        <PollingIndicator name="cleanup-test" />
+      </PollingProvider>,
+    );
+
+    await flushPolls();
+    expect(screen.getByText(/^Updated\b/)).toBeInTheDocument();
+
+    // Unmount the PollerSeed — the cleanup must remove the entry from the
+    // registry so the indicator falls back to "Not polling".
+    await act(async () => {
+      rerender(
+        <PollingProvider>
+          <ConditionalPoller show={false} />
+          <PollingIndicator name="cleanup-test" />
+        </PollingProvider>,
+      );
+    });
+
+    expect(screen.getByText('Not polling')).toBeInTheDocument();
+  });
+
   it('should expose the next-poll countdown via the tooltip on hover', async () => {
     const user = userEvent.setup();
     render(
