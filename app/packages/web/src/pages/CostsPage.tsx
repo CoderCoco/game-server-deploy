@@ -25,6 +25,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { PollingIndicator } from '../polling/PollingIndicator.js';
 
 // Sub-day granularities (1h, 24h) are intentionally absent — AWS Cost Explorer
 // only exposes daily granularity. Add entries here when a finer-grain source lands.
@@ -219,7 +220,10 @@ export function CostsPage() {
               ECS + Fargate spend, per-game estimates, and trailing-window deltas.
             </p>
           </div>
-          <RangeSelector active={range} onChange={setRange} />
+          <div className="flex items-center gap-3">
+            <PollingIndicator />
+            <RangeSelector active={range} onChange={setRange} />
+          </div>
         </header>
 
         <Card>

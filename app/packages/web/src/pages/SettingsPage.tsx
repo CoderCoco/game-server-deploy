@@ -1,4 +1,5 @@
 import { WatchdogPanel } from '../components/WatchdogPanel.js';
+import { PollingIndicator } from '../polling/PollingIndicator.js';
 
 /**
  * Settings route (`/settings`) — watchdog config + general settings skeleton.
@@ -7,7 +8,10 @@ import { WatchdogPanel } from '../components/WatchdogPanel.js';
 export function SettingsPage() {
   return (
     <div className="max-w-5xl mx-auto p-8">
-      <h2 className="text-2xl font-semibold mb-6">Settings</h2>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Settings</h2>
+        <PollingIndicator />
+      </div>
 
       {/* Watchdog section */}
       <div className="mb-8">

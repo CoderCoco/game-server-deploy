@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import { useGameStatus } from '../hooks/useGameStatus.js';
+import { useGameStatus } from '../polling/GameStatusProvider.js';
 import { useFileManager } from '../hooks/useFileManager.js';
 import { api, type ActualCosts } from '../api.js';
 import { GameCard } from '../components/GameCard.js';
 import { KpiStrip } from '../components/KpiStrip.js';
 import { FileManagerModal } from '../components/FileManagerModal.js';
+import { PollingIndicator } from '../polling/PollingIndicator.js';
 import { Input } from '@/components/ui/input';
 
 /**
@@ -41,17 +42,20 @@ export function DashboardPage() {
         {/* KPI strip */}
         <KpiStrip statuses={statuses} estimates={estimates} actualCosts={actualCosts} />
 
-        {/* Search filter */}
-        <div className="mb-4 relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[var(--color-muted-foreground)] pointer-events-none" />
-          <Input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by game or hostname…"
-            className="pl-9"
-            aria-label="Filter games"
-          />
+        {/* Search filter + polling indicator */}
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[var(--color-muted-foreground)] pointer-events-none" />
+            <Input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter by game or hostname…"
+              className="pl-9"
+              aria-label="Filter games"
+            />
+          </div>
+          <PollingIndicator />
         </div>
 
         {/* Game cards */}

@@ -14,6 +14,7 @@ import {
 } from '../components/ui/dropdown-menu.js';
 import { GameCombobox } from '../components/GameCombobox.js';
 import { cn } from '../lib/utils.js';
+import { PollingIndicator } from '../polling/PollingIndicator.js';
 
 const MAX_LINES = 1000;
 const AGE_TICK_MS = 10_000;
@@ -281,7 +282,10 @@ export function LogsPage() {
             CloudWatch tail for the selected game. Pause to inspect; resume to flush the buffer.
           </p>
         </div>
-        <LiveBadge paused={paused} />
+        <div className="flex items-center gap-3">
+          <PollingIndicator />
+          <LiveBadge paused={paused} />
+        </div>
       </div>
 
       {/* Controls row */}

@@ -8,6 +8,8 @@ import { CostsPage } from './pages/CostsPage.js';
 import { DiscordPage } from './pages/DiscordPage.js';
 import { LogsPage } from './pages/LogsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { PollingProvider } from './polling/PollingProvider.js';
+import { GameStatusProvider } from './polling/GameStatusProvider.js';
 
 /**
  * Root component. Wires up the 401 handler on `api.ts` and renders the routed
@@ -31,17 +33,21 @@ export default function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <ApiTokenModal open={needsToken} onSuccess={() => setNeedsToken(false)} />
-      <AppLayout>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/costs" element={<CostsPage />} />
-          <Route path="/discord" element={<DiscordPage />} />
-          <Route path="/logs" element={<LogsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Routes>
-      </AppLayout>
-    </BrowserRouter>
+    <PollingProvider>
+      <GameStatusProvider>
+        <BrowserRouter>
+          <ApiTokenModal open={needsToken} onSuccess={() => setNeedsToken(false)} />
+          <AppLayout>
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/costs" element={<CostsPage />} />
+              <Route path="/discord" element={<DiscordPage />} />
+              <Route path="/logs" element={<LogsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </AppLayout>
+        </BrowserRouter>
+      </GameStatusProvider>
+    </PollingProvider>
   );
 }

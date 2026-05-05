@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, type RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { PollingProvider } from '../polling/PollingProvider.js';
 
 // Mock the API client and the token reader so the component drives off
 // canned data instead of real fetch calls. `vi.mock` is hoisted above
@@ -31,6 +32,17 @@ vi.stubGlobal('EventSource', MockEventSource);
 
 import { LogsPage } from './LogsPage.js';
 
+/**
+ * `<LogsPage>` reads the polling registry to render the shared
+ * {@link PollingIndicator} in its header. The provider is just a registry —
+ * it never starts a background fetch on its own — so it's safe to wrap every
+ * test render with it without affecting the assertions below.
+ */
+const renderWithProviders = (
+  ui: React.ReactElement,
+  opts?: Omit<RenderOptions, 'wrapper'>,
+) => render(ui, { wrapper: PollingProvider, ...opts });
+
 const SAMPLE_LINES = [
   '2026-05-03T12:00:00Z INFO Server started on port 25565',
   '2026-05-03T12:00:01Z DEBUG Loaded world "world" in 1.2s',
@@ -46,21 +58,21 @@ describe('LogsPage', () => {
   });
 
   it('should render the Server Logs heading and the LIVE badge', async () => {
-    render(<LogsPage />);
+    renderWithProviders(<LogsPage />);
 
     expect(await screen.findByRole('heading', { name: 'Server Logs' })).toBeInTheDocument();
     expect(screen.getByText('Live', { selector: 'div' })).toBeInTheDocument();
   });
 
   it('should render seeded log lines once the snapshot resolves', async () => {
-    render(<LogsPage />);
+    renderWithProviders(<LogsPage />);
 
     expect(await screen.findByText(/Server started on port 25565/)).toBeInTheDocument();
     expect(screen.getByText(/Connection refused from 10.0.0.5/)).toBeInTheDocument();
   });
 
   it('should color-code lines containing INFO/WARN/ERROR/DEBUG with badges', async () => {
-    render(<LogsPage />);
+    renderWithProviders(<LogsPage />);
 
     // Wait until the first seeded line is rendered, then assert one badge per
     // detected level. The badge text is exact-matched to avoid colliding with
@@ -77,7 +89,7 @@ describe('LogsPage', () => {
 
   it('should toggle the Pause / Resume button and the LIVE / PAUSED badge', async () => {
     const user = userEvent.setup();
-    render(<LogsPage />);
+    renderWithProviders(<LogsPage />);
     await screen.findByText(/Server started/);
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));
@@ -91,7 +103,7 @@ describe('LogsPage', () => {
 
   it('should highlight matches inside <mark> when typing in the search input', async () => {
     const user = userEvent.setup();
-    const { container } = render(<LogsPage />);
+    const { container } = renderWithProviders(<LogsPage />);
     await screen.findByText(/Server started/);
 
     expect(container.querySelectorAll('mark')).toHaveLength(0);
@@ -107,7 +119,7 @@ describe('LogsPage', () => {
 
   it('should hide ERROR-level lines after unchecking ERROR in the Levels filter', async () => {
     const user = userEvent.setup();
-    render(<LogsPage />);
+    renderWithProviders(<LogsPage />);
     await screen.findByText(/Server started/);
     expect(screen.getByText(/Connection refused/)).toBeInTheDocument();
 
@@ -120,13 +132,13 @@ describe('LogsPage', () => {
   });
 
   it('should display "5 lines · oldest …" in the footer for the seeded buffer', async () => {
-    render(<LogsPage />);
+    renderWithProviders(<LogsPage />);
 
     expect(await screen.findByText(/^5 lines · oldest /)).toBeInTheDocument();
   });
 
   it('should call api.logs(game) with the selected game on mount', async () => {
-    render(<LogsPage />);
+    renderWithProviders(<LogsPage />);
 
     await waitFor(() => {
       expect(apiMock.games).toHaveBeenCalled();
