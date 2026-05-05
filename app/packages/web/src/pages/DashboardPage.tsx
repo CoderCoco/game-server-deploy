@@ -6,15 +6,13 @@ import { api, type ActualCosts } from '../api.js';
 import { GameCard } from '../components/GameCard.js';
 import { KpiStrip } from '../components/KpiStrip.js';
 import { FileManagerModal } from '../components/FileManagerModal.js';
-import { LogsPanel } from '../components/LogsPanel.js';
 import { Input } from '@/components/ui/input';
 
 /**
  * Dashboard route (`/`) — top KPI strip, then a search-filterable grid of
- * GameCards, then the logs panel (which will move to its own route in
- * CoderCoco/game-server-deploy#63). Cost analysis lives at `/costs`,
- * Discord settings at `/discord`, and the watchdog at `/settings`. The
- * search input narrows the grid by game name or hostname client-side.
+ * GameCards. Cost analysis lives at `/costs`, Discord settings at `/discord`,
+ * the live log tail at `/logs`, and the watchdog at `/settings`. The search
+ * input narrows the grid by game name or hostname client-side.
  */
 export function DashboardPage() {
   const { statuses, estimates, loading, refreshGame } = useGameStatus();
@@ -27,8 +25,6 @@ export function DashboardPage() {
   useEffect(() => {
     void api.costsActual().then(setActualCosts).catch(() => undefined);
   }, []);
-
-  const gameNames = statuses.map((s) => s.game);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,9 +80,6 @@ export function DashboardPage() {
             ))
           )}
         </div>
-
-        {/* Logs panel */}
-        {gameNames.length > 0 && <LogsPanel games={gameNames} />}
       </div>
 
       {/* File manager modal */}

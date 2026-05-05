@@ -16,7 +16,7 @@ import {
   CONFIGURED_DISCORD_CONFIG,
   makeActualCosts,
 } from './game-data.js';
-import { AppLayout, AuthGatePage, DashboardPage, CostsPage } from '../pages/index.js';
+import { AppLayout, AuthGatePage, DashboardPage, CostsPage, LogsPage } from '../pages/index.js';
 
 export type {
   GameStatus,
@@ -41,8 +41,9 @@ export {
   VALID_GUILD_ID,
   VALID_GUILD_ID_2,
   VALID_USER_ID,
+  SAMPLE_LOG_LINES,
 } from './game-data.js';
-export { AppLayout, AuthGatePage, DashboardPage, CostsPage } from '../pages/index.js';
+export { AppLayout, AuthGatePage, DashboardPage, CostsPage, LogsPage } from '../pages/index.js';
 
 /** Per-spec overrides for the default `/api/*` stubs registered by `stubApis`. */
 export interface StubOptions {
@@ -70,6 +71,20 @@ export interface StubOptions {
    * `FIRST_RUN_DISCORD_CONFIG` to exercise the setup wizard.
    */
   discord?: DiscordConfigRedacted;
+  /**
+   * Game names returned by `GET /api/games` (used by the Logs page).
+   * Defaults to the names derived from `statuses`. Override when the Logs
+   * page should expose games that aren't part of `statuses`.
+   */
+  games?: string[];
+  /**
+   * Initial log lines returned by `GET /api/logs/:game` (used by the Logs
+   * page). Maps game name → seeded lines. Games not present in the map
+   * receive an empty buffer. The SSE stream at `/api/logs/:game/stream` is
+   * always aborted so EventSource gives up immediately and tests don't hang
+   * on a never-ending response.
+   */
+  logLines?: Record<string, string[]>;
 }
 
 /**
@@ -89,7 +104,8 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
   const config = opts.config ?? WATCHDOG_CONFIG;
   const startResult: ActionResult = opts.startResult ?? { success: true, message: 'Started' };
   const discord = opts.discord ?? CONFIGURED_DISCORD_CONFIG;
-  const games = statuses.map((s) => s.game);
+  const games = opts.games ?? statuses.map((s) => s.game);
+  const logLines = opts.logLines ?? {};
   const actualCostsFn: (days: number) => ActualCosts =
     typeof opts.actualCosts === 'function'
       ? opts.actualCosts
@@ -159,6 +175,17 @@ export async function stubApis(page: Page, opts: StubOptions = {}): Promise<void
   await page.route('**/api/discord/permissions/*', (route) =>
     route.fulfill({ json: { success: true, permissions: discord.gamePermissions } }),
   );
+
+  // Logs page — the SSE stream is aborted so EventSource gives up immediately.
+  // Specs that need to drive the stream can override this route after stubApis().
+  // The `/stream*` glob is registered AFTER `/api/logs/*` so it wins for SSE
+  // URLs (Playwright matches routes in reverse registration order).
+  await page.route('**/api/logs/*', (route) => {
+    const url = new URL(route.request().url());
+    const game = url.pathname.split('/').pop()!;
+    return route.fulfill({ json: { game, lines: logLines[game] ?? [] } });
+  });
+  await page.route('**/api/logs/*/stream*', (route) => route.abort());
 }
 
 type E2EFixtures = {
@@ -173,6 +200,8 @@ type E2EFixtures = {
   dashboard: DashboardPage;
   /** Page object for the `/costs` route — use in any authed-costs spec. */
   costs: CostsPage;
+  /** Page object for the `/logs` route — use in any authed-logs spec. */
+  logs: LogsPage;
   /** Page object for the persistent nav shell (sidebar + top bar). */
   layout: AppLayout;
   /** Page object for the API-token modal — use in auth-gate specs. */
@@ -195,6 +224,9 @@ export const test = base.extend<E2EFixtures>({
   },
   costs: async ({ authedPage }, use) => {
     await use(new CostsPage(authedPage));
+  },
+  logs: async ({ authedPage }, use) => {
+    await use(new LogsPage(authedPage));
   },
   layout: async ({ page }, use) => {
     await use(new AppLayout(page));

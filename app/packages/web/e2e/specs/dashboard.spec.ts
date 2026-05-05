@@ -102,6 +102,9 @@ test.describe('dashboard', () => {
     await dashboard.goto();
 
     await layout.navigateTo('Logs', '/logs');
+    // The /logs route is no longer a placeholder — verify the redesigned
+    // page actually renders so a regression to the placeholder breaks here.
+    await expect(dashboard.page.getByRole('heading', { name: 'Server Logs' })).toBeVisible();
   });
 
   test('should navigate to the Discord page via sidebar', async ({ dashboard, layout }) => {
