@@ -19,7 +19,7 @@ export const FILE_MANAGER_INTERVAL_MS = 5000;
  * background polling once the task has settled or the modal is closed.
  */
 export function useFileManager() {
-  const ctx = usePollingContext();
+  const { register } = usePollingContext();
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [status, setStatus] = useState<FileMgrStatus | null>(null);
   const [message, setMessage] = useState('');
@@ -70,7 +70,7 @@ export function useFileManager() {
   // pollers are currently live.
   useEffect(() => {
     if (!activeGame || status?.state !== 'starting') return;
-    return ctx.register(
+    return register(
       FILE_MANAGER_POLLER,
       async () => {
         const game = gameRef.current;
@@ -79,7 +79,7 @@ export function useFileManager() {
       },
       FILE_MANAGER_INTERVAL_MS,
     );
-  }, [ctx, activeGame, status?.state, fetchOnce]);
+  }, [register, activeGame, status?.state, fetchOnce]);
 
   return { activeGame, status, message, open, close, start, stop };
 }

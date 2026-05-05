@@ -182,14 +182,22 @@ export function usePoller(
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
+  // Pull the stable callbacks out of `ctx` so the effects below don't re-fire
+  // every time the provider's `pollers` map or `tick` changes — the whole
+  // context value is re-memoized on each heartbeat, but `register` and
+  // `refresh` are wrapped in `useCallback` and have stable identity.
+  const { register, refresh: refreshCtx } = ctx;
+
   useEffect(() => {
     if (!enabled) return;
-    return ctx.register(name, () => fnRef.current(), intervalMs);
-  }, [ctx, name, intervalMs, enabled]);
+    return register(name, () => fnRef.current(), intervalMs);
+  }, [register, name, intervalMs, enabled]);
+
+  const refresh = useCallback(() => refreshCtx(name), [refreshCtx, name]);
 
   return {
     state: ctx.pollers[name],
-    refresh: () => ctx.refresh(name),
+    refresh,
   };
 }
 
