@@ -176,6 +176,12 @@ A planned **tier 2** (#75) will add full-stack specs (real Nest + mocked AWS SDK
 - Tests live **next to the component** (`Foo.tsx` → `Foo.test.tsx`), not in a separate `__tests__` directory. Mock the API client and any module-level singletons via `vi.mock`. Use `vi.stubGlobal('EventSource', …)` for SSE-driven components (jsdom doesn't ship one).
 - Cover: visible rendering for each `state` branch, every callback prop firing with the right argument, internal state transitions (open/close, pause/resume), and any non-trivial pure helper. Don't reach for snapshots — they break on every Tailwind tweak. Don't repeat assertions already covered by the e2e tier (full SSE streaming flow, real network, full routing).
 
+**Routed page tests (`@gsd/web`):**
+- Each routed page (`DashboardPage`, `CostsPage`, `DiscordPage`, `LogsPage`, `SettingsPage`) gets a co-located `*.test.tsx` that mounts the page through `renderPage()` (`app/packages/web/src/test-utils/renderPage.tsx`). The helper wraps children in `PollingProvider → GameStatusProvider → MemoryRouter` so the same provider stack the production app uses is exercised; pass `initialEntries` when the page reads `useLocation`.
+- Mock `../api.js` with `vi.mock` + `vi.hoisted` so the page drives off canned data instead of real fetches. Stub every method the page (and the GameStatusProvider above it) calls — at minimum `api.status` and `api.costsEstimate` — or the test will hang waiting for the polling registry to settle.
+- These tests are intentionally **complementary** to the e2e tier, not a replacement: the e2e specs prove the indicator + chrome render at the route level under a real Vite preview build; the unit tests pin the page's own provider wiring (e.g. that `<PollingIndicator />` resolves to "Updated …" once the mocked status poll resolves) and let us iterate on the page layout without spinning up Playwright.
+- Keep page-test scope tight: smoke-render each header section, exercise interactive controls that aren't already covered by a child component's unit test, and verify the polling indicator wiring. Anything that requires real HTTP belongs in the planned tier-2 specs (#75).
+
 **Playwright conventions:**
 - Specs live under `app/packages/web/e2e/specs/`.
 - Shared stub helpers and fixtures are in `app/packages/web/e2e/fixtures/`.
