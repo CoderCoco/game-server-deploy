@@ -303,7 +303,8 @@ to configure the value, in priority order:
    a non-empty token.
 2. **`api_token` field in `app/server_config.json`** — the persisted file
    bind-mounted by `docker-compose.yml`. Used when `API_TOKEN` is absent.
-   Edit it directly or let the server write it via `/api/config`.
+   Edit the file directly; the dashboard's `/api/config` endpoint only
+   manages watchdog settings and does not write the token.
 
 Generate a fresh token with `openssl rand -hex 32`. The dashboard prompts
 for it on first load (and any time the server returns 401); paste the
