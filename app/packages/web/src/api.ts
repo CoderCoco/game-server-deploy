@@ -24,7 +24,7 @@ export interface WatchdogConfig {
   watchdog_min_packets: number;
 }
 
-/** Per-game Fargate cost breakdown used by `CostPanel` to render the hourly/monthly estimate. */
+/** Per-game Fargate cost breakdown used by `CostsPage` and `GameCard` to surface hourly/monthly estimates. */
 export interface GameEstimate {
   vcpu: number;
   memoryGb: number;

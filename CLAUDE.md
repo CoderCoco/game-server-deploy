@@ -165,16 +165,24 @@ The test suite has two complementary tiers:
 
 | Tier | Command | What runs | When to add specs |
 |------|---------|-----------|-------------------|
-| **Unit / integration** | `npm run app:test` | Vitest — server-side logic, hooks, helpers. No browser, no real network. AWS SDK mocked via `aws-sdk-client-mock`. | Pure logic, hook behaviour, server controllers. |
+| **Unit / integration** | `npm run app:test` | Vitest. Server-side logic, hooks, helpers run under the `node` environment; React component specs in `@gsd/web` run under `jsdom` via `environmentMatchGlobs`. No real network — AWS SDK mocked via `aws-sdk-client-mock`; the `@gsd/web` API client is stubbed via `vi.mock`. | Pure logic, hook behaviour, server controllers, **per-component React behaviour** (rendering, callbacks, internal state transitions). |
 | **E2E (tier 1 — #74)** | `npm run app:test:e2e` | Playwright against `vite build` + `vite preview`. Nest server never runs; every `/api/*` call is stubbed at the network layer via `page.route()`. | User-visible flows: routing, auth gate, button interactions, status-badge rendering, optimistic updates. |
 
 A planned **tier 2** (#75) will add full-stack specs (real Nest + mocked AWS SDK) for scenarios that require real HTTP contract validation between the client and server. Until that lands, all browser-facing specs belong in tier 1.
 
+**React component unit tests (`@gsd/web`):**
+- Use **Vitest + jsdom + `@testing-library/react` + `@testing-library/user-event`**. `@testing-library/jest-dom` matchers (`toBeInTheDocument`, `toHaveTextContent`, etc.) are auto-loaded via `app/vitest.setup.ts`.
+- `app/vitest.config.ts` flips to the `jsdom` environment for everything under `packages/web/**` so server tests stay on Node. The setup file also wires `afterEach(cleanup)` because we run with `globals: false`, which disables RTL's normal auto-cleanup.
+- Tests live **next to the component** (`Foo.tsx` → `Foo.test.tsx`), not in a separate `__tests__` directory. Mock the API client and any module-level singletons via `vi.mock`. Use `vi.stubGlobal('EventSource', …)` for SSE-driven components (jsdom doesn't ship one).
+- Cover: visible rendering for each `state` branch, every callback prop firing with the right argument, internal state transitions (open/close, pause/resume), and any non-trivial pure helper. Don't reach for snapshots — they break on every Tailwind tweak. Don't repeat assertions already covered by the e2e tier (full SSE streaming flow, real network, full routing).
+
 **Playwright conventions:**
 - Specs live under `app/packages/web/e2e/specs/`.
 - Shared stub helpers and fixtures are in `app/packages/web/e2e/fixtures/`.
-- Import `{ test, expect, stubApis }` from `../fixtures/index.js` for authenticated specs; use `@playwright/test` directly for auth-gate specs.
-- Use the `authedPage` fixture (token pre-seeded in localStorage) for any spec that is not testing the auth flow itself.
+- **Page objects** for each route live in `app/packages/web/e2e/pages/` (`DashboardPage`, `CostsPage`, `LogsPage`, etc.). Specs **must** reach for elements through a page-object method (`logs.pauseButton()`, `dashboard.gameCardHeading('minecraft')`) rather than calling `page.getByX(...)` directly. The page object centralises locator drift, gives spec files a vocabulary that reads like the feature it's testing, and is the only place locator strategy (role + accessible name vs. text vs. test-id) gets decided. Add a new page object whenever a spec wants a locator that isn't already wrapped.
+- Each page object receives a `Page` in its constructor and exposes `goto()` plus typed `Locator`-returning methods. Encapsulate multi-step flows (`dashboard.filter(query)`, `logs.toggleLevel('ERROR')`) so individual specs stay one-liners.
+- Import `{ test, expect, stubApis }` plus the page-object fixture you need (`logs`, `dashboard`, `costs`, `layout`, `authGate`) from `../fixtures/index.js` for authenticated specs; use `@playwright/test` directly for auth-gate specs.
+- Use the `authedPage` fixture (token pre-seeded in localStorage) only when a spec needs raw `Page` access (e.g. to call `stubApis` or `addInitScript`); otherwise prefer the higher-level page-object fixtures.
 - Stubs must cover every `/api/*` endpoint the page hits, or the catch-all returns 404 and the test will surface the missing stub quickly.
 
 ## Git & Branch Workflow
@@ -186,6 +194,22 @@ Use `.worktrees/<branch-name>` for feature work (the directory is gitignored). C
 ```bash
 git worktree add .worktrees/<branch> -b <branch>
 ```
+
+## Claude Code Plugins
+
+This repo expects the **`issue-flow`** plugin (from `CoderCoco/claude-plugin-marketplace`) to drive the issue → PR loop. Two skills, used in order:
+
+- **`work-on`** — start work on a GitHub issue. Creates the `claude/issue-<N>-<slug>` branch, scaffolds a worktree, and pulls the issue checklist into the session as the source of truth for what "done" means.
+- **`open-pr`** — finish the loop. Verifies the issue checklist is actually complete, picks up the repo's PR conventions (the rules in the next section), opens the PR with the right `Closes #N` keyword, and moves the project card to "In Review".
+
+Install once:
+
+```
+/plugin marketplace add CoderCoco/claude-plugin-marketplace
+/plugin install issue-flow@claude-plugin-marketplace
+```
+
+If the plugin isn't loaded in the current environment, fetch the skill body from the marketplace repo and follow it manually — don't fall back to ad-hoc PR creation, because the skills enforce checklist-completeness and the closing keyword that this repo's `/pr` command takes for granted.
 
 ## PR Conventions
 
