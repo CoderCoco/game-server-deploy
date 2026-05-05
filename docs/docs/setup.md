@@ -295,12 +295,15 @@ The dashboard API is gated behind a bearer token; `/api/*` requests without
 a matching `Authorization: Bearer …` header return 401. There are two ways
 to configure the value, in priority order:
 
-1. **`API_TOKEN` environment variable** — wins, even when set to empty (use
-   this to deliberately disable auth in scripts/CI). Required when running
-   under `NODE_ENV=production`; the server refuses to boot otherwise.
+1. **`API_TOKEN` environment variable** — takes precedence over
+   `server_config.json` when set, including when set to empty. An empty
+   value is normalized to "no token configured" and prevents the config
+   file from being consulted, but it is **not** a supported way to disable
+   auth — `NODE_ENV=production` startup fails when neither source supplies
+   a non-empty token.
 2. **`api_token` field in `app/server_config.json`** — the persisted file
-   bind-mounted by `docker-compose.yml`. Edit it directly or let the
-   server write it via `/api/config`.
+   bind-mounted by `docker-compose.yml`. Used when `API_TOKEN` is absent.
+   Edit it directly or let the server write it via `/api/config`.
 
 Generate a fresh token with `openssl rand -hex 32`. The dashboard prompts
 for it on first load (and any time the server returns 401); paste the
