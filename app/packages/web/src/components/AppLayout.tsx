@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { api, type EnvInfo } from '../api.js';
 import { cn } from '../lib/utils.js';
 import { Button } from '@/components/ui/button';
-import { isStale, usePollingContext } from '../polling/PollingProvider.js';
+import { isStale, usePollingActions, usePollingState } from '../polling/PollingProvider.js';
 import {
   LayoutDashboard,
   Server,
@@ -141,8 +141,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
  * icon spins while at least one poll is in flight so the operator gets a brief
  * loading affordance even if the underlying call returns instantly.
  */
-function RefreshAllButton() {
-  const { pollers, refreshAll } = usePollingContext();
+export function RefreshAllButton() {
+  const { refreshAll } = usePollingActions();
+  const { pollers } = usePollingState();
   const anyLoading = Object.values(pollers).some((p) => p.loading);
   return (
     <Button
@@ -163,8 +164,8 @@ function RefreshAllButton() {
  * success, dims gray when every poller is past 2× its interval, and goes
  * neutral when no pollers are registered yet.
  */
-function LiveIndicator() {
-  const { pollers, tick } = usePollingContext();
+export function LiveIndicator() {
+  const { pollers, tick } = usePollingState();
   void tick;
   const now = Date.now();
   const entries = Object.values(pollers);

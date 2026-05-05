@@ -10,9 +10,9 @@ import {
 } from 'react';
 
 /**
- * Per-poller state exposed through the context. Times are absolute ms epoch
- * (`Date.now()`) so consumers can render "X seconds ago" without juggling
- * different clocks.
+ * Per-poller state exposed through {@link PollingStateContext}. Times are
+ * absolute ms epoch (`Date.now()`) so consumers can render "X seconds ago"
+ * without juggling different clocks.
  */
 export interface PollerState {
   intervalMs: number;
@@ -22,19 +22,32 @@ export interface PollerState {
   error: Error | null;
 }
 
-interface PollingContextValue {
-  pollers: Record<string, PollerState>;
-  /** Register a poller under `name`. Returns the unregister function. */
+/**
+ * Stable-identity slice of the polling registry. Held in a separate context
+ * from the changing state so consumers that only need to register / refresh
+ * don't re-render every heartbeat tick. `register` / `refresh` / `refreshAll`
+ * are all wrapped in `useCallback` with a stable `runOne` dependency.
+ */
+interface PollingActionsContextValue {
   register: (name: string, fn: () => Promise<void>, intervalMs: number) => () => void;
-  /** Trigger one named poller immediately (e.g. after a Start/Stop action). */
   refresh: (name: string) => Promise<void>;
-  /** Trigger every registered poller in parallel — used by the top-bar Refresh button. */
   refreshAll: () => Promise<void>;
+}
+
+/**
+ * Live state slice. Re-renders subscribers whenever any poller's status
+ * changes or the 1Hz heartbeat fires. Reserved for components that actually
+ * render relative timestamps (the indicator, the LIVE badge); never read
+ * from `usePoller`, which only needs the stable actions.
+ */
+interface PollingStateContextValue {
+  pollers: Record<string, PollerState>;
   /** Heartbeat counter that ticks every second so consumers can re-render relative timestamps. */
   tick: number;
 }
 
-const PollingCtx = createContext<PollingContextValue | null>(null);
+const ActionsCtx = createContext<PollingActionsContextValue | null>(null);
+const StateCtx = createContext<PollingStateContextValue | null>(null);
 
 /** A poller is considered stale once it has missed two intervals without success. */
 export const STALE_MULTIPLIER = 2;
@@ -45,7 +58,9 @@ export const STALE_MULTIPLIER = 2;
  * so the indicator and LIVE badge re-render on every result.
  *
  * Designed to live near the top of the tree (above the router) so polling
- * persists across route changes.
+ * persists across route changes. Internally splits its value across two
+ * contexts — stable actions vs. tick-driven state — so registering a poller
+ * doesn't subscribe the caller to per-second re-renders.
  */
 export function PollingProvider({ children }: { children: ReactNode }) {
   const [pollers, setPollers] = useState<Record<string, PollerState>>({});
@@ -174,41 +189,60 @@ export function PollingProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const value = useMemo<PollingContextValue>(
-    () => ({ pollers, register, refresh, refreshAll, tick }),
-    [pollers, register, refresh, refreshAll, tick],
+  const actions = useMemo<PollingActionsContextValue>(
+    () => ({ register, refresh, refreshAll }),
+    [register, refresh, refreshAll],
+  );
+  const state = useMemo<PollingStateContextValue>(
+    () => ({ pollers, tick }),
+    [pollers, tick],
   );
 
-  return <PollingCtx.Provider value={value}>{children}</PollingCtx.Provider>;
+  return (
+    <ActionsCtx.Provider value={actions}>
+      <StateCtx.Provider value={state}>{children}</StateCtx.Provider>
+    </ActionsCtx.Provider>
+  );
 }
 
-/** Read the polling registry from inside the provider tree. */
-export function usePollingContext(): PollingContextValue {
-  const v = useContext(PollingCtx);
-  if (!v) throw new Error('usePollingContext must be used inside <PollingProvider>');
+/**
+ * Read the stable polling actions (register / refresh / refreshAll). Does not
+ * subscribe to per-second tick updates, so it's safe to call from providers
+ * that sit above the router without cascading re-renders.
+ */
+export function usePollingActions(): PollingActionsContextValue {
+  const v = useContext(ActionsCtx);
+  if (!v) throw new Error('usePollingActions must be used inside <PollingProvider>');
   return v;
 }
 
 /**
- * Subscribe a function to the shared polling registry. The latest `fn` is
- * captured via a ref so consumers can pass closures without thrashing the
- * registration. Re-registers when `name` or `intervalMs` change.
+ * Read the live polling state slice (`pollers` + `tick`). Re-renders the
+ * caller every second; only use it from indicators / badges that actually
+ * render relative timestamps.
+ */
+export function usePollingState(): PollingStateContextValue {
+  const v = useContext(StateCtx);
+  if (!v) throw new Error('usePollingState must be used inside <PollingProvider>');
+  return v;
+}
+
+/**
+ * Subscribe a function to the shared polling registry. Only subscribes to the
+ * actions context — registering or refreshing a poller does **not** trigger
+ * per-second re-renders. The latest `fn` is captured via a ref so consumers
+ * can pass closures without thrashing the registration. Re-registers when
+ * `name` or `intervalMs` change.
  */
 export function usePoller(
   name: string,
   fn: () => Promise<void>,
   intervalMs: number,
   enabled = true,
-): { state: PollerState | undefined; refresh: () => Promise<void> } {
-  const ctx = usePollingContext();
+): { refresh: () => Promise<void> } {
+  const { register, refresh: refreshCtx } = usePollingActions();
   const fnRef = useRef(fn);
   fnRef.current = fn;
-
-  // Pull the stable callbacks out of `ctx` so the effects below don't re-fire
-  // every time the provider's `pollers` map or `tick` changes — the whole
-  // context value is re-memoized on each heartbeat, but `register` and
-  // `refresh` are wrapped in `useCallback` and have stable identity.
-  const { register, refresh: refreshCtx } = ctx;
 
   useEffect(() => {
     if (!enabled) return;
@@ -217,10 +251,7 @@ export function usePoller(
 
   const refresh = useCallback(() => refreshCtx(name), [refreshCtx, name]);
 
-  return {
-    state: ctx.pollers[name],
-    refresh,
-  };
+  return { refresh };
 }
 
 /** True iff `state` has gone longer than `STALE_MULTIPLIER × intervalMs` without a successful poll. */

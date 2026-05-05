@@ -1,7 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { isStale, usePollingContext, type PollerState } from './PollingProvider.js';
+import { isStale, usePollingState, type PollerState } from './PollingProvider.js';
 
 interface Props {
   /** Name of the poller in the registry to surface. Defaults to "status". */
@@ -16,13 +16,13 @@ interface Props {
  * on the next successful poll.
  */
 export function PollingIndicator({ name = 'status', className }: Props) {
-  const ctx = usePollingContext();
-  const state = ctx.pollers[name];
+  const { pollers, tick } = usePollingState();
+  const state = pollers[name];
 
-  // Tracking ctx.tick keeps the relative-time labels updating once a second
+  // Reading `tick` keeps the relative-time labels updating once a second
   // without each indicator instance running its own setInterval.
   const now = Date.now();
-  void ctx.tick;
+  void tick;
 
   if (!state) {
     return (

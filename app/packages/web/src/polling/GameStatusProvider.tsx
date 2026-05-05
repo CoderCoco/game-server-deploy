@@ -12,8 +12,21 @@ import { usePoller } from './PollingProvider.js';
 
 /** Name under which the dashboard status poller is registered. */
 export const GAME_STATUS_POLLER = 'status';
-/** 20-second cadence to match the previous in-hook interval. */
-export const GAME_STATUS_INTERVAL_MS = 20_000;
+
+/**
+ * Status poll cadence in milliseconds. Defaults to 20s and can be overridden
+ * at build time via `VITE_STATUS_POLL_MS` so deployments that want to reduce
+ * AWS API traffic (or testers running offline) can tune it without forking
+ * the source.
+ */
+export const GAME_STATUS_INTERVAL_MS = (() => {
+  const raw = import.meta.env?.VITE_STATUS_POLL_MS;
+  if (typeof raw === 'string') {
+    const parsed = parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed >= 1000) return parsed;
+  }
+  return 20_000;
+})();
 
 interface GameStatusContextValue {
   statuses: GameStatus[];
