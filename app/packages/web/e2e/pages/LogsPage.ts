@@ -91,8 +91,10 @@ export class LogsPage {
 
   /** Levels trigger asserted to display a specific visible-count (e.g. `3/4`). */
   levelsTriggerWithCount(visible: number, total = 4): Locator {
-    const escaped = `${visible}/${total}`.replace(/\//g, '\\/');
-    return this.page.getByRole('button', { name: new RegExp(`Levels.*${escaped}`) });
+    // The button's accessible name is the visible text "Levels (V/T)". Exact
+    // match on a literal string avoids constructing a dynamic regex (and the
+    // CodeQL "incomplete string escaping" alert that comes with it).
+    return this.page.getByRole('button', { name: `Levels (${visible}/${total})`, exact: true });
   }
 
   /** Checkbox item inside the open Levels menu, by level label. */
