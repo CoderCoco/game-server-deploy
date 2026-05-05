@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -34,20 +35,29 @@ const GameStatusCtx = createContext<GameStatusContextValue | null>(null);
  *
  * Internally registers a `status` poller with the shared polling registry so
  * the top-bar Refresh button can trigger it alongside any other active poll.
+ *
+ * Cost estimates are fetched once on mount rather than on every poll —
+ * `/api/costs/estimate` loops over every configured game and calls
+ * `EcsService.getTaskDefinition()` per game, so polling it every 20s on every
+ * route would add steady ECS API traffic for data that only changes on
+ * `terraform apply`.
  */
 export function GameStatusProvider({ children }: { children: ReactNode }) {
   const [statuses, setStatuses] = useState<GameStatus[]>([]);
   const [estimates, setEstimates] = useState<CostEstimates | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchAll = useCallback(async () => {
-    const [s, e] = await Promise.all([api.status(), api.costsEstimate()]);
+  const fetchStatuses = useCallback(async () => {
+    const s = await api.status();
     setStatuses(s);
-    setEstimates(e);
     setLoading(false);
   }, []);
 
-  const { refresh } = usePoller(GAME_STATUS_POLLER, fetchAll, GAME_STATUS_INTERVAL_MS);
+  const { refresh } = usePoller(GAME_STATUS_POLLER, fetchStatuses, GAME_STATUS_INTERVAL_MS);
+
+  useEffect(() => {
+    void api.costsEstimate().then(setEstimates).catch(() => undefined);
+  }, []);
 
   const refreshGame = useCallback(async (game: string) => {
     const s = await api.statusGame(game);

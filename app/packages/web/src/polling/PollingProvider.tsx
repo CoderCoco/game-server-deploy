@@ -50,17 +50,36 @@ export const STALE_MULTIPLIER = 2;
 export function PollingProvider({ children }: { children: ReactNode }) {
   const [pollers, setPollers] = useState<Record<string, PollerState>>({});
   const fnsRef = useRef<
-    Record<string, { fn: () => Promise<void>; intervalMs: number; timerId: ReturnType<typeof setInterval> }>
+    Record<
+      string,
+      {
+        fn: () => Promise<void>;
+        intervalMs: number;
+        timerId: ReturnType<typeof setInterval>;
+        /** True while a fetch is in flight; guards against concurrent runs of the same poller. */
+        inFlight: boolean;
+      }
+    >
   >({});
 
   /**
    * Run a single poller by name and write the result back into state.
+   * Skips silently if a previous call is still in flight — that prevents a
+   * slow response + manual Refresh + auto-tick from stacking concurrent
+   * fetches. Also resets the poller's interval timer so the next automatic
+   * poll lands `intervalMs` after this attempt (whether triggered by the
+   * timer or by a manual `refresh()` / `refreshAll()`), keeping the
+   * indicator's "next refresh in X" tooltip accurate.
+   *
    * Swallows errors into the per-poller `error` field so a thrown poller
    * doesn't crash the rest of the app.
    */
   const runOne = useCallback(async (name: string) => {
     const entry = fnsRef.current[name];
-    if (!entry) return;
+    if (!entry || entry.inFlight) return;
+    entry.inFlight = true;
+    clearInterval(entry.timerId);
+    entry.timerId = setInterval(() => void runOne(name), entry.intervalMs);
     setPollers((p) => {
       const prev = p[name];
       if (!prev) return p;
@@ -79,6 +98,9 @@ export function PollingProvider({ children }: { children: ReactNode }) {
         if (!prev) return p;
         return { ...p, [name]: { ...prev, loading: false, error: err as Error } };
       });
+    } finally {
+      const cur = fnsRef.current[name];
+      if (cur) cur.inFlight = false;
     }
   }, []);
 
@@ -90,7 +112,7 @@ export function PollingProvider({ children }: { children: ReactNode }) {
       if (previous) clearInterval(previous.timerId);
 
       const timerId = setInterval(() => void runOne(name), intervalMs);
-      fnsRef.current[name] = { fn, intervalMs, timerId };
+      fnsRef.current[name] = { fn, intervalMs, timerId, inFlight: false };
 
       setPollers((p) => ({
         ...p,
