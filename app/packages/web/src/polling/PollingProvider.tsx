@@ -16,6 +16,12 @@ import {
  */
 export interface PollerState {
   intervalMs: number;
+  /**
+   * Timestamp of the very first attempt this poller made. Set once and never
+   * reset — the never-succeeded staleness check needs a stable reference
+   * point, since `lastAttemptAt` advances on every retry.
+   */
+  firstAttemptAt: number | null;
   lastSuccessAt: number | null;
   lastAttemptAt: number | null;
   loading: boolean;
@@ -98,7 +104,16 @@ export function PollingProvider({ children }: { children: ReactNode }) {
     setPollers((p) => {
       const prev = p[name];
       if (!prev) return p;
-      return { ...p, [name]: { ...prev, loading: true, lastAttemptAt: Date.now() } };
+      const now = Date.now();
+      return {
+        ...p,
+        [name]: {
+          ...prev,
+          loading: true,
+          lastAttemptAt: now,
+          firstAttemptAt: prev.firstAttemptAt ?? now,
+        },
+      };
     });
     try {
       await entry.fn();
@@ -133,6 +148,7 @@ export function PollingProvider({ children }: { children: ReactNode }) {
         ...p,
         [name]: {
           intervalMs,
+          firstAttemptAt: p[name]?.firstAttemptAt ?? null,
           lastSuccessAt: p[name]?.lastSuccessAt ?? null,
           lastAttemptAt: p[name]?.lastAttemptAt ?? null,
           loading: false,
@@ -258,9 +274,12 @@ export function usePoller(
 export function isStale(state: PollerState | undefined, now: number = Date.now()): boolean {
   if (!state) return false;
   if (state.lastSuccessAt === null) {
-    // Never succeeded — treat as stale once we've waited 2× the interval.
-    if (state.lastAttemptAt === null) return false;
-    return now - state.lastAttemptAt > STALE_MULTIPLIER * state.intervalMs;
+    // Never succeeded — measure staleness from the FIRST attempt, not the
+    // most recent retry. Otherwise a poller that fails every interval would
+    // keep its `lastAttemptAt` recent and never flip to stale, which would
+    // hide a totally-down API from the LIVE indicator on first load.
+    if (state.firstAttemptAt === null) return false;
+    return now - state.firstAttemptAt > STALE_MULTIPLIER * state.intervalMs;
   }
   return now - state.lastSuccessAt > STALE_MULTIPLIER * state.intervalMs;
 }

@@ -14,21 +14,26 @@ export const FILE_MANAGER_INTERVAL_MS = 5000;
  *
  * Polling is reactive rather than interval-based: we register a 5-second
  * poller with the shared {@link PollingProvider} only while the helper task
- * is mid-transition (state `starting`, or after the operator clicked Stop
- * before ECS has actually transitioned the task out of `RUNNING`). That
- * makes the file-manager's progress visible to the LIVE indicator and the
- * top-bar Refresh button while still leaving no background polling once the
- * task has settled or the modal is closed.
+ * is mid-transition. Two transient flags cover the windows ECS spends in a
+ * "wrong" state right after `runTask` / `stopTask`:
+ *
+ *   - `pendingStart` — set on a successful Start, cleared once status reaches
+ *     `starting` / `running`. Without it, an immediate read after `runTask`
+ *     can come back `stopped` (the new task isn't visible to
+ *     `listTasksByStartedBy` yet) and the poller would never register.
+ *   - `pendingStop`  — set on a successful Stop, cleared once status reaches
+ *     `stopped` / `not_deployed`. Without it, the post-Stop read still says
+ *     `running` for a few seconds and the modal would stick on stale data.
+ *
+ * Either way, the registry unregisters automatically once the helper settles
+ * or the modal closes, so there's no background polling for an idle task.
  */
 export function useFileManager() {
   const { register } = usePollingActions();
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [status, setStatus] = useState<FileMgrStatus | null>(null);
   const [message, setMessage] = useState('');
-  // True between a successful Stop call and the helper actually transitioning
-  // to `stopped`/`not_deployed`. ECS reports `running` for a few seconds after
-  // a stop request, so without this flag the polling effect would unregister
-  // immediately and the modal would stick on stale "running" status.
+  const [pendingStart, setPendingStart] = useState(false);
   const [pendingStop, setPendingStop] = useState(false);
 
   // Latest `activeGame` used inside the registered poller closure — keeps
@@ -45,6 +50,7 @@ export function useFileManager() {
     (game: string) => {
       setActiveGame(game);
       setMessage('');
+      setPendingStart(false);
       setPendingStop(false);
       void fetchOnce(game);
     },
@@ -55,6 +61,7 @@ export function useFileManager() {
     setActiveGame(null);
     setStatus(null);
     setMessage('');
+    setPendingStart(false);
     setPendingStop(false);
   }, []);
 
@@ -63,7 +70,10 @@ export function useFileManager() {
     setMessage('Launching…');
     const result = await api.filesMgrStart(activeGame);
     setMessage(result.message);
-    if (result.success) void fetchOnce(activeGame);
+    if (result.success) {
+      setPendingStart(true);
+      void fetchOnce(activeGame);
+    }
   }, [activeGame, fetchOnce]);
 
   const stop = useCallback(async () => {
@@ -74,21 +84,24 @@ export function useFileManager() {
     void fetchOnce(activeGame);
   }, [activeGame, fetchOnce]);
 
-  // Clear the pending-stop flag once the helper has actually stopped so the
-  // poller below unregisters and we stop hitting `/api/files/:game`.
+  // Clear the pending flags once the status reaches the matching settled
+  // state so the poller below unregisters and we stop hitting
+  // `/api/files/:game`.
   useEffect(() => {
+    if (status?.state === 'starting' || status?.state === 'running') {
+      setPendingStart(false);
+    }
     if (status?.state === 'stopped' || status?.state === 'not_deployed') {
       setPendingStop(false);
     }
   }, [status?.state]);
 
   // Register the reactive poller only while the helper task is mid-transition
-  // (starting, or stop-in-flight). Unregisters automatically when the state
-  // settles or the modal closes — that keeps the polling registry honest
-  // about which pollers are currently live.
+  // (starting, start-in-flight, or stop-in-flight). Unregisters automatically
+  // when the state settles or the modal closes.
   useEffect(() => {
     if (!activeGame) return;
-    const transitioning = status?.state === 'starting' || pendingStop;
+    const transitioning = status?.state === 'starting' || pendingStart || pendingStop;
     if (!transitioning) return;
     return register(
       FILE_MANAGER_POLLER,
@@ -99,7 +112,7 @@ export function useFileManager() {
       },
       FILE_MANAGER_INTERVAL_MS,
     );
-  }, [register, activeGame, status?.state, pendingStop, fetchOnce]);
+  }, [register, activeGame, status?.state, pendingStart, pendingStop, fetchOnce]);
 
   return { activeGame, status, message, open, close, start, stop };
 }

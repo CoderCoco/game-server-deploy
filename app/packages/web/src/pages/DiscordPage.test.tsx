@@ -58,4 +58,16 @@ describe('DiscordPage', () => {
 
     expect(await screen.findByText(/Discord config unavailable/i)).toBeInTheDocument();
   });
+
+  it('should keep the polling indicator visible while /api/discord/config is loading', async () => {
+    // Hold the discord-config response open so the page stays in its
+    // loading state for the duration of the assertions.
+    apiMock.discordConfig.mockReturnValue(new Promise(() => undefined));
+    renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+    // Loading copy is rendered, AND the indicator is wired to the (mocked)
+    // status poll above so the operator can still see "Updated …".
+    expect(await screen.findByText('Loading…')).toBeInTheDocument();
+    expect(await screen.findByText(/^Updated\b/)).toBeInTheDocument();
+  });
 });
