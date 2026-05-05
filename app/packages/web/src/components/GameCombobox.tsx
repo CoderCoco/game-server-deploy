@@ -55,7 +55,7 @@ export function GameCombobox({ games, value, onChange, className }: Props) {
     <div ref={containerRef} className={cn('relative', className)}>
       <button
         type="button"
-        aria-haspopup="listbox"
+        aria-label={value ? `Game selector, ${value} selected` : 'Game selector'}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="flex h-9 w-56 items-center justify-between rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-foreground)] hover:bg-[var(--color-border)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
@@ -65,10 +65,7 @@ export function GameCombobox({ games, value, onChange, className }: Props) {
       </button>
 
       {open && (
-        <div
-          role="listbox"
-          className="absolute z-50 mt-1 w-72 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
-        >
+        <div className="absolute z-50 mt-1 w-72 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
           <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
             <Search className="h-4 w-4 opacity-50" />
             <input

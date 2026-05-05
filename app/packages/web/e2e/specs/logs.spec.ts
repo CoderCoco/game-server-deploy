@@ -105,7 +105,7 @@ test.describe('logs page', () => {
 
     await expect(page.getByText('minecraft seeded line')).toBeVisible();
 
-    await page.locator('button[aria-haspopup="listbox"]').click();
+    await page.getByRole('button', { name: /^Game selector/ }).click();
     await page.getByPlaceholder('Search games…').fill('val');
     await page.getByRole('button', { name: 'valheim' }).click();
 
