@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '../lib/utils.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 
 interface Props {
   games: string[];
@@ -27,22 +28,16 @@ export function GameCombobox({ games, value, onChange, className }: Props) {
     return games.filter((g) => g.toLowerCase().includes(q));
   }, [games, query]);
 
+  // Close the popover on outside-click or Escape. The hook owns the
+  // document-level listeners; we just hand it the container ref + a close
+  // callback. (Stable handler via useCallback so the hook's deps array
+  // doesn't churn on every render.)
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(containerRef, close, open);
+
+  // Focus the search input on open so users can start typing immediately.
   useEffect(() => {
-    if (!open) return;
-    const onMouseDown = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    document.addEventListener('keydown', onKeyDown);
-    // Focus the search input on open
-    inputRef.current?.focus();
-    return () => {
-      document.removeEventListener('mousedown', onMouseDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
+    if (open) inputRef.current?.focus();
   }, [open]);
 
   const select = (g: string) => {
