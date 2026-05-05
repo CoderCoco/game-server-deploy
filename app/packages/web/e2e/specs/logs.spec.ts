@@ -9,89 +9,84 @@ import { test, expect, stubApis, SAMPLE_LOG_LINES } from '../fixtures/index.js';
  * by `GET /api/logs/:game`.
  */
 test.describe('logs page', () => {
-  test('should render LIVE badge and seeded log lines', async ({ authedPage: page }) => {
-    await stubApis(page, {
+  test('should render LIVE badge and seeded log lines', async ({ logs }) => {
+    await stubApis(logs.page, {
       statuses: [{ game: 'minecraft', state: 'stopped' }],
       logLines: { minecraft: SAMPLE_LOG_LINES },
     });
-    await page.goto('/logs');
+    await logs.goto();
 
-    await expect(page.getByRole('heading', { name: 'Server Logs' })).toBeVisible();
-    await expect(page.getByText('Live', { exact: true })).toBeVisible();
-    await expect(page.getByText('Server started on port 25565')).toBeVisible();
+    await expect(logs.heading()).toBeVisible();
+    await expect(logs.liveBadge()).toBeVisible();
+    await expect(logs.page.getByText('Server started on port 25565')).toBeVisible();
   });
 
-  test('should toggle to Paused badge and back via the Pause/Resume button', async ({ authedPage: page }) => {
-    await stubApis(page, {
+  test('should toggle to Paused badge and back via the Pause/Resume button', async ({ logs }) => {
+    await stubApis(logs.page, {
       statuses: [{ game: 'minecraft', state: 'stopped' }],
       logLines: { minecraft: SAMPLE_LOG_LINES },
     });
-    await page.goto('/logs');
+    await logs.goto();
 
-    await page.getByRole('button', { name: 'Pause' }).click();
-    await expect(page.getByText('Paused', { exact: true })).toBeVisible();
-    await expect(page.getByText('Live', { exact: true })).not.toBeVisible();
+    await logs.pauseButton().click();
+    await expect(logs.pausedBadge()).toBeVisible();
+    await expect(logs.liveBadge()).not.toBeVisible();
 
-    await page.getByRole('button', { name: 'Resume' }).click();
-    await expect(page.getByText('Live', { exact: true })).toBeVisible();
+    await logs.resumeButton().click();
+    await expect(logs.liveBadge()).toBeVisible();
   });
 
-  test('should color-code lines containing INFO/WARN/ERROR/DEBUG with badges', async ({ authedPage: page }) => {
-    await stubApis(page, {
+  test('should color-code lines containing INFO/WARN/ERROR/DEBUG with badges', async ({ logs }) => {
+    await stubApis(logs.page, {
       statuses: [{ game: 'minecraft', state: 'stopped' }],
       logLines: { minecraft: SAMPLE_LOG_LINES },
     });
-    await page.goto('/logs');
+    await logs.goto();
 
     // Each level token should appear at least once as a small badge alongside
-    // the matching line. We don't pin the exact element type — the badge is a
-    // `<div>` rendered by the shadcn `Badge` component.
-    for (const lvl of ['INFO', 'WARN', 'ERROR', 'DEBUG']) {
-      await expect(page.getByText(lvl, { exact: true }).first()).toBeVisible();
+    // the matching line.
+    for (const lvl of ['INFO', 'WARN', 'ERROR', 'DEBUG'] as const) {
+      await expect(logs.levelBadge(lvl)).toBeVisible();
     }
   });
 
   test('should highlight matches via <mark> when typing into the search box without filtering lines out', async ({
-    authedPage: page,
+    logs,
   }) => {
-    await stubApis(page, {
+    await stubApis(logs.page, {
       statuses: [{ game: 'minecraft', state: 'stopped' }],
       logLines: { minecraft: SAMPLE_LOG_LINES },
     });
-    await page.goto('/logs');
+    await logs.goto();
 
-    await expect(page.locator('mark')).toHaveCount(0);
+    await expect(logs.highlightMarks()).toHaveCount(0);
 
-    await page.getByPlaceholder('Search visible buffer…').fill('Connection');
-    await expect(page.locator('mark', { hasText: 'Connection' }).first()).toBeVisible();
+    await logs.search('Connection');
+    await expect(logs.highlightMark('Connection').first()).toBeVisible();
     // The matched line must remain in the buffer — search highlights, never filters.
-    await expect(page.getByText('refused from 10.0.0.5')).toBeVisible();
+    await expect(logs.page.getByText('refused from 10.0.0.5')).toBeVisible();
   });
 
   test('should hide ERROR-level lines when ERROR is unchecked in the Levels filter', async ({
-    authedPage: page,
+    logs,
   }) => {
-    await stubApis(page, {
+    await stubApis(logs.page, {
       statuses: [{ game: 'minecraft', state: 'stopped' }],
       logLines: { minecraft: SAMPLE_LOG_LINES },
     });
-    await page.goto('/logs');
+    await logs.goto();
 
-    await expect(page.getByText('Connection refused from 10.0.0.5')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Levels.*4\/4/ })).toBeVisible();
+    await expect(logs.page.getByText('Connection refused from 10.0.0.5')).toBeVisible();
+    await expect(logs.levelsTriggerWithCount(4)).toBeVisible();
 
-    await page.getByRole('button', { name: /Levels/ }).click();
-    await page.getByRole('menuitemcheckbox', { name: 'ERROR' }).click();
-    // The level menu stays open by design (`onSelect` preventDefault); close it
-    // with Escape so the underlying log box is unobstructed for assertions.
-    await page.keyboard.press('Escape');
+    await logs.toggleLevel('ERROR');
 
-    await expect(page.getByText('Connection refused from 10.0.0.5')).not.toBeVisible();
-    await expect(page.getByRole('button', { name: /Levels.*3\/4/ })).toBeVisible();
+    await expect(logs.page.getByText('Connection refused from 10.0.0.5')).not.toBeVisible();
+    await expect(logs.levelsTriggerWithCount(3)).toBeVisible();
   });
 
-  test('should switch streams via the searchable game combobox', async ({ authedPage: page }) => {
-    await stubApis(page, {
+  test('should switch streams via the searchable game combobox', async ({ logs }) => {
+    await stubApis(logs.page, {
       statuses: [
         { game: 'minecraft', state: 'stopped' },
         { game: 'valheim', state: 'stopped' },
@@ -101,28 +96,26 @@ test.describe('logs page', () => {
         valheim: ['valheim seeded line'],
       },
     });
-    await page.goto('/logs');
+    await logs.goto();
 
-    await expect(page.getByText('minecraft seeded line')).toBeVisible();
+    await expect(logs.page.getByText('minecraft seeded line')).toBeVisible();
 
-    await page.getByRole('button', { name: /^Game selector/ }).click();
-    await page.getByPlaceholder('Search games…').fill('val');
-    await page.getByRole('button', { name: 'valheim' }).click();
+    await logs.selectGame('valheim');
 
-    await expect(page.getByText('valheim seeded line')).toBeVisible();
+    await expect(logs.page.getByText('valheim seeded line')).toBeVisible();
     // Switching games resets the buffer — the previous game's seeded line
     // must be gone, not just hidden.
-    await expect(page.getByText('minecraft seeded line')).not.toBeVisible();
+    await expect(logs.page.getByText('minecraft seeded line')).not.toBeVisible();
   });
 
-  test('should display line count and oldest-line age in the footer', async ({ authedPage: page }) => {
-    await stubApis(page, {
+  test('should display line count and oldest-line age in the footer', async ({ logs }) => {
+    await stubApis(logs.page, {
       statuses: [{ game: 'minecraft', state: 'stopped' }],
       logLines: { minecraft: SAMPLE_LOG_LINES },
     });
-    await page.goto('/logs');
+    await logs.goto();
 
     // SAMPLE_LOG_LINES has 5 entries; "oldest" follows the count.
-    await expect(page.getByText(/^5 lines · oldest /)).toBeVisible();
+    await expect(logs.footerLineCount(5)).toBeVisible();
   });
 });
