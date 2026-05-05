@@ -12,9 +12,9 @@ import { PollingProvider } from './polling/PollingProvider.js';
 import { GameStatusProvider } from './polling/GameStatusProvider.js';
 
 /**
- * Root component. Wires up the 401 handler on `api.ts` and renders either the
- * token-prompt modal or the routed dashboard shell. The shell has a persistent
- * layout (sidebar + top bar) and five routes:
+ * Root component. Wires up the 401 handler on `api.ts` and renders the routed
+ * dashboard shell with the API token dialog overlaid when an `/api/*` request
+ * has been parked on a 401. Five routes:
  *   - `/` → Dashboard (game cards + panels)
  *   - `/costs` → Cost analysis placeholder
  *   - `/discord` → Discord settings placeholder
@@ -32,12 +32,11 @@ export default function App() {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  if (needsToken) return <ApiTokenModal />;
-
   return (
     <PollingProvider>
       <GameStatusProvider>
         <BrowserRouter>
+          <ApiTokenModal open={needsToken} onSuccess={() => setNeedsToken(false)} />
           <AppLayout>
             <Routes>
               <Route path="/" element={<DashboardPage />} />

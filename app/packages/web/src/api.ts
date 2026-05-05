@@ -24,7 +24,7 @@ export interface WatchdogConfig {
   watchdog_min_packets: number;
 }
 
-/** Per-game Fargate cost breakdown used by `CostPanel` to render the hourly/monthly estimate. */
+/** Per-game Fargate cost breakdown used by `CostsPage` and `GameCard` to surface hourly/monthly estimates. */
 export interface GameEstimate {
   vcpu: number;
   memoryGb: number;
@@ -134,18 +134,79 @@ export function setUnauthorizedHandler(h: (() => void) | null): void {
   unauthorizedHandler = h;
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+interface PendingRetry {
+  url: string;
+  init: RequestInit | undefined;
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+}
+
+/**
+ * Requests parked when the server returned 401. They wait for the operator to
+ * supply a valid token via `ApiTokenModal`, at which point `retryPendingAfterAuth`
+ * re-issues each one with the new bearer.
+ */
+const pendingRetries: PendingRetry[] = [];
+
+/** Internal sentinel — `request` recognises it and parks the caller's promise; `retryPendingAfterAuth` recognises it on a retry to mark the new token as still bad. */
+const UNAUTHORIZED = Symbol('api.unauthorized');
+
+async function fetchWithAuth<T>(url: string, init?: RequestInit): Promise<T> {
   const token = getStoredApiToken();
   const headers = new Headers(init?.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const res = await fetch(url, { ...init, headers });
   if (res.status === 401) {
     setStoredApiToken('');
-    unauthorizedHandler?.();
-    return new Promise<T>(() => undefined);
+    throw UNAUTHORIZED;
   }
   if (!res.ok) throw new Error(`API error ${res.status}`);
   return res.json() as Promise<T>;
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  try {
+    return await fetchWithAuth<T>(url, init);
+  } catch (err) {
+    if (err !== UNAUTHORIZED) throw err;
+    return new Promise<T>((resolve, reject) => {
+      pendingRetries.push({
+        url,
+        init,
+        resolve: resolve as (value: unknown) => void,
+        reject,
+      });
+      unauthorizedHandler?.();
+    });
+  }
+}
+
+/**
+ * Re-issues every request that was parked on a 401 using the now-current
+ * stored token. Called by `ApiTokenModal` after the operator supplies a token.
+ *
+ * @returns `true` if every retry succeeded (the modal can dismiss);
+ *          `false` if any retry returned 401 again (the modal stays open and
+ *          shows an inline error). Requests that 401 again stay queued so the
+ *          next save attempt retries them.
+ */
+export async function retryPendingAfterAuth(): Promise<boolean> {
+  const queued = pendingRetries.splice(0);
+  let allOk = true;
+  for (const entry of queued) {
+    try {
+      const value = await fetchWithAuth(entry.url, entry.init);
+      entry.resolve(value);
+    } catch (err) {
+      if (err === UNAUTHORIZED) {
+        allOk = false;
+        pendingRetries.push(entry);
+      } else {
+        entry.reject(err);
+      }
+    }
+  }
+  return allOk;
 }
 
 export const api = {
