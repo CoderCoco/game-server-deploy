@@ -1,86 +1,123 @@
-import { test, expect, stubApis, STOPPED_GAME, RUNNING_GAME, MULTI_GAME_STATUSES } from '../fixtures/index.js';
+import {
+  test,
+  expect,
+  stubApis,
+  STOPPED_GAME,
+  RUNNING_GAME,
+  MULTI_GAME_STATUSES,
+} from '../fixtures/index.js';
 
 test.describe('dashboard', () => {
-  test('should render a game card for a stopped game', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [STOPPED_GAME] });
-    await page.goto('/');
+  test('should render a game card for a stopped game', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: [STOPPED_GAME] });
+    await dashboard.goto();
 
-    const card = page.getByText('minecraft', { exact: false }).first();
-    await expect(card).toBeVisible();
-    await expect(page.getByText('Offline')).toBeVisible();
+    await expect(dashboard.gameCardHeading('minecraft')).toBeVisible();
+    await expect(dashboard.statusBadge('STOPPED')).toBeVisible();
   });
 
-  test('should render a game card for a running game with IP', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [RUNNING_GAME] });
-    await page.goto('/');
+  test('should render a game card for a running game with IP', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: [RUNNING_GAME] });
+    await dashboard.goto();
 
-    await expect(page.getByText('Online')).toBeVisible();
-    await expect(page.getByText('minecraft.example.com')).toBeVisible();
+    await expect(dashboard.statusBadge('RUNNING')).toBeVisible();
+    await expect(dashboard.page.getByText('minecraft.example.com')).toBeVisible();
   });
 
-  test('should render multiple game cards', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: MULTI_GAME_STATUSES });
-    await page.goto('/');
+  test('should render multiple game cards', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: MULTI_GAME_STATUSES });
+    await dashboard.goto();
 
-    await expect(page.getByText('minecraft', { exact: false }).first()).toBeVisible();
-    await expect(page.getByText('valheim', { exact: false }).first()).toBeVisible();
+    await expect(dashboard.gameCardHeading('minecraft')).toBeVisible();
+    await expect(dashboard.gameCardHeading('valheim')).toBeVisible();
   });
 
-  test('should show empty-state message when no games are configured', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [] });
-    await page.goto('/');
+  test('should show empty-state message when no games are configured', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: [] });
+    await dashboard.goto();
 
-    await expect(page.getByText(/no games configured/i)).toBeVisible();
+    await expect(dashboard.emptyConfiguredMessage()).toBeVisible();
   });
 
-  test('should fire POST /api/start/:game when Start is clicked', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [STOPPED_GAME] });
+  test('should fire POST /api/start/:game when Start is clicked', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: [STOPPED_GAME] });
 
-    // Track whether the start request was made.
     let startCalled = false;
-    await page.route('**/api/start/minecraft', (route) => {
+    await dashboard.page.route('**/api/start/minecraft', (route) => {
       startCalled = true;
       return route.fulfill({ json: { success: true, message: 'Started' } });
     });
 
-    await page.goto('/');
-    await page.getByRole('button', { name: 'Start' }).click();
+    await dashboard.goto();
+    await dashboard.startButton().click();
 
     await expect.poll(() => startCalled).toBe(true);
   });
 
-  test('should disable Start button for a running game', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [RUNNING_GAME] });
-    await page.goto('/');
+  test('should show only Stop as the primary action for a running game', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: [RUNNING_GAME] });
+    await dashboard.goto();
 
-    await expect(page.getByRole('button', { name: 'Start' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Stop' })).toBeEnabled();
+    // The redesigned card swaps the primary CTA based on state instead of
+    // disabling the inactive button — Start should not exist while running.
+    await expect(dashboard.stopButton()).toBeEnabled();
+    await expect(dashboard.startButton()).toHaveCount(0);
   });
 
-  test('should navigate to the Logs page via sidebar', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [] });
-    await page.goto('/');
+  test('should filter game cards by name in real time', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: MULTI_GAME_STATUSES });
+    await dashboard.goto();
 
-    await page.getByRole('link', { name: 'Logs' }).click();
-    await expect(page).toHaveURL('/logs');
+    await expect(dashboard.gameCardHeading('minecraft')).toBeVisible();
+    await expect(dashboard.gameCardHeading('valheim')).toBeVisible();
+
+    await dashboard.filter('valheim');
+
+    await expect(dashboard.gameCardHeading('minecraft')).toHaveCount(0);
+    await expect(dashboard.gameCardHeading('valheim')).toBeVisible();
+  });
+
+  test('should show empty-state message when search has no matches', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: MULTI_GAME_STATUSES });
+    await dashboard.goto();
+
+    await dashboard.filter('nonexistent');
+    await expect(dashboard.emptySearchMessage()).toBeVisible();
+  });
+
+  test('should render the KPI strip with the four ops tiles', async ({ dashboard }) => {
+    await stubApis(dashboard.page, { statuses: MULTI_GAME_STATUSES });
+    await dashboard.goto();
+
+    await expect(dashboard.kpiTileLabel('Servers running')).toBeVisible();
+    await expect(dashboard.kpiTileLabel('Spend today')).toBeVisible();
+    await expect(dashboard.kpiTileLabel('Forecast MTD')).toBeVisible();
+    await expect(dashboard.kpiTileLabel('Active alerts')).toBeVisible();
+    // 1 of 2 games are running in MULTI_GAME_STATUSES (valheim).
+    await expect(dashboard.serversRunningValue('1/2')).toBeVisible();
+  });
+
+  test('should navigate to the Logs page via sidebar', async ({ dashboard, layout }) => {
+    await stubApis(dashboard.page, { statuses: [] });
+    await dashboard.goto();
+
+    await layout.navigateTo('Logs', '/logs');
     // The /logs route is no longer a placeholder — verify the redesigned
     // page actually renders so a regression to the placeholder breaks here.
-    await expect(page.getByRole('heading', { name: 'Server Logs' })).toBeVisible();
+    await expect(dashboard.page.getByRole('heading', { name: 'Server Logs' })).toBeVisible();
   });
 
-  test('should navigate to the Discord page via sidebar', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [] });
-    await page.goto('/');
+  test('should navigate to the Discord page via sidebar', async ({ dashboard, layout }) => {
+    await stubApis(dashboard.page, { statuses: [] });
+    await dashboard.goto();
 
-    await page.getByRole('link', { name: 'Discord' }).click();
-    await expect(page).toHaveURL('/discord');
+    await layout.navigateTo('Discord', '/discord');
   });
 
-  test('should navigate to the Settings page via sidebar', async ({ authedPage: page }) => {
-    await stubApis(page, { statuses: [] });
-    await page.goto('/');
+  test('should navigate to the Settings page via sidebar', async ({ dashboard, layout }) => {
+    await stubApis(dashboard.page, { statuses: [] });
+    await dashboard.goto();
 
-    await page.getByRole('link', { name: 'Settings' }).click();
-    await expect(page).toHaveURL('/settings');
+    await layout.navigateTo('Settings', '/settings');
   });
 });

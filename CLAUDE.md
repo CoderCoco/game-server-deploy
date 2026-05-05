@@ -187,6 +187,22 @@ Use `.worktrees/<branch-name>` for feature work (the directory is gitignored). C
 git worktree add .worktrees/<branch> -b <branch>
 ```
 
+## Claude Code Plugins
+
+This repo expects the **`issue-flow`** plugin (from `CoderCoco/claude-plugin-marketplace`) to drive the issue → PR loop. Two skills, used in order:
+
+- **`work-on`** — start work on a GitHub issue. Creates the `claude/issue-<N>-<slug>` branch, scaffolds a worktree, and pulls the issue checklist into the session as the source of truth for what "done" means.
+- **`open-pr`** — finish the loop. Verifies the issue checklist is actually complete, picks up the repo's PR conventions (the rules in the next section), opens the PR with the right `Closes #N` keyword, and moves the project card to "In Review".
+
+Install once:
+
+```
+/plugin marketplace add CoderCoco/claude-plugin-marketplace
+/plugin install issue-flow@claude-plugin-marketplace
+```
+
+If the plugin isn't loaded in the current environment, fetch the skill body from the marketplace repo and follow it manually — don't fall back to ad-hoc PR creation, because the skills enforce checklist-completeness and the closing keyword that this repo's `/pr` command takes for granted.
+
 ## PR Conventions
 
 - **Always use `/pr` to create pull requests.** The `.claude/commands/pr.md` skill validates the title format before calling the API. Never call `mcp__github__create_pull_request` directly without running this check first.
