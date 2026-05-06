@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   PowerOff,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api, type GameStatus, type GameEstimate } from '../api.service.js';
 import { Card } from '@/components/ui/card.component';
 import { Button } from '@/components/ui/button.component';
@@ -143,9 +144,14 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
     setBusy(true);
     try {
       await api.start(game);
+      toast.success(`${game} is starting`);
+    } catch (err) {
+      toast.error(`Failed to start ${game}`, {
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
-      // Always release the busy flag, even if the request threw — otherwise a
-      // transient API failure would leave the card disabled until reload.
+      // Always schedule a refresh even on error — transient failures shouldn't
+      // leave the card disabled until reload.
       setTimeout(() => { void onRefresh(game); setBusy(false); }, 3000);
     }
   }
@@ -154,6 +160,17 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
     setBusy(true);
     try {
       await api.stop(game);
+      toast(`${game} stopped`, {
+        duration: 5000,
+        action: {
+          label: 'Undo',
+          onClick: () => { void api.start(game).then(() => onRefresh(game)); },
+        },
+      });
+    } catch (err) {
+      toast.error(`Failed to stop ${game}`, {
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setTimeout(() => { void onRefresh(game); setBusy(false); }, 3000);
     }

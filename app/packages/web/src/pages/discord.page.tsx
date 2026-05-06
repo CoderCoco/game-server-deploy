@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import {
   Eye,
   EyeOff,
@@ -113,11 +114,16 @@ export function DiscordPage() {
    * Guard a mutating API call with the `busy` flag and refresh config after
    * it resolves so the UI reflects the server-side change.
    */
-  async function wrap<T>(fn: () => Promise<T>): Promise<void> {
+  async function wrap<T>(fn: () => Promise<T>, successMsg?: string): Promise<void> {
     setBusy(true);
     try {
       await fn();
       await refresh();
+      if (successMsg) toast.success(successMsg);
+    } catch (err) {
+      toast.error('Action failed', {
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setBusy(false);
     }
@@ -173,7 +179,7 @@ export function DiscordPage() {
           <CredentialsSection
             cfg={cfg}
             busy={busy}
-            onSave={(body) => wrap(() => api.discordSaveCredentials(body))}
+            onSave={(body) => wrap(() => api.discordSaveCredentials(body), 'Credentials saved')}
           />
         </TabsContent>
 
@@ -181,9 +187,9 @@ export function DiscordPage() {
           <GuildsSection
             cfg={cfg}
             busy={busy}
-            onAdd={(g) => wrap(() => api.discordAddGuild(g))}
-            onRemove={(g) => wrap(() => api.discordRemoveGuild(g))}
-            onRegister={(g) => wrap(() => api.discordRegisterCommands(g))}
+            onAdd={(g) => wrap(() => api.discordAddGuild(g), 'Guild added')}
+            onRemove={(g) => wrap(() => api.discordRemoveGuild(g), 'Guild removed')}
+            onRegister={(g) => wrap(() => api.discordRegisterCommands(g), 'Commands registered')}
           />
         </TabsContent>
 
@@ -191,7 +197,7 @@ export function DiscordPage() {
           <AdminsSection
             cfg={cfg}
             busy={busy}
-            onSave={(a) => wrap(() => api.discordSaveAdmins(a))}
+            onSave={(a) => wrap(() => api.discordSaveAdmins(a), 'Admins saved')}
           />
         </TabsContent>
 
@@ -200,8 +206,8 @@ export function DiscordPage() {
             cfg={cfg}
             games={games}
             busy={busy}
-            onSave={(game, perm) => wrap(() => api.discordSavePermission(game, perm))}
-            onDelete={(game) => wrap(() => api.discordDeletePermission(game))}
+            onSave={(game, perm) => wrap(() => api.discordSavePermission(game, perm), 'Permissions saved')}
+            onDelete={(game) => wrap(() => api.discordDeletePermission(game), 'Permissions cleared')}
           />
         </TabsContent>
       </Tabs>
