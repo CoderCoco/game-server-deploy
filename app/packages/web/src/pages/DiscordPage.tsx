@@ -34,6 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { PollingIndicator } from '../polling/PollingIndicator.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
+import { isSuppressed } from '../lib/confirm-skip.js';
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const ALL_ACTIONS: DiscordAction[] = ['start', 'stop', 'status'];
@@ -976,6 +977,7 @@ function PermissionRow({
   const [userIds, setUserIds] = useState<string[]>(initial.userIds);
   const [roleIds, setRoleIds] = useState<string[]>(initial.roleIds);
   const [actions, setActions] = useState<DiscordAction[]>(initial.actions);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
 
   const dirty =
     JSON.stringify(userIds) !== JSON.stringify(initial.userIds) ||
@@ -988,7 +990,17 @@ function PermissionRow({
   }
 
   return (
-    <TableRow>
+    <>
+      <ConfirmDialog
+        open={clearDialogOpen}
+        onOpenChange={setClearDialogOpen}
+        title={`Clear permissions for ${game}?`}
+        description="Per-game permissions will be reset. This is recoverable from infrastructure-as-code."
+        confirmLabel="Clear"
+        confirmKey="clear-permissions"
+        onConfirm={() => { void onDelete(); }}
+      />
+      <TableRow>
       <TableCell className="font-medium capitalize align-top pt-4">{game}</TableCell>
       <TableCell className="align-top">
         <SnowflakeChipsInput value={userIds} onChange={setUserIds} placeholder="User IDs" />
@@ -1020,11 +1032,23 @@ function PermissionRow({
           >
             Save
           </Button>
-          <Button variant="outline" size="sm" disabled={busy} onClick={onDelete}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              if (isSuppressed('clear-permissions')) {
+                onDelete();
+              } else {
+                setClearDialogOpen(true);
+              }
+            }}
+          >
             Clear
           </Button>
         </div>
       </TableCell>
     </TableRow>
+    </>
   );
 }
