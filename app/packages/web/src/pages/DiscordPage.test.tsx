@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const apiMock = vi.hoisted(() => ({
   status: vi.fn(),
   costsEstimate: vi.fn(),
   games: vi.fn(),
   discordConfig: vi.fn(),
+  discordRemoveGuild: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../api.js', () => ({ api: apiMock }));
 
@@ -69,5 +71,45 @@ describe('DiscordPage', () => {
     // status poll above so the operator can still see "Updated …".
     expect(await screen.findByText('Loading…')).toBeInTheDocument();
     expect(await screen.findByText(/^Updated\b/)).toBeInTheDocument();
+  });
+
+  describe('Guilds tab — Remove guild', () => {
+    it('should open a confirmation dialog when Remove is clicked', async () => {
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      // Navigate to the Guilds tab
+      await userEvent.click(await screen.findByRole('tab', { name: 'Guilds' }));
+
+      // Click the Remove button for the guild
+      await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText('Remove guild?')).toBeInTheDocument();
+    });
+
+    it('should enable Confirm only after the guild ID is typed', async () => {
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await userEvent.click(await screen.findByRole('tab', { name: 'Guilds' }));
+      await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+      const confirmBtn = screen.getByRole('button', { name: /remove guild/i });
+      expect(confirmBtn).toBeDisabled();
+
+      await userEvent.type(screen.getByRole('textbox'), '111111111111111111');
+      expect(confirmBtn).not.toBeDisabled();
+    });
+
+    it('should call the remove API after the user types the guild ID and confirms', async () => {
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await userEvent.click(await screen.findByRole('tab', { name: 'Guilds' }));
+      await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+      await userEvent.type(screen.getByRole('textbox'), '111111111111111111');
+      await userEvent.click(screen.getByRole('button', { name: /remove guild/i }));
+
+      expect(apiMock.discordRemoveGuild).toHaveBeenCalledWith('111111111111111111');
+    });
   });
 });

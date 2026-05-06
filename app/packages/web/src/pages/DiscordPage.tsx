@@ -34,8 +34,6 @@ import {
 import { cn } from '@/lib/utils';
 import { PollingIndicator } from '../polling/PollingIndicator.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- used in Tasks 5 & 6 (same file)
-import { isSuppressed } from '../lib/confirm-skip.js';
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const ALL_ACTIONS: DiscordAction[] = ['start', 'stop', 'status'];
