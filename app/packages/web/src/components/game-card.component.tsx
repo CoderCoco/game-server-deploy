@@ -164,7 +164,15 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
         duration: 5000,
         action: {
           label: 'Undo',
-          onClick: () => { void api.start(game).then(() => onRefresh(game)); },
+          onClick: () => {
+            void api.start(game)
+              .then(() => onRefresh(game))
+              .catch((err: unknown) => {
+                toast.error(`Failed to undo stop of ${game}`, {
+                  description: err instanceof Error ? err.message : undefined,
+                });
+              });
+          },
         },
       });
     } catch (err) {
