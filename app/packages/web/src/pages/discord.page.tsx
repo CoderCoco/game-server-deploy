@@ -180,7 +180,7 @@ export function DiscordPage() {
           <CredentialsSection
             cfg={cfg}
             busy={busy}
-            onSave={(body) => wrap(() => api.discordSaveCredentials(body), 'Credentials saved')}
+            onSave={(body) => { void wrap(() => api.discordSaveCredentials(body), 'Credentials saved').catch(() => undefined); }}
           />
         </TabsContent>
 
@@ -188,8 +188,8 @@ export function DiscordPage() {
           <GuildsSection
             cfg={cfg}
             busy={busy}
-            onAdd={(g) => wrap(() => api.discordAddGuild(g), 'Guild added')}
-            onRemove={(g) => wrap(() => api.discordRemoveGuild(g), 'Guild removed')}
+            onAdd={(g) => { void wrap(() => api.discordAddGuild(g), 'Guild added').catch(() => undefined); }}
+            onRemove={(g) => { void wrap(() => api.discordRemoveGuild(g), 'Guild removed').catch(() => undefined); }}
             onRegister={(g) => wrap(() => api.discordRegisterCommands(g), 'Commands registered')}
           />
         </TabsContent>
@@ -198,7 +198,7 @@ export function DiscordPage() {
           <AdminsSection
             cfg={cfg}
             busy={busy}
-            onSave={(a) => wrap(() => api.discordSaveAdmins(a), 'Admins saved')}
+            onSave={(a) => { void wrap(() => api.discordSaveAdmins(a), 'Admins saved').catch(() => undefined); }}
           />
         </TabsContent>
 
@@ -207,8 +207,8 @@ export function DiscordPage() {
             cfg={cfg}
             games={games}
             busy={busy}
-            onSave={(game, perm) => wrap(() => api.discordSavePermission(game, perm), 'Permissions saved')}
-            onDelete={(game) => wrap(() => api.discordDeletePermission(game), 'Permissions cleared')}
+            onSave={(game, perm) => { void wrap(() => api.discordSavePermission(game, perm), 'Permissions saved').catch(() => undefined); }}
+            onDelete={(game) => { void wrap(() => api.discordDeletePermission(game), 'Permissions cleared').catch(() => undefined); }}
           />
         </TabsContent>
       </Tabs>

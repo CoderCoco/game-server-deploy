@@ -166,7 +166,7 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
           label: 'Undo',
           onClick: () => {
             void api.start(game)
-              .then(() => onRefresh(game))
+              .then(() => setTimeout(() => onRefresh(game), 3000))
               .catch((err: unknown) => {
                 toast.error(`Failed to undo stop of ${game}`, {
                   description: err instanceof Error ? err.message : undefined,
