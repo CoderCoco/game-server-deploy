@@ -124,6 +124,7 @@ export function DiscordPage() {
       toast.error('Action failed', {
         description: err instanceof Error ? err.message : undefined,
       });
+      throw err;
     } finally {
       setBusy(false);
     }
