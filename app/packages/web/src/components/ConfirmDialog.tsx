@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -10,7 +10,7 @@ import {
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
-import { isSuppressed, suppress } from '../lib/confirm-skip.js';
+import { suppress } from '../lib/confirm-skip.js';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -51,18 +51,21 @@ export function ConfirmDialog({
   const [typed, setTyped] = useState('');
   const [skipSession, setSkipSession] = useState(false);
 
+  useEffect(() => {
+    if (!open) {
+      setTyped('');
+      setSkipSession(false);
+    }
+  }, [open]);
+
   const confirmDisabled = typeToConfirm !== undefined && typed !== typeToConfirm;
 
   function handleConfirm() {
     if (confirmKey && skipSession) suppress(confirmKey);
     onConfirm();
-    setTyped('');
-    setSkipSession(false);
   }
 
   function handleCancel() {
-    setTyped('');
-    setSkipSession(false);
     onOpenChange(false);
   }
 
@@ -92,7 +95,7 @@ export function ConfirmDialog({
               onChange={(e) => setSkipSession(e.target.checked)}
               className="size-3.5 rounded"
             />
-            Don't ask again for this session
+            Don&apos;t ask again for this session
           </label>
         )}
 

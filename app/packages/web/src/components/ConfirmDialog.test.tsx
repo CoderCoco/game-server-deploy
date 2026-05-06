@@ -4,14 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { isSuppressed } from '../lib/confirm-skip.js';
 
-// Reset module-level Set between tests by re-importing with a fresh module
-vi.mock('../lib/confirm-skip.js', () => {
-  const store = new Set<string>();
-  return {
-    isSuppressed: (key: string) => store.has(key),
-    suppress: (key: string) => store.add(key),
-  };
-});
+const mockStore = new Set<string>();
+
+vi.mock('../lib/confirm-skip.js', () => ({
+  isSuppressed: (key: string) => mockStore.has(key),
+  suppress: (key: string) => mockStore.add(key),
+}));
 
 function open(overrides: Partial<Parameters<typeof ConfirmDialog>[0]> = {}) {
   const onConfirm = vi.fn();
@@ -30,6 +28,10 @@ function open(overrides: Partial<Parameters<typeof ConfirmDialog>[0]> = {}) {
 }
 
 describe('ConfirmDialog', () => {
+  beforeEach(() => {
+    mockStore.clear();
+  });
+
   it('should render the title and description', () => {
     open();
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
