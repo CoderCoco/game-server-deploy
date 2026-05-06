@@ -706,6 +706,7 @@ function AdminsSection({
 }) {
   const [userIds, setUserIds] = useState<string[]>(cfg.admins.userIds);
   const [roleIds, setRoleIds] = useState<string[]>(cfg.admins.roleIds);
+  const [pendingRemove, setPendingRemove] = useState<{ list: 'user' | 'role'; id: string } | null>(null);
   const hasBaseAdmins =
     cfg.baseAdmins.userIds.length > 0 || cfg.baseAdmins.roleIds.length > 0;
 
@@ -714,7 +715,26 @@ function AdminsSection({
     JSON.stringify(roleIds) !== JSON.stringify(cfg.admins.roleIds);
 
   return (
-    <Card>
+    <>
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
+        title="Remove admin?"
+        description="This ID will no longer have admin-level access."
+        confirmLabel="Remove"
+        confirmKey="remove-admin"
+        onConfirm={() => {
+          if (pendingRemove) {
+            if (pendingRemove.list === 'user') {
+              setUserIds((cur) => cur.filter((v) => v !== pendingRemove.id));
+            } else {
+              setRoleIds((cur) => cur.filter((v) => v !== pendingRemove.id));
+            }
+          }
+          setPendingRemove(null);
+        }}
+      />
+      <Card>
       <CardHeader>
         <CardTitle>Admins</CardTitle>
         <CardDescription>
@@ -729,6 +749,13 @@ function AdminsSection({
             value={userIds}
             onChange={setUserIds}
             placeholder="Paste or type a user ID, then press Enter"
+            onRemoveChip={(id) => {
+              if (isSuppressed('remove-admin')) {
+                setUserIds((cur) => cur.filter((v) => v !== id));
+              } else {
+                setPendingRemove({ list: 'user', id });
+              }
+            }}
           />
         </div>
         <div className="space-y-2">
@@ -737,6 +764,13 @@ function AdminsSection({
             value={roleIds}
             onChange={setRoleIds}
             placeholder="Paste or type a role ID, then press Enter"
+            onRemoveChip={(id) => {
+              if (isSuppressed('remove-admin')) {
+                setRoleIds((cur) => cur.filter((v) => v !== id));
+              } else {
+                setPendingRemove({ list: 'role', id });
+              }
+            }}
           />
         </div>
 
@@ -772,6 +806,7 @@ function AdminsSection({
         )}
       </CardContent>
     </Card>
+    </>
   );
 }
 
@@ -800,10 +835,13 @@ function SnowflakeChipsInput({
   value,
   onChange,
   placeholder,
+  onRemoveChip,
 }: {
   value: string[];
   onChange: (next: string[]) => void;
   placeholder?: string;
+  /** When provided, called instead of removing the chip immediately — caller handles confirmation. */
+  onRemoveChip?: (id: string) => void;
 }) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -840,7 +878,7 @@ function SnowflakeChipsInput({
             {id}
             <button
               type="button"
-              onClick={() => removeAt(id)}
+              onClick={() => (onRemoveChip ? onRemoveChip(id) : removeAt(id))}
               aria-label={`Remove ${id}`}
               className="hover:text-[var(--color-red)]"
             >
