@@ -566,7 +566,7 @@ function GuildsSection({
         confirmLabel="Remove guild"
         typeToConfirm={pendingRemoveId ?? ''}
         onConfirm={() => {
-          if (pendingRemoveId) onRemove(pendingRemoveId);
+          if (pendingRemoveId) void onRemove(pendingRemoveId);
           setPendingRemoveId(null);
         }}
       />
