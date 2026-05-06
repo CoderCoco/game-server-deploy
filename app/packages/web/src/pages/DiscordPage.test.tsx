@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   games: vi.fn(),
   discordConfig: vi.fn(),
   discordRemoveGuild: vi.fn().mockResolvedValue(undefined),
+  discordDeletePermission: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../api.js', () => ({ api: apiMock }));
 
@@ -71,6 +72,31 @@ describe('DiscordPage', () => {
     // status poll above so the operator can still see "Updated …".
     expect(await screen.findByText('Loading…')).toBeInTheDocument();
     expect(await screen.findByText(/^Updated\b/)).toBeInTheDocument();
+  });
+
+  describe('Per-Game Permissions tab — Clear', () => {
+    it('should open a confirmation dialog when Clear is clicked', async () => {
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      // Navigate to the Per-Game Permissions tab
+      await userEvent.click(await screen.findByRole('tab', { name: 'Per-Game Permissions' }));
+
+      // Click the Clear button for the minecraft row
+      await userEvent.click(screen.getByRole('button', { name: /clear/i }));
+
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText('Clear permissions for minecraft?')).toBeInTheDocument();
+    });
+
+    it('should call the delete API after the user confirms', async () => {
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await userEvent.click(await screen.findByRole('tab', { name: 'Per-Game Permissions' }));
+      await userEvent.click(screen.getByRole('button', { name: /clear/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^clear$/i }));
+
+      expect(apiMock.discordDeletePermission).toHaveBeenCalledWith('minecraft');
+    });
   });
 
   describe('Guilds tab — Remove guild', () => {

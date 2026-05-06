@@ -1001,54 +1001,54 @@ function PermissionRow({
         onConfirm={() => { void onDelete(); }}
       />
       <TableRow>
-      <TableCell className="font-medium capitalize align-top pt-4">{game}</TableCell>
-      <TableCell className="align-top">
-        <SnowflakeChipsInput value={userIds} onChange={setUserIds} placeholder="User IDs" />
-      </TableCell>
-      <TableCell className="align-top">
-        <SnowflakeChipsInput value={roleIds} onChange={setRoleIds} placeholder="Role IDs" />
-      </TableCell>
-      <TableCell className="align-top pt-4">
-        <div className="flex flex-col gap-1.5">
-          {ALL_ACTIONS.map((a) => (
-            <label key={a} className="flex items-center gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox"
-                checked={actions.includes(a)}
-                onChange={() => toggle(a)}
-                className="size-3.5 rounded border-[var(--color-border)] bg-[var(--color-surface-2)] accent-[var(--color-primary)]"
-              />
-              <span className="capitalize">{a}</span>
-            </label>
-          ))}
-        </div>
-      </TableCell>
-      <TableCell className="text-right align-top pt-4">
-        <div className="inline-flex flex-col gap-1.5">
-          <Button
-            size="sm"
-            disabled={busy || !dirty}
-            onClick={() => onSave({ userIds, roleIds, actions })}
-          >
-            Save
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              if (isSuppressed('clear-permissions')) {
-                onDelete();
-              } else {
-                setClearDialogOpen(true);
-              }
-            }}
-          >
-            Clear
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
+        <TableCell className="font-medium capitalize align-top pt-4">{game}</TableCell>
+        <TableCell className="align-top">
+          <SnowflakeChipsInput value={userIds} onChange={setUserIds} placeholder="User IDs" />
+        </TableCell>
+        <TableCell className="align-top">
+          <SnowflakeChipsInput value={roleIds} onChange={setRoleIds} placeholder="Role IDs" />
+        </TableCell>
+        <TableCell className="align-top pt-4">
+          <div className="flex flex-col gap-1.5">
+            {ALL_ACTIONS.map((a) => (
+              <label key={a} className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={actions.includes(a)}
+                  onChange={() => toggle(a)}
+                  className="size-3.5 rounded border-[var(--color-border)] bg-[var(--color-surface-2)] accent-[var(--color-primary)]"
+                />
+                <span className="capitalize">{a}</span>
+              </label>
+            ))}
+          </div>
+        </TableCell>
+        <TableCell className="text-right align-top pt-4">
+          <div className="inline-flex flex-col gap-1.5">
+            <Button
+              size="sm"
+              disabled={busy || !dirty}
+              onClick={() => onSave({ userIds, roleIds, actions })}
+            >
+              Save
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                if (isSuppressed('clear-permissions')) {
+                  void onDelete();
+                } else {
+                  setClearDialogOpen(true);
+                }
+              }}
+            >
+              Clear
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
     </>
   );
 }
