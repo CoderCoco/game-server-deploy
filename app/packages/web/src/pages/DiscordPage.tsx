@@ -33,6 +33,9 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { PollingIndicator } from '../polling/PollingIndicator.js';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- used in Tasks 5 & 6 (same file)
+import { isSuppressed } from '../lib/confirm-skip.js';
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const ALL_ACTIONS: DiscordAction[] = ['start', 'stop', 'status'];
@@ -493,6 +496,7 @@ function GuildsSection({
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [registered, setRegistered] = useState<Set<string>>(new Set());
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   // Merge the terraform-managed and dynamic allowlists, deduping by guild ID
   // so a guild that appears in both never renders twice (which would collide
   // React keys and produce conflicting per-row actions). The terraform entry
@@ -554,15 +558,28 @@ function GuildsSection({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Guilds</CardTitle>
-        <CardDescription>
-          The interactions Lambda rejects commands from any server whose ID isn&apos;t in this
-          allowlist. Enable Discord Developer Mode (Settings → Advanced) to copy server IDs.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <>
+      <ConfirmDialog
+        open={pendingRemoveId !== null}
+        onOpenChange={(o) => { if (!o) setPendingRemoveId(null); }}
+        title="Remove guild?"
+        description="The bot will no longer respond to commands from this guild."
+        confirmLabel="Remove guild"
+        typeToConfirm={pendingRemoveId ?? ''}
+        onConfirm={() => {
+          if (pendingRemoveId) onRemove(pendingRemoveId);
+          setPendingRemoveId(null);
+        }}
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Guilds</CardTitle>
+          <CardDescription>
+            The interactions Lambda rejects commands from any server whose ID isn&apos;t in this
+            allowlist. Enable Discord Developer Mode (Settings → Advanced) to copy server IDs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
         <div>
           <Label htmlFor="add-guild" className="mb-2 block">
             Add a guild
@@ -656,7 +673,7 @@ function GuildsSection({
                           variant="outline"
                           size="sm"
                           disabled={busy || locked}
-                          onClick={() => onRemove(id)}
+                          onClick={() => setPendingRemoveId(id)}
                           title={locked ? 'Managed by Terraform — remove via terraform.tfvars' : undefined}
                         >
                           Remove
@@ -671,6 +688,7 @@ function GuildsSection({
         )}
       </CardContent>
     </Card>
+  </>
   );
 }
 
