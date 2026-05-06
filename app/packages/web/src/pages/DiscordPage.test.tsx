@@ -9,6 +9,7 @@ const apiMock = vi.hoisted(() => ({
   discordConfig: vi.fn(),
   discordRemoveGuild: vi.fn().mockResolvedValue(undefined),
   discordDeletePermission: vi.fn().mockResolvedValue(undefined),
+  discordSaveAdmins: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../api.js', () => ({ api: apiMock }));
 
@@ -136,6 +137,50 @@ describe('DiscordPage', () => {
       await userEvent.click(screen.getByRole('button', { name: /remove guild/i }));
 
       expect(apiMock.discordRemoveGuild).toHaveBeenCalledWith('111111111111111111');
+    });
+  });
+
+  describe('Admins tab — Remove admin', () => {
+    const CONFIG_WITH_ADMINS = {
+      ...REDACTED_CONFIG,
+      admins: {
+        userIds: ['111222333444555666'],
+        roleIds: ['999888777666555444'],
+      },
+    };
+
+    it('should open a confirmation dialog when the X button is clicked on an admin user ID chip', async () => {
+      apiMock.discordConfig.mockResolvedValue(CONFIG_WITH_ADMINS);
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await userEvent.click(await screen.findByRole('tab', { name: 'Admins' }));
+
+      await userEvent.click(screen.getByRole('button', { name: /remove 111222333444555666/i }));
+
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText('Remove admin?')).toBeInTheDocument();
+    });
+
+    it('should open a confirmation dialog when the X button is clicked on an admin role ID chip', async () => {
+      apiMock.discordConfig.mockResolvedValue(CONFIG_WITH_ADMINS);
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await userEvent.click(await screen.findByRole('tab', { name: 'Admins' }));
+
+      await userEvent.click(screen.getByRole('button', { name: /remove 999888777666555444/i }));
+
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    });
+
+    it('should remove the user ID from the chip list after the user confirms', async () => {
+      apiMock.discordConfig.mockResolvedValue(CONFIG_WITH_ADMINS);
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await userEvent.click(await screen.findByRole('tab', { name: 'Admins' }));
+      await userEvent.click(screen.getByRole('button', { name: /remove 111222333444555666/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^remove$/i }));
+
+      expect(screen.queryByText('111222333444555666')).not.toBeInTheDocument();
     });
   });
 });

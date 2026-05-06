@@ -735,77 +735,77 @@ function AdminsSection({
         }}
       />
       <Card>
-      <CardHeader>
-        <CardTitle>Admins</CardTitle>
-        <CardDescription>
-          Admins can run every command on every game. Right-click a user or role with Discord
-          Developer Mode enabled to copy their ID.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="space-y-2">
-          <Label>Admin User IDs</Label>
-          <SnowflakeChipsInput
-            value={userIds}
-            onChange={setUserIds}
-            placeholder="Paste or type a user ID, then press Enter"
-            onRemoveChip={(id) => {
-              if (isSuppressed('remove-admin')) {
-                setUserIds((cur) => cur.filter((v) => v !== id));
-              } else {
-                setPendingRemove({ list: 'user', id });
-              }
-            }}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Admin Role IDs</Label>
-          <SnowflakeChipsInput
-            value={roleIds}
-            onChange={setRoleIds}
-            placeholder="Paste or type a role ID, then press Enter"
-            onRemoveChip={(id) => {
-              if (isSuppressed('remove-admin')) {
-                setRoleIds((cur) => cur.filter((v) => v !== id));
-              } else {
-                setPendingRemove({ list: 'role', id });
-              }
-            }}
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <Button disabled={busy || !dirty} onClick={() => onSave({ userIds, roleIds })}>
-            Save admins
-          </Button>
-        </div>
-
-        {hasBaseAdmins && (
-          <div className="border-t border-[var(--color-border)] pt-4 space-y-3">
-            <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
-              <ShieldCheck className="size-3.5" />
-              Terraform-managed (read-only)
-            </div>
-            {cfg.baseAdmins.userIds.length > 0 && (
-              <div>
-                <Label className="text-xs text-[var(--color-muted-foreground)]">
-                  Admin User IDs
-                </Label>
-                <ChipList ids={cfg.baseAdmins.userIds} />
-              </div>
-            )}
-            {cfg.baseAdmins.roleIds.length > 0 && (
-              <div>
-                <Label className="text-xs text-[var(--color-muted-foreground)]">
-                  Admin Role IDs
-                </Label>
-                <ChipList ids={cfg.baseAdmins.roleIds} />
-              </div>
-            )}
+        <CardHeader>
+          <CardTitle>Admins</CardTitle>
+          <CardDescription>
+            Admins can run every command on every game. Right-click a user or role with Discord
+            Developer Mode enabled to copy their ID.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <Label>Admin User IDs</Label>
+            <SnowflakeChipsInput
+              value={userIds}
+              onChange={setUserIds}
+              placeholder="Paste or type a user ID, then press Enter"
+              onRemoveChip={(id) => {
+                if (isSuppressed('remove-admin')) {
+                  setUserIds((cur) => cur.filter((v) => v !== id));
+                } else {
+                  setPendingRemove({ list: 'user', id });
+                }
+              }}
+            />
           </div>
-        )}
-      </CardContent>
-    </Card>
+          <div className="space-y-2">
+            <Label>Admin Role IDs</Label>
+            <SnowflakeChipsInput
+              value={roleIds}
+              onChange={setRoleIds}
+              placeholder="Paste or type a role ID, then press Enter"
+              onRemoveChip={(id) => {
+                if (isSuppressed('remove-admin')) {
+                  setRoleIds((cur) => cur.filter((v) => v !== id));
+                } else {
+                  setPendingRemove({ list: 'role', id });
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button disabled={busy || !dirty} onClick={() => onSave({ userIds, roleIds })}>
+              Save admins
+            </Button>
+          </div>
+
+          {hasBaseAdmins && (
+            <div className="border-t border-[var(--color-border)] pt-4 space-y-3">
+              <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
+                <ShieldCheck className="size-3.5" />
+                Terraform-managed (read-only)
+              </div>
+              {cfg.baseAdmins.userIds.length > 0 && (
+                <div>
+                  <Label className="text-xs text-[var(--color-muted-foreground)]">
+                    Admin User IDs
+                  </Label>
+                  <ChipList ids={cfg.baseAdmins.userIds} />
+                </div>
+              )}
+              {cfg.baseAdmins.roleIds.length > 0 && (
+                <div>
+                  <Label className="text-xs text-[var(--color-muted-foreground)]">
+                    Admin Role IDs
+                  </Label>
+                  <ChipList ids={cfg.baseAdmins.roleIds} />
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }
@@ -898,7 +898,12 @@ function SnowflakeChipsInput({
               e.preventDefault();
               commit();
             } else if (e.key === 'Backspace' && !draft && value.length) {
-              onChange(value.slice(0, -1));
+              const last = value[value.length - 1];
+              if (onRemoveChip) {
+                onRemoveChip(last);
+              } else {
+                onChange(value.slice(0, -1));
+              }
             }
           }}
           onBlur={() => commit()}
