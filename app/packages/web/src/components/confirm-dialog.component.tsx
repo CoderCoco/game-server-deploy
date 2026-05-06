@@ -65,10 +65,6 @@ export function ConfirmDialog({
     onConfirm();
   }
 
-  function handleCancel() {
-    onOpenChange(false);
-  }
-
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -100,7 +96,7 @@ export function ConfirmDialog({
         )}
 
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirm} disabled={confirmDisabled}>
             {confirmLabel}
           </AlertDialogAction>
