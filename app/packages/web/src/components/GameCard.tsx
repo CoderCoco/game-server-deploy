@@ -172,7 +172,7 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
         description="Active sessions will end."
         confirmLabel="Stop server"
         confirmKey="stop-server"
-        onConfirm={() => { setStopDialogOpen(false); void handleStop(); }}
+        onConfirm={() => { void handleStop(); }}
       />
       <Card className="relative overflow-hidden p-0 flex flex-col">
         {/* Top gradient accent rule */}
