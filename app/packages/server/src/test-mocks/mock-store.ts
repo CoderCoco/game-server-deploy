@@ -14,10 +14,10 @@ export interface MockResponse {
  * `TestMocksController` HTTP endpoints before exercising each flow.
  *
  * Default (empty queue) behaviour per command:
- *  - ListTasks    → { taskArns: [] }   (no running tasks)
- *  - DescribeTasks → { tasks: [] }
- *  - RunTask      → { tasks: [{ taskArn: 'arn:aws:ecs:us-east-1:123:task/test-cluster/test-task-id' }] }
- *  - StopTask     → {}
+ *  - ListTasks    → \{ taskArns: [] \}   (no running tasks)
+ *  - DescribeTasks → \{ tasks: [] \}
+ *  - RunTask      → \{ tasks: [\{ taskArn: 'arn:aws:ecs:us-east-1:123:task/test-cluster/test-task-id' \}] \}
+ *  - StopTask     → \{\}
  */
 class MockStore {
   private listTasksQueue: MockResponse[] = [];
