@@ -41,3 +41,6 @@ app/packages/web/playwright/.cache/
 app/packages/web/dist-integration/
 
 .make
+
+# Vitest coverage output
+app/coverage/
