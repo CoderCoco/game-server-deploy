@@ -147,7 +147,7 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
       toast.success(`${game} is starting`);
     } catch (err) {
       toast.error(`Failed to start ${game}`, {
-        description: err instanceof Error ? err.message : undefined,
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
       });
     } finally {
       // Always schedule a refresh even on error — transient failures shouldn't
@@ -169,7 +169,7 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
               .then(() => setTimeout(() => onRefresh(game), 3000))
               .catch((err: unknown) => {
                 toast.error(`Failed to undo stop of ${game}`, {
-                  description: err instanceof Error ? err.message : undefined,
+                  description: err instanceof Error ? err.message : 'An unknown error occurred',
                 });
               });
           },
@@ -177,7 +177,7 @@ export function GameCard({ status, estimate, onRefresh, onOpenFiles }: Props) {
       });
     } catch (err) {
       toast.error(`Failed to stop ${game}`, {
-        description: err instanceof Error ? err.message : undefined,
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
       });
     } finally {
       setTimeout(() => { void onRefresh(game); setBusy(false); }, 3000);

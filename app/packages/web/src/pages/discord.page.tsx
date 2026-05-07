@@ -122,7 +122,7 @@ export function DiscordPage() {
       if (successMsg) toast.success(successMsg);
     } catch (err) {
       toast.error('Action failed', {
-        description: err instanceof Error ? err.message : undefined,
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
       });
       throw err;
     } finally {

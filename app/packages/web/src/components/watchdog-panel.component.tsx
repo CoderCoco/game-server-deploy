@@ -25,7 +25,7 @@ export function WatchdogPanel() {
       toast.success('Watchdog settings saved');
     } catch (err) {
       toast.error('Failed to save watchdog settings', {
-        description: err instanceof Error ? err.message : undefined,
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
       });
     }
   }
