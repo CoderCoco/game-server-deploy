@@ -35,9 +35,14 @@ export class DashboardPage {
     return this.page.getByText(state, { exact: true });
   }
 
-  /** Empty-state when the operator hasn't configured any games at all. */
+  /** Empty-state card heading shown when no games are deployed. */
   emptyConfiguredMessage(): Locator {
-    return this.page.getByText(/no games configured/i);
+    return this.page.getByRole('heading', { name: /no games deployed/i });
+  }
+
+  /** "Open setup guide" CTA link inside the no-games card. */
+  setupGuideLink(): Locator {
+    return this.page.getByRole('link', { name: /open setup guide/i });
   }
 
   /** Empty-state when the search input filters out every card. */

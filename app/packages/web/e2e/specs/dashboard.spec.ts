@@ -39,6 +39,18 @@ test.describe('dashboard', () => {
     await expect(dashboard.emptyConfiguredMessage()).toBeVisible();
   });
 
+  test('should show setup guide and terraform.tfvars CTAs in the no-games card', async ({
+    dashboard,
+  }) => {
+    await stubApis(dashboard.page, { statuses: [] });
+    await dashboard.goto();
+
+    await expect(dashboard.setupGuideLink()).toBeVisible();
+    await expect(
+      dashboard.page.getByRole('link', { name: /terraform\.tfvars/i }),
+    ).toBeVisible();
+  });
+
   test('should fire POST /api/start/:game when Start is clicked', async ({ dashboard }) => {
     await stubApis(dashboard.page, { statuses: [STOPPED_GAME] });
 
