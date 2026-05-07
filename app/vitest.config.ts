@@ -29,6 +29,22 @@ export default defineConfig({
     globals: false,
     clearMocks: true,
     restoreMocks: true,
+    coverage: {
+      provider: 'v8',
+      // Measure all source files, not just those touched by tests.
+      include: ['packages/**/*.{ts,tsx}'],
+      exclude: [
+        'packages/**/*.test.{ts,tsx}',
+        'packages/**/*.d.ts',
+        'packages/**/dist/**',
+        'packages/server/src/generated/**',
+        'packages/web/src/generated/**',
+      ],
+      // text: printed to console after each run.
+      // lcov: machine-readable format; available for future Codecov integration.
+      reporter: ['text', 'lcov'],
+      reportsDirectory: './coverage',
+    },
   },
   esbuild: {
     target: 'es2022',
