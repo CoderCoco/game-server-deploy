@@ -90,7 +90,13 @@ function Field({
         {label}
         <Tooltip>
           <TooltipTrigger asChild>
-            <HelpCircle style={{ width: '0.7rem', height: '0.7rem', flexShrink: 0, cursor: 'help' }} />
+            <button
+              type="button"
+              aria-label={`${label} help`}
+              style={{ display: 'inline-flex', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'help', color: 'inherit' }}
+            >
+              <HelpCircle style={{ width: '0.7rem', height: '0.7rem', flexShrink: 0 }} />
+            </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-56">
             {tooltip}

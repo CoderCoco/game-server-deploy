@@ -91,6 +91,7 @@ export function DiscordPage() {
   const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [games, setGames] = useState<string[]>([]);
+  const [showWizard, setShowWizard] = useState(false);
 
   useEffect(() => {
     api.games().then((g) => setGames(g.games)).catch(() => undefined);
@@ -109,6 +110,27 @@ export function DiscordPage() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  // Latch the wizard open on first load when no guilds are configured so the
+  // operator can work through each step and see the final green check on step 4.
+  useEffect(() => {
+    if (cfg && cfg.allowedGuilds.length === 0) {
+      setShowWizard(true);
+    }
+  }, [cfg]);
+
+  const allStepsDone =
+    !!cfg?.clientId &&
+    !!cfg?.botTokenSet &&
+    !!cfg?.publicKeySet &&
+    !!cfg?.interactionsEndpointUrl &&
+    (cfg?.allowedGuilds.length ?? 0) > 0;
+
+  // Collapse only after the render that shows all four checks — the effect
+  // fires after paint so the operator sees step 4 as green before it hides.
+  useEffect(() => {
+    if (allStepsDone) setShowWizard(false);
+  }, [allStepsDone]);
 
   /**
    * Guard a mutating API call with the `busy` flag and refresh config after
@@ -141,8 +163,6 @@ export function DiscordPage() {
       </div>
     );
   }
-
-  const showWizard = cfg.allowedGuilds.length === 0;
 
   return (
     <div className="max-w-5xl mx-auto p-8 space-y-6">
