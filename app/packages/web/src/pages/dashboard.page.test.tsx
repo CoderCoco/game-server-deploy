@@ -52,6 +52,15 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('heading', { name: 'valheim' })).toBeInTheDocument();
   });
 
+  it('should render the no-games card with CTAs when the server returns no statuses', async () => {
+    apiMock.status.mockResolvedValue([]);
+    renderPage(<DashboardPage />);
+
+    expect(await screen.findByRole('heading', { name: 'No games deployed' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open setup guide/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /terraform\.tfvars/i })).toBeInTheDocument();
+  });
+
   it('should narrow the visible cards by the search filter without removing the indicator', async () => {
     const user = userEvent.setup();
     renderPage(<DashboardPage />);

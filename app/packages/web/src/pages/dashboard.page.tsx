@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Server, ExternalLink } from 'lucide-react';
 import { useGameStatus } from '../polling/game-status-provider.component.js';
 import { useFileManager } from '../hooks/use-file-manager.hook.js';
 import { api, type ActualCosts } from '../api.service.js';
@@ -8,6 +8,7 @@ import { KpiStrip } from '../components/kpi-strip.component.js';
 import { FileManagerModal } from '../components/file-manager-modal.component.js';
 import { PollingIndicator } from '../polling/polling-indicator.component.js';
 import { Input } from '@/components/ui/input.component';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card.component';
 
 /**
  * Dashboard route (`/`) — top KPI strip, then a search-filterable grid of
@@ -65,8 +66,8 @@ export function DashboardPage() {
               Loading servers…
             </div>
           ) : statuses.length === 0 ? (
-            <div className="col-span-full text-sm text-[var(--color-muted-foreground)] py-8 text-center">
-              No games configured. Run <code>terraform apply</code> first.
+            <div className="col-span-full py-8 flex justify-center">
+              <NoGamesCard />
             </div>
           ) : visible.length === 0 ? (
             <div className="col-span-full text-sm text-[var(--color-muted-foreground)] py-8 text-center">
@@ -98,5 +99,48 @@ export function DashboardPage() {
         />
       )}
     </>
+  );
+}
+
+/** Shown when the API returns no game statuses — guides first-time operators. */
+function NoGamesCard() {
+  return (
+    <Card className="max-w-lg w-full border-[var(--color-border)]">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="p-2 rounded-lg bg-[var(--color-primary)]/10">
+            <Server className="size-5 text-[var(--color-primary-light)]" />
+          </div>
+          <CardTitle>No games deployed</CardTitle>
+        </div>
+        <CardDescription>
+          Game servers are provisioned via Terraform. Each entry in{' '}
+          <code className="font-mono text-xs bg-[var(--color-surface-2)] px-1 py-0.5 rounded">
+            terraform.tfvars
+          </code>{' '}
+          creates an ECS task definition, EFS volume, and CloudWatch log group automatically.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-4">
+        <a
+          href="https://codercoco.github.io/game-server-deploy/setup"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--color-primary-light)] underline-offset-4 hover:underline"
+        >
+          Open setup guide
+          <ExternalLink className="size-3.5" />
+        </a>
+        <a
+          href="https://github.com/CoderCoco/game-server-deploy/blob/main/terraform/terraform.tfvars.example"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--color-primary-light)] underline-offset-4 hover:underline"
+        >
+          Edit <code className="font-mono text-xs">terraform.tfvars</code>
+          <ExternalLink className="size-3.5" />
+        </a>
+      </CardContent>
+    </Card>
   );
 }
