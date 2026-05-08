@@ -29,6 +29,42 @@ export default defineConfig({
     globals: false,
     clearMocks: true,
     restoreMocks: true,
+    coverage: {
+      provider: 'v8',
+      // Measure all source files, not just those touched by tests.
+      // Scoped to src/ trees so Playwright e2e files, Vite/Playwright configs,
+      // and other non-unit-tested support files are excluded by default.
+      // Double-star is needed because lambda packages nest under packages/lambda/*.
+      include: ['packages/**/src/**/*.{ts,tsx}'],
+      exclude: [
+        'packages/**/*.test.{ts,tsx}',
+        'packages/**/*.d.ts',
+        'packages/**/dist/**',
+        'packages/server/src/generated/**',
+        'packages/web/src/generated/**',
+        // Bootstrap / entry-point files — only exercised by e2e/integration tests.
+        'packages/server/src/main.ts',
+        'packages/server/src/test-main.ts',
+        'packages/web/src/main.tsx',
+        // NestJS DI module files — wiring config, not business logic.
+        'packages/server/src/app.module.ts',
+        'packages/server/src/modules/**',
+        // Test-only infrastructure — not production code.
+        'packages/server/src/test-mocks/**',
+        // Pure type declarations — no executable statements.
+        'packages/shared/src/types.ts',
+      ],
+      // text: printed to console after each run.
+      // lcov: machine-readable format; available for future Codecov integration.
+      reporter: ['text', 'lcov'],
+      reportsDirectory: './coverage',
+      thresholds: {
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
+      },
+    },
   },
   esbuild: {
     target: 'es2022',
