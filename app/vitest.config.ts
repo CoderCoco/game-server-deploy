@@ -32,7 +32,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       // Measure all source files, not just those touched by tests.
-      include: ['packages/**/*.{ts,tsx}'],
+      // Scoped to src/ trees so Playwright e2e files, Vite/Playwright configs,
+      // and other non-unit-tested support files are excluded by default.
+      include: ['packages/*/src/**/*.{ts,tsx}'],
       exclude: [
         'packages/**/*.test.{ts,tsx}',
         'packages/**/*.d.ts',
