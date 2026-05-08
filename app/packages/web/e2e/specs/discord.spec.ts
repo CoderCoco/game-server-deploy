@@ -34,6 +34,34 @@ test.describe('discord settings', () => {
     await expect(page.getByRole('heading', { name: 'Get started' })).not.toBeVisible();
   });
 
+  test('should show the wizard when allowedGuilds is empty even if credentials are already set', async ({
+    authedPage: page,
+  }) => {
+    await stubApis(page, {
+      discord: { ...CONFIGURED_DISCORD_CONFIG, allowedGuilds: [] },
+    });
+    await page.goto('/discord');
+
+    await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible();
+  });
+
+  test('should render live checkmarks for satisfied wizard steps', async ({
+    authedPage: page,
+  }) => {
+    // clientId set → step 1 done; botTokenSet + publicKeySet → step 2 done;
+    // interactionsEndpointUrl set → step 3 done; no guilds → step 4 pending.
+    await stubApis(page, {
+      discord: { ...CONFIGURED_DISCORD_CONFIG, allowedGuilds: [] },
+    });
+    await page.goto('/discord');
+
+    await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible();
+    // The credentials step should be struck through (done) because both secrets are set
+    const credentialsStep = page.getByText(/Paste those values into the/i);
+    await expect(credentialsStep).toBeVisible();
+    await expect(credentialsStep).toHaveCSS('text-decoration-line', 'line-through');
+  });
+
   test('should render the Credentials tab by default', async ({ authedPage: page }) => {
     await stubApis(page, { discord: CONFIGURED_DISCORD_CONFIG });
     await page.goto('/discord');

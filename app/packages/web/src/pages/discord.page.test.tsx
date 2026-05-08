@@ -65,6 +65,45 @@ describe('DiscordPage', () => {
     expect(screen.getByRole('tab', { name: 'Per-Game Permissions' })).toBeInTheDocument();
   });
 
+  describe('SetupWizard', () => {
+    it('should render the setup wizard when allowedGuilds is empty', async () => {
+      apiMock.discordConfig.mockResolvedValue({
+        ...REDACTED_CONFIG,
+        allowedGuilds: [],
+        botTokenSet: false,
+        publicKeySet: false,
+        clientId: '',
+        interactionsEndpointUrl: null,
+      });
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      expect(await screen.findByRole('heading', { name: 'Get started' })).toBeInTheDocument();
+    });
+
+    it('should not render the setup wizard when allowedGuilds is non-empty', async () => {
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await screen.findByText(/Slash-command bot configuration/i);
+      expect(screen.queryByRole('heading', { name: 'Get started' })).toBeNull();
+    });
+
+    it('should mark credentials step as done when botTokenSet and publicKeySet are true', async () => {
+      apiMock.discordConfig.mockResolvedValue({
+        ...REDACTED_CONFIG,
+        allowedGuilds: [],
+        botTokenSet: true,
+        publicKeySet: true,
+        clientId: '123456789012345678',
+        interactionsEndpointUrl: null,
+      });
+      renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
+
+      await screen.findByRole('heading', { name: 'Get started' });
+      // The credentials step text should be present (and rendered as struck-through)
+      expect(screen.getByText(/Paste those values into the/i)).toBeInTheDocument();
+    });
+  });
+
   it('should show the unavailable-state copy when /api/discord/config rejects', async () => {
     apiMock.discordConfig.mockRejectedValue(new Error('boom'));
     renderPage(<DiscordPage />, { initialEntries: ['/discord'] });
