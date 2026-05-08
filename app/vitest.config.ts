@@ -44,6 +44,12 @@ export default defineConfig({
       // lcov: machine-readable format; available for future Codecov integration.
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
+      thresholds: {
+        statements: 64,
+        branches: 75,
+        functions: 67,
+        lines: 64,
+      },
     },
   },
   esbuild: {
