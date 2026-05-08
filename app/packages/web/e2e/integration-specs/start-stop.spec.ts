@@ -14,9 +14,8 @@ test.describe('Start / Stop game server (browser)', () => {
    */
   test('should display game cards from tfstate and show STOPPED status on initial load', async ({
     dashboard,
-    serverMocks: _,
+    serverMocks: _reset,
   }) => {
-    void _;
     await dashboard.goto();
     await expect(dashboard.gameCardHeading('minecraft')).toBeVisible();
     await expect(dashboard.gameCardHeading('valheim')).toBeVisible();

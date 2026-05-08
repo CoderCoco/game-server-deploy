@@ -9,8 +9,8 @@ const HEADERS = { Authorization: 'Bearer test-token' };
  * test-server startup.
  */
 test.describe('ConfigService — tfstate fixture', () => {
-  test('should return aws_region and domain from tfstate fixture', async ({ request, serverMocks: _ }) => {
-    void _;
+  test('should return aws_region and domain from tfstate fixture', async ({ request, serverMocks: _reset }) => {
+
     const resp = await request.get(`${BASE}/api/env`, { headers: HEADERS });
     expect(resp.status()).toBe(200);
     const body = await resp.json() as { region: string; domain: string; environment: string };
@@ -20,16 +20,16 @@ test.describe('ConfigService — tfstate fixture', () => {
     expect(body.environment).toBe('PROD');
   });
 
-  test('should return game names from tfstate fixture', async ({ request, serverMocks: _ }) => {
-    void _;
+  test('should return game names from tfstate fixture', async ({ request, serverMocks: _reset }) => {
+
     const resp = await request.get(`${BASE}/api/games`, { headers: HEADERS });
     expect(resp.status()).toBe(200);
     const body = await resp.json() as { games: string[] };
     expect(body.games).toEqual(['minecraft', 'valheim']);
   });
 
-  test('should return status entries for all games in tfstate fixture', async ({ request, serverMocks: _ }) => {
-    void _;
+  test('should return status entries for all games in tfstate fixture', async ({ request, serverMocks: _reset }) => {
+
     const resp = await request.get(`${BASE}/api/status`, { headers: HEADERS });
     expect(resp.status()).toBe(200);
     const statuses = await resp.json() as Array<{ game: string; state: string }>;
