@@ -42,6 +42,17 @@ export default defineConfig({
         'packages/**/dist/**',
         'packages/server/src/generated/**',
         'packages/web/src/generated/**',
+        // Bootstrap / entry-point files — only exercised by e2e/integration tests.
+        'packages/server/src/main.ts',
+        'packages/server/src/test-main.ts',
+        'packages/web/src/main.tsx',
+        // NestJS DI module files — wiring config, not business logic.
+        'packages/server/src/app.module.ts',
+        'packages/server/src/modules/**',
+        // Test-only infrastructure — not production code.
+        'packages/server/src/test-mocks/**',
+        // Pure type declarations — no executable statements.
+        'packages/shared/src/types.ts',
       ],
       // text: printed to console after each run.
       // lcov: machine-readable format; available for future Codecov integration.
