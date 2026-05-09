@@ -41,22 +41,28 @@ const configItems: NavItem[] = [
  * Shared nav sections used by both the desktop sidebar and the mobile drawer.
  * Accepts an optional `onNavigate` callback that fires when a nav link is clicked,
  * allowing the mobile drawer to close itself on navigation.
+ *
+ * `prefix` makes the section heading ids unique so that both the desktop sidebar
+ * and the mobile drawer can coexist in the DOM without duplicate ids (an HTML
+ * validity violation that also breaks `aria-labelledby`).
  */
 function NavSections({
   currentPath,
   onNavigate,
+  prefix,
 }: {
   currentPath: string;
   onNavigate?: () => void;
+  prefix: string;
 }) {
   return (
     <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
       {/* Monitoring */}
       <div>
-        <p id="nav-monitoring" className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <p id={`${prefix}-nav-monitoring`} className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Monitoring
         </p>
-        <ul aria-labelledby="nav-monitoring" className="space-y-1 list-none">
+        <ul aria-labelledby={`${prefix}-nav-monitoring`} className="space-y-1 list-none">
           {monitoringItems.map((item) => (
             <li key={item.to + item.label}>
               <NavLink item={item} active={currentPath === item.to} onNavigate={onNavigate} />
@@ -67,10 +73,10 @@ function NavSections({
 
       {/* Configuration */}
       <div>
-        <p id="nav-configuration" className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <p id={`${prefix}-nav-configuration`} className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Configuration
         </p>
-        <ul aria-labelledby="nav-configuration" className="space-y-1 list-none">
+        <ul aria-labelledby={`${prefix}-nav-configuration`} className="space-y-1 list-none">
           {configItems.map((item) => (
             <li key={item.to + item.label}>
               <NavLink item={item} active={currentPath === item.to} onNavigate={onNavigate} />
@@ -133,7 +139,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <NavSections currentPath={location.pathname} />
+        <NavSections currentPath={location.pathname} prefix="desktop" />
       </aside>
 
       {/* Mobile drawer backdrop */}
@@ -147,7 +153,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Mobile off-canvas drawer */}
       {mobileMenuOpen && (
-        <div className="fixed inset-y-0 left-0 z-40 w-60 bg-card border-r border-border flex flex-col md:hidden">
+        <aside id="mobile-nav" className="fixed inset-y-0 left-0 z-40 w-60 bg-card border-r border-border flex flex-col md:hidden">
           {/* Drawer header with close button */}
           <div className="px-4 py-5 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -166,12 +172,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
 
-          <NavSections currentPath={location.pathname} onNavigate={closeMobileMenu} />
-        </div>
+          <NavSections currentPath={location.pathname} onNavigate={closeMobileMenu} prefix="mobile" />
+        </aside>
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-4">
@@ -181,6 +187,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Open navigation"
               aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-nav"
               className="shrink-0 md:hidden min-h-11 min-w-11 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               <Menu className="w-5 h-5" aria-hidden="true" />

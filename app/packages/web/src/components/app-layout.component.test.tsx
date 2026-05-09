@@ -97,7 +97,7 @@ describe('AppLayout — skip link and nav landmarks', () => {
 });
 
 describe('AppLayout — LiveIndicator', () => {
-  it('should always render the LIVE label so the chrome is visible from first paint', () => {
+  it('should render the LIVE label element in the DOM regardless of screen size', () => {
     render(
       <PollingProvider>
         <LiveIndicator />
@@ -168,7 +168,8 @@ describe('AppLayout — mobile navigation', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Open navigation' }));
     const logsLinks = screen.getAllByRole('link', { name: 'Logs' });
-    await user.click(logsLinks[0]!);
+    // Click the drawer's Logs link (index 1 — desktop sidebar's link is rendered first in DOM)
+    await user.click(logsLinks[1]!);
     expect(screen.queryByRole('button', { name: 'Close navigation' })).not.toBeInTheDocument();
   });
 });
