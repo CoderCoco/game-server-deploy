@@ -11,7 +11,7 @@
 
   /* Foreground */
   --color-foreground:     #e1e4ed;
-  --color-muted-foreground: #8b90a5;
+  --color-muted-foreground: #9398ad;
 
   /* Accent palette */
   --color-primary:       #7c3aed;
@@ -43,7 +43,7 @@
   --surface2: #252a40;
   --border:   #2e3350;
   --text:     #e1e4ed;
-  --text-dim: #8b90a5;
+  --text-dim: #9398ad;
   --accent:   #7c3aed;
   --accent-h: #a78bfa;
   --green:    #4ade80;
@@ -60,6 +60,15 @@ body {
   color: var(--text);
   min-height: 100vh;
   font-feature-settings: 'tnum';
+}
+
+/* ── Motion accessibility ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ── Legacy button classes (used by unmigrated components only) ─────── */
