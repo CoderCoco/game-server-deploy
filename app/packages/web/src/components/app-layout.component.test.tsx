@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AppLayout, LiveIndicator, RefreshAllButton } from './app-layout.component.js';
@@ -97,7 +97,7 @@ describe('AppLayout — skip link and nav landmarks', () => {
 });
 
 describe('AppLayout — LiveIndicator', () => {
-  it('should always render the LIVE label so the chrome is visible from first paint', () => {
+  it('should render the LIVE label element in the DOM regardless of screen size', () => {
     render(
       <PollingProvider>
         <LiveIndicator />
@@ -124,5 +124,50 @@ describe('AppLayout — LiveIndicator', () => {
     const dot = container.querySelector('div.rounded-full');
     expect(dot?.className).toMatch(/animate-pulse/);
     expect(dot?.className).toMatch(/var\(--color-cyan\)/);
+  });
+});
+
+describe('AppLayout — mobile navigation', () => {
+  it('should render a hamburger button that opens the mobile nav', async () => {
+    const user = userEvent.setup();
+    render(
+      <PollingProvider>
+        <MemoryRouter>
+          <AppLayout>content</AppLayout>
+        </MemoryRouter>
+      </PollingProvider>,
+    );
+    const hamburger = screen.getByRole('button', { name: 'Open navigation' });
+    expect(hamburger).toBeInTheDocument();
+    await user.click(hamburger);
+    expect(screen.getByRole('button', { name: 'Close navigation' })).toBeInTheDocument();
+  });
+
+  it('should close the mobile nav when the close button is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <PollingProvider>
+        <MemoryRouter>
+          <AppLayout>content</AppLayout>
+        </MemoryRouter>
+      </PollingProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    await user.click(screen.getByRole('button', { name: 'Close navigation' }));
+    expect(screen.queryByRole('button', { name: 'Close navigation' })).not.toBeInTheDocument();
+  });
+
+  it('should close the mobile nav when a nav link is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <PollingProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <AppLayout>content</AppLayout>
+        </MemoryRouter>
+      </PollingProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    await user.click(within(document.getElementById('mobile-nav')!).getByRole('link', { name: 'Logs' }));
+    expect(screen.queryByRole('button', { name: 'Close navigation' })).not.toBeInTheDocument();
   });
 });
