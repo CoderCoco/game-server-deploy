@@ -17,8 +17,7 @@ WEB_SRCS     := $(shell find $(APP_DIR)/packages/web/src     -name '*.ts' -o -na
                 $(APP_DIR)/packages/web/vite.config.ts
 LAMBDA_SRCS  := $(shell find $(APP_DIR)/packages/lambda      -name '*.ts' -o -name '*.mjs' 2>/dev/null)
 PKG_JSONS    := $(shell find $(APP_DIR)/packages             -name 'package.json' 2>/dev/null) \
-                $(APP_DIR)/package.json \
-                $(APP_DIR)/package-lock.json
+                $(APP_DIR)/package.json
 TS_CONFIGS   := $(APP_DIR)/tsconfig.json \
                 $(APP_DIR)/tsconfig.base.json \
                 $(shell find $(APP_DIR)/packages -name 'tsconfig*.json' 2>/dev/null)
