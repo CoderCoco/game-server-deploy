@@ -326,7 +326,7 @@ The three existing tiers carry over with one substitution per tier:
 | Tier | Today | After pivot |
 |---|---|---|
 | Unit / integration | vitest, AWS mocked via `aws-sdk-client-mock`, web component specs under jsdom | Unchanged. `@gsd/desktop-main` services use the same fixtures. `TerraformService` tests stub `child_process.spawn`. Web specs mock `window.gsd` instead of `fetch`. |
-| E2E | Playwright vs `vite preview` + stubbed `/api` via `page.route()` | Replaced with `Playwright's Electron API (`@playwright/test`'s `_electron.launch()`)` launching the packaged main+renderer. Stubbing now happens at the IPC layer via a test-only `window.gsd.__test.mock(channel, response)` injected by the preload in test mode. Page objects unchanged. |
+| E2E | Playwright vs `vite preview` + stubbed `/api` via `page.route()` | Replaced with Playwright Electron tests (`_electron.launch()` from `@playwright/test`) launching the packaged main+renderer. Stubbing now happens at the IPC layer via a test-only `window.gsd.__test.mock(channel, response)` injected by the preload in test mode. Page objects unchanged. |
 | Integration | Playwright + real Nest server + AWS-SDK-mock | Recast as "main-process + IPC + AWS-mock". Boots the Nest microservice in-process; drives IPC channels directly without a BrowserWindow; `aws-sdk-client-mock` intercepts SDK calls. ServerMocks fixture pattern preserved. |
 
 A new tier is added for terraform-spawn behaviors: a thin "fake terraform" binary checked into `app/test/fake-terraform.mjs` that prints scripted output, gets put on PATH for the integration tier, exercises the orchestrator against realistic stdout/stderr without real AWS or real terraform.
@@ -374,7 +374,7 @@ Each closed with: `Closed as obsolete by the Electron desktop pivot — see <lin
 | **C — Cloud provider abstraction + AWS impl** | Define `CloudProvider`, `SecretsStore`, `RemoteFileStore`, `DiscordEventReceiver` in `@gsd/shared`. Extract AWS-specific code from server services into new `@gsd/cloud-aws`. Bind impls in `CloudProviderModule`. Split `terraform/` into `terraform/aws/` + a top-level composer. |
 | **D — Local terraform orchestration** | `TerraformService`, IPC-driven plan/apply/destroy/output. Run records in DynamoDB. Mutex + tf state lock. Plan/Apply page, Apply-history page, rollback flow. Inherits #105, #106, #110, #111, #112. |
 | **E — First-run wizard + credentials UX** | Multi-step wizard: detect CLIs, pick cloud (v1: AWS only), profile selection from `~/.aws`, paste-and-encrypt for ad-hoc keys, bootstrap S3 state + tfvars + DynamoDB lock via SDK, run `terraform init`. Re-runnable from Settings as "Reconfigure". |
-| **F — Test migration to Playwright's Electron API (`@playwright/test`'s `_electron.launch()`)** | Convert e2e specs from `vite preview` to `Playwright's Electron API (`@playwright/test`'s `_electron.launch()`)`. Recast integration tier as "main-process + IPC + AWS-mock". Add `fake-terraform.mjs` for orchestrator coverage. Page objects unchanged. |
+| **F — Test migration to Playwright Electron** | Convert e2e specs from `vite preview` to Playwright Electron tests (`_electron.launch()` from `@playwright/test`). Recast integration tier as "main-process + IPC + AWS-mock". Add `fake-terraform.mjs` for orchestrator coverage. Page objects unchanged. |
 | **G — Distribution + auto-update scaffolding** | Three-target CI artifacts. Release workflow with GitHub Releases. `electron-updater` wired but disabled. Documented unsigned-MVP install instructions per OS. |
 
 ### Releasable milestones
@@ -389,7 +389,7 @@ M4 "Polish & ship"           :  Epic F + Epic G (parallel)
 Dependencies:
 
 - **A** unblocks **B** and **C** (chassis must exist first).
-- **B** unblocks repurposed-#82 UI work (UI changes ride on top of the IPC contract) and Epic F (Playwright's Electron API (`@playwright/test`'s `_electron.launch()`) needs the IPC surface).
+- **B** unblocks repurposed-#82 UI work (UI changes ride on top of the IPC contract) and Epic F (Playwright Electron tests need the IPC surface).
 - **C** unblocks **D**, repurposed-#80, repurposed-#81 (cloud-side work goes through the abstracted store).
 - repurposed-#80 → repurposed-#81 → **D** and repurposed-#82.
 - **F** runs after **B** (when IPC is the contract).
