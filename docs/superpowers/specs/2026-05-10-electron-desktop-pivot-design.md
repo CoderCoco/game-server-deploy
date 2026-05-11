@@ -78,7 +78,7 @@ The renderer never talks to AWS or to the network directly. Every cross-process 
                          CostService, LogsService, DiscordConfigService,
                          and a new RemoteTfvarsStore.
 
-@hyveon/desktop-main        RENAMED from @hyveon/desktop-main. Electron main entry
+@hyveon/desktop-main        RENAMED from @gsd/server. Electron main entry
                          point; bootstraps the Nest microservice with
                          IPC transport; hosts TerraformService,
                          FirstRunWizardService, AwsProfileService.

@@ -118,7 +118,7 @@ game-server-deploy/
 ├── app/                       # Nest.js + React monorepo (npm workspaces)
 │   └── packages/
 │       ├── shared/            # @hyveon/shared
-│       ├── server/            # @hyveon/desktop-main (Nest.js API)
+│       ├── desktop-main/      # @hyveon/desktop-main (Nest.js API)
 │       ├── web/               # @hyveon/web   (React + Vite)
 │       └── lambda/
 │           ├── interactions/  # Discord Function URL entry point
