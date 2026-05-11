@@ -6,7 +6,7 @@ sidebar_position: 2
 # Architecture
 
 Three loosely-coupled pieces, all sharing types and helpers through a single
-workspace package, `@gsd/shared`:
+workspace package, `@hyveon/shared`:
 
 1. **Terraform** provisions every AWS resource.
 2. The **management app** (Nest.js API + React dashboard) is a local control
@@ -102,7 +102,7 @@ write the PR description as if you're explaining the new design.
    register global commands — they would leak to every guild the bot is
    invited to.
 
-6. **Permission resolution lives in `canRun()` in `@gsd/shared`.** The server
+6. **Permission resolution lives in `canRun()` in `@hyveon/shared`.** The server
    and both Discord Lambdas import the same function. Do not duplicate the
    logic; do not reorder the checks (guild allowlist → admin → per-game).
 

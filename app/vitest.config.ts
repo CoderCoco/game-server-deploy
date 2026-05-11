@@ -7,12 +7,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      // Point @gsd/shared imports at the TypeScript source so `vitest run`
-      // works without first running `npm run build -w @gsd/shared`. Runtime
+      // Point @hyveon/shared imports at the TypeScript source so `vitest run`
+      // works without first running `npm run build -w @hyveon/shared`. Runtime
       // (Nest server + Lambda bundles) still use the built dist/ via the
       // package.json "main" field — this alias only applies inside Vitest.
-      '@gsd/shared': resolve(__dirname, 'packages/shared/src/index.ts'),
-      // The @gsd/web package uses `@/foo` as a shortcut for `./src/foo`
+      '@hyveon/shared': resolve(__dirname, 'packages/shared/src/index.ts'),
+      // The @hyveon/web package uses `@/foo` as a shortcut for `./src/foo`
       // (matches its tsconfig + Vite config). Re-declare it here so the
       // same imports resolve under Vitest.
       '@': resolve(__dirname, 'packages/web/src'),
@@ -21,7 +21,7 @@ export default defineConfig({
   test: {
     include: ['packages/**/*.test.{ts,tsx}'],
     // Default environment for server-side and shared tests is Node.
-    // React component tests under @gsd/web override this via
+    // React component tests under @hyveon/web override this via
     // `environmentMatchGlobs` so they get a real DOM.
     environment: 'node',
     environmentMatchGlobs: [['packages/web/**', 'jsdom']],
@@ -40,17 +40,17 @@ export default defineConfig({
         'packages/**/*.test.{ts,tsx}',
         'packages/**/*.d.ts',
         'packages/**/dist/**',
-        'packages/server/src/generated/**',
+        'packages/desktop-main/src/generated/**',
         'packages/web/src/generated/**',
         // Bootstrap / entry-point files — only exercised by e2e/integration tests.
-        'packages/server/src/main.ts',
-        'packages/server/src/test-main.ts',
+        'packages/desktop-main/src/main.ts',
+        'packages/desktop-main/src/test-main.ts',
         'packages/web/src/main.tsx',
         // NestJS DI module files — wiring config, not business logic.
-        'packages/server/src/app.module.ts',
-        'packages/server/src/modules/**',
+        'packages/desktop-main/src/app.module.ts',
+        'packages/desktop-main/src/modules/**',
         // Test-only infrastructure — not production code.
-        'packages/server/src/test-mocks/**',
+        'packages/desktop-main/src/test-mocks/**',
         // Pure type declarations — no executable statements.
         'packages/shared/src/types.ts',
       ],

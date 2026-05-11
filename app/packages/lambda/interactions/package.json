@@ -1,5 +1,5 @@
 {
-  "name": "@gsd/lambda-interactions",
+  "name": "@hyveon/lambda-interactions",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@gsd/shared": "*",
+    "@hyveon/shared": "*",
     "@noble/ed25519": "^2.1.0"
   },
   "devDependencies": {

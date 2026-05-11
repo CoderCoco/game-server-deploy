@@ -18,8 +18,8 @@ import {
 
 const getEffectiveDiscordConfigMock = vi.fn();
 const putPendingMock = vi.fn();
-vi.mock('@gsd/shared', async () => {
-  const actual = await vi.importActual<typeof import('@gsd/shared')>('@gsd/shared');
+vi.mock('@hyveon/shared', async () => {
+  const actual = await vi.importActual<typeof import('@hyveon/shared')>('@hyveon/shared');
   return {
     ...actual,
     getEffectiveDiscordConfig: (...args: unknown[]) => getEffectiveDiscordConfigMock(...args),

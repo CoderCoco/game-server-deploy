@@ -213,7 +213,7 @@ async function listAllRunningTaskArns(): Promise<string[]> {
  * `NetworkPacketsIn` on its ENI via CloudWatch and bumps a consecutive-idle counter
  * stored as an ECS task tag (no DynamoDB/SSM state). After `watchdog_idle_checks`
  * consecutive idle intervals, the task is stopped — which triggers the DNS-delete
- * path in `@gsd/lambda-update-dns`.
+ * path in `@hyveon/lambda-update-dns`.
  */
 export const handler = async (): Promise<{ checked: number }> => {
   console.log(`Watchdog running — cluster: ${ECS_CLUSTER}, games: ${GAME_NAMES.join(',')}`);

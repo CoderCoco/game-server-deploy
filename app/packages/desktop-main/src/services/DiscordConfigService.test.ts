@@ -1,8 +1,8 @@
 /**
  * Tests for the DynamoDB + Secrets Manager-backed DiscordConfigService.
  *
- * The service is a thin wrapper around `@gsd/shared/ddb/configStore` and
- * `@gsd/shared/secrets/secretsStore` — the stores themselves have their own
+ * The service is a thin wrapper around `@hyveon/shared/ddb/configStore` and
+ * `@hyveon/shared/secrets/secretsStore` — the stores themselves have their own
  * tests under the shared package. Here we validate the wiring: that the
  * right stores get called with the right args, that the redacted view
  * strips both secrets, and that the controller-facing contract (same method
@@ -21,8 +21,8 @@ const putBotTokenMock = vi.fn();
 const putPublicKeyMock = vi.fn();
 const invalidateSecretsCacheMock = vi.fn();
 
-vi.mock('@gsd/shared', async () => {
-  const actual = await vi.importActual<typeof import('@gsd/shared')>('@gsd/shared');
+vi.mock('@hyveon/shared', async () => {
+  const actual = await vi.importActual<typeof import('@hyveon/shared')>('@hyveon/shared');
   return {
     ...actual,
     getDiscordConfig: (...args: unknown[]) => getDiscordConfigMock(...args),

@@ -28,8 +28,8 @@ import {
 
 const getPendingMock = vi.fn();
 const deletePendingMock = vi.fn();
-vi.mock('@gsd/shared', async () => {
-  const actual = await vi.importActual<typeof import('@gsd/shared')>('@gsd/shared');
+vi.mock('@hyveon/shared', async () => {
+  const actual = await vi.importActual<typeof import('@hyveon/shared')>('@hyveon/shared');
   return {
     ...actual,
     getPending: (...args: unknown[]) => getPendingMock(...args),

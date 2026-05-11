@@ -279,6 +279,6 @@ than stashing long-lived keys. The role's policy is the same
 | `make plan` says "No such file or directory" pointing at `game-server-deploy/` | Submodule wasn't initialised | `make setup` (or `git submodule update --init --recursive`). |
 | `make apply` runs against an old `terraform.tfvars` | You edited the parent's tfvars but ran terraform inside the submodule directly | Always run `make apply` from the parent — the `copy-tfvars` recipe forces a fresh copy. |
 | `make update` silently pulls main and breaks apply | Upstream changed something incompatible | The stamp file's job is to flag setup.sh changes; for non-bootstrap breakage, run `make plan` and read the diff. Pin to a SHA in `.gitmodules` if you want stricter control. |
-| After bumping upstream, Discord commands have wrong arguments | Descriptors in `@gsd/shared/commands.ts` changed | Click **Register commands** for each guild in the dashboard. |
+| After bumping upstream, Discord commands have wrong arguments | Descriptors in `@hyveon/shared/commands.ts` changed | Click **Register commands** for each guild in the dashboard. |
 | `make dev` complains it can't read tfstate | First-time run before `make apply` | Ignore — the recipe writes `null` and the app degrades gracefully until the first apply succeeds. |
 | CI plan shows a Lambda recreating every run | Bundle hash changes between builds | Run `npm ci` (not `npm install`) in CI to pin dependencies; `setup.sh` already does this. |

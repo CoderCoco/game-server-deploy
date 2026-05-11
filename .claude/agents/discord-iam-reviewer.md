@@ -6,10 +6,10 @@ tools: Bash, Read, Grep, Glob
 
 You review changes to the Discord serverless path for security regressions. The architecture (from CLAUDE.md):
 
-- `@gsd/lambda-interactions` is exposed via a public Function URL. It MUST verify the Ed25519 signature against the public key in Secrets Manager before doing anything else.
+- `@hyveon/lambda-interactions` is exposed via a public Function URL. It MUST verify the Ed25519 signature against the public key in Secrets Manager before doing anything else.
 - The interactions Lambda enforces `allowedGuilds` from `pk="CONFIG#discord"` in DynamoDB. This is the only allowlist gate.
-- `canRun()` in `@gsd/shared/canRun` is the single permission resolver. Order: guild allowlist → admin user/role → per-game user/role + action gate.
-- Slash commands are JSON descriptors in `@gsd/shared/commands.ts`. Adding one requires a new entry in `actionForCommand()` so `canRun()` gets the right bucket.
+- `canRun()` in `@hyveon/shared/canRun` is the single permission resolver. Order: guild allowlist → admin user/role → per-game user/role + action gate.
+- Slash commands are JSON descriptors in `@hyveon/shared/commands.ts`. Adding one requires a new entry in `actionForCommand()` so `canRun()` gets the right bucket.
 - Per-guild command registration only — never global commands.
 - Neither the bot token nor the public key is ever returned to the client; `getRedacted()` exposes booleans.
 - The full deploy IAM policy `GameServerDeployAll` lives only in `docs/setup.md`.

@@ -23,7 +23,7 @@ Convert game-server-deploy from a Nest+React web app (operator runs Docker, hand
 | Scope | Full pivot to desktop. S3 (or future cloud-native object store) is the remote source of truth for tfvars so a fresh install can re-sync. |
 | Terraform model | Local CLI invoked from main process. Remote S3 backend (terraform state) + DynamoDB lock + versioned S3 tfvars bucket. |
 | Nest ↔ renderer | Pattern B — IPC bridge via `nestjs-electron-ipc-transport`. No HTTP listener. SSE replaced by IPC streaming channels. |
-| Cloud abstraction | Provider-interface seams in `@gsd/shared`. AWS-only impl in `@gsd/cloud-aws` for v1. Terraform splits into `terraform/aws/` with a top-level composer. |
+| Cloud abstraction | Provider-interface seams in `@hyveon/shared`. AWS-only impl in `@hyveon/cloud-aws` for v1. Terraform splits into `terraform/aws/` with a top-level composer. |
 | Discord bot | `DiscordEventReceiver` interface; AWS Lambda + DynamoDB impl is the v1 concrete. Multi-user permissions stack (`canRun`, admin roles, per-game gates) untouched. |
 | Auth on desktop | None. IPC bridge is the trust boundary. `ApiTokenGuard` is removed. |
 | Existing epics | #80, #81, #82 repurposed (numbers preserved, scope shifts to desktop main process). #83 closed; viable children moved into new Epic D. |
@@ -69,46 +69,46 @@ The renderer never talks to AWS or to the network directly. Every cross-process 
 ### Workspace layout
 
 ```
-@gsd/shared              types, canRun, sanitizers, command descriptors,
+@hyveon/shared              types, canRun, sanitizers, command descriptors,
                          CloudProvider/SecretsStore/RemoteFileStore/
                          DiscordEventReceiver INTERFACES (no impls).
 
-@gsd/cloud-aws           NEW. Concrete AWS implementations of all four
+@hyveon/cloud-aws           NEW. Concrete AWS implementations of all four
                          interfaces. Wraps EcsService, Ec2Service,
                          CostService, LogsService, DiscordConfigService,
                          and a new RemoteTfvarsStore.
 
-@gsd/desktop-main        RENAMED from @gsd/server. Electron main entry
+@hyveon/desktop-main        RENAMED from @hyveon/desktop-main. Electron main entry
                          point; bootstraps the Nest microservice with
                          IPC transport; hosts TerraformService,
                          FirstRunWizardService, AwsProfileService.
-                         CloudProviderModule binds @gsd/cloud-aws impls.
+                         CloudProviderModule binds @hyveon/cloud-aws impls.
 
-@gsd/desktop-preload     NEW. Defines the typed `window.gsd` surface via
+@hyveon/desktop-preload     NEW. Defines the typed `window.gsd` surface via
                          contextBridge. One file per Nest module
                          (games, status, logs, costs, discord, files,
                          env, config, terraform, wizard).
 
-@gsd/web                 React SPA. api.service.ts is rewritten over
+@hyveon/web                 React SPA. api.service.ts is rewritten over
                          window.gsd.*. EventSource consumers replaced
                          with IPC subscriptions. ApiTokenModal removed
                          (no token concept).
 
-@gsd/lambda-interactions, lambda-followup, lambda-update-dns,
-@gsd/lambda-watchdog     Unchanged. They are AWS-bound code that backs
+@hyveon/lambda-interactions, lambda-followup, lambda-update-dns,
+@hyveon/lambda-watchdog     Unchanged. They are AWS-bound code that backs
                          the AWS DiscordEventReceiver impl.
 
-@gsd/scripts             Maintainer scripts. init-parent reframed as a
+@hyveon/scripts             Maintainer scripts. init-parent reframed as a
                          developer scaffolder; first-run wizard is the
                          user-facing equivalent.
 ```
 
 ### Cloud provider seams
 
-Four interfaces in `@gsd/shared`, each with one AWS impl in `@gsd/cloud-aws` for v1.
+Four interfaces in `@hyveon/shared`, each with one AWS impl in `@hyveon/cloud-aws` for v1.
 
 ```ts
-// @gsd/shared/cloud.ts
+// @hyveon/shared/cloud.ts
 export interface CloudProvider {
   startWorkload(game: string, opts: StartOpts): Promise<WorkloadHandle>;
   stopWorkload(game: string): Promise<void>;
@@ -153,12 +153,12 @@ export class CloudProviderModule {}
 ```
 
 When (future) GCP support lands, the change is:
-1. New package `@gsd/cloud-gcp` with the four impls.
+1. New package `@hyveon/cloud-gcp` with the four impls.
 2. `terraform/gcp/` directory with the equivalent Terraform module.
 3. `CloudProviderModule` switches on `cfg.activeCloud`.
 4. First-run wizard offers "GCP" alongside "AWS".
 
-No call sites in `@gsd/desktop-main` or `@gsd/web` change.
+No call sites in `@hyveon/desktop-main` or `@hyveon/web` change.
 
 ### Terraform layout
 
@@ -206,11 +206,11 @@ A "Reconfigure" button in Settings re-runs steps 2–5 against the current insta
 - Each `terraform plan/apply` re-pulls before running. Local copies of every applied tfvars version are written to `userData/tfvars-history/<versionId>.json` for cheap rollback.
 - `terraform.tfstate` itself is not on the desktop disk — the S3 backend handles it. The desktop reads outputs via `terraform output -json` (spawn) or `aws s3api get-object` against the state file when an output is needed before init has run.
 
-Schema validation: a Zod schema in `@gsd/shared` validates the parsed JSON. Invalid remote tfvars surface a "remote config is invalid" UI rather than crashing the app — operators can fix it via the AWS console or a "fix and re-push" UX.
+Schema validation: a Zod schema in `@hyveon/shared` validates the parsed JSON. Invalid remote tfvars surface a "remote config is invalid" UI rather than crashing the app — operators can fix it via the AWS console or a "fix and re-push" UX.
 
 ### Terraform orchestrator (`TerraformService`)
 
-Single service in `@gsd/desktop-main`. Public surface (also the IPC contract):
+Single service in `@hyveon/desktop-main`. Public surface (also the IPC contract):
 
 | Method | Purpose |
 |---|---|
@@ -325,7 +325,7 @@ The three existing tiers carry over with one substitution per tier:
 
 | Tier | Today | After pivot |
 |---|---|---|
-| Unit / integration | vitest, AWS mocked via `aws-sdk-client-mock`, web component specs under jsdom | Unchanged. `@gsd/desktop-main` services use the same fixtures. `TerraformService` tests stub `child_process.spawn`. Web specs mock `window.gsd` instead of `fetch`. |
+| Unit / integration | vitest, AWS mocked via `aws-sdk-client-mock`, web component specs under jsdom | Unchanged. `@hyveon/desktop-main` services use the same fixtures. `TerraformService` tests stub `child_process.spawn`. Web specs mock `window.gsd` instead of `fetch`. |
 | E2E | Playwright vs `vite preview` + stubbed `/api` via `page.route()` | Replaced with Playwright Electron tests (`_electron.launch()` from `@playwright/test`) launching the packaged main+renderer. Stubbing now happens at the IPC layer via a test-only `window.gsd.__test.mock(channel, response)` injected by the preload in test mode. Page objects unchanged. |
 | Integration | Playwright + real Nest server + AWS-SDK-mock | Recast as "main-process + IPC + AWS-mock". Boots the Nest microservice in-process; drives IPC channels directly without a BrowserWindow; `aws-sdk-client-mock` intercepts SDK calls. ServerMocks fixture pattern preserved. |
 
@@ -350,7 +350,7 @@ Each closed with: `Closed as obsolete by the Electron desktop pivot — see <lin
 
 | # | New title | Notes |
 |---|---|---|
-| #80 | Remote tfvars storage — `RemoteFileStore` interface + AWS S3 impl | Children #84–#86, #90 carry over. #87–#89 (script helpers) reframed as `RemoteTfvarsStore` service in `@gsd/desktop-main` — same outcomes, different host. |
+| #80 | Remote tfvars storage — `RemoteFileStore` interface + AWS S3 impl | Children #84–#86, #90 carry over. #87–#89 (script helpers) reframed as `RemoteTfvarsStore` service in `@hyveon/desktop-main` — same outcomes, different host. |
 | #81 | `TfvarsService` reads from `RemoteFileStore` in desktop-main | Children #91–#95 carry over verbatim — host process moves from Nest-on-:3001 to Nest microservice. |
 | #82 | Add/edit/remove games via desktop UI | Children #96–#102 carry over. #103 closed (RBAC out of scope). |
 
@@ -369,9 +369,9 @@ Each closed with: `Closed as obsolete by the Electron desktop pivot — see <lin
 
 | Epic | Scope summary |
 |---|---|
-| **A — Electron shell + build pipeline** | Add `@gsd/desktop-main` (rename of `@gsd/server`) and `@gsd/desktop-preload`. Adopt `electron-vite` + `electron-builder`. Three-target CI matrix. `asarUnpack` for Lambda bundles + `terraform/`. `userData` paths for caches and logs. `fix-path` at boot. Main-process Winston logger. |
+| **A — Electron shell + build pipeline** | Add `@hyveon/desktop-main` (rename of `@hyveon/desktop-main`) and `@hyveon/desktop-preload`. Adopt `electron-vite` + `electron-builder`. Three-target CI matrix. `asarUnpack` for Lambda bundles + `terraform/`. `userData` paths for caches and logs. `fix-path` at boot. Main-process Winston logger. |
 | **B — IPC migration of Nest controllers** | Adopt `nestjs-electron-ipc-transport`. Convert every `@Controller` route to `@MessagePattern`. Drop `ApiTokenGuard` and the HTTP bootstrap. Replace SSE with IPC streaming. Rewrite `api.service.ts` over `window.gsd.*`. Replace `EventSource` log consumer with IPC subscription. Decommission `embed-tfstate.mjs`. |
-| **C — Cloud provider abstraction + AWS impl** | Define `CloudProvider`, `SecretsStore`, `RemoteFileStore`, `DiscordEventReceiver` in `@gsd/shared`. Extract AWS-specific code from server services into new `@gsd/cloud-aws`. Bind impls in `CloudProviderModule`. Split `terraform/` into `terraform/aws/` + a top-level composer. |
+| **C — Cloud provider abstraction + AWS impl** | Define `CloudProvider`, `SecretsStore`, `RemoteFileStore`, `DiscordEventReceiver` in `@hyveon/shared`. Extract AWS-specific code from server services into new `@hyveon/cloud-aws`. Bind impls in `CloudProviderModule`. Split `terraform/` into `terraform/aws/` + a top-level composer. |
 | **D — Local terraform orchestration** | `TerraformService`, IPC-driven plan/apply/destroy/output. Run records in DynamoDB. Mutex + tf state lock. Plan/Apply page, Apply-history page, rollback flow. Inherits #105, #106, #110, #111, #112. |
 | **E — First-run wizard + credentials UX** | Multi-step wizard: detect CLIs, pick cloud (v1: AWS only), profile selection from `~/.aws`, paste-and-encrypt for ad-hoc keys, bootstrap S3 state + tfvars + DynamoDB lock via SDK, run `terraform init`. Re-runnable from Settings as "Reconfigure". |
 | **F — Test migration to Playwright Electron** | Convert e2e specs from `vite preview` to Playwright Electron tests (`_electron.launch()` from `@playwright/test`). Recast integration tier as "main-process + IPC + AWS-mock". Add `fake-terraform.mjs` for orchestrator coverage. Page objects unchanged. |
@@ -418,7 +418,7 @@ Each milestone is releasable. M1 ships an Electron app that does what today's we
 | Risk | Mitigation |
 |---|---|
 | `nestjs-electron-ipc-transport` is a small library; could go unmaintained. | The library is thin (~300 LOC). If it breaks, fork it. The IPC contract itself is stable Electron API. |
-| AWS SDK from the renderer would be a security regression — ensure no leakage. | Lint rule banning `@aws-sdk/*` imports from `@gsd/web`. The preload has zero AWS SDK references. |
+| AWS SDK from the renderer would be a security regression — ensure no leakage. | Lint rule banning `@aws-sdk/*` imports from `@hyveon/web`. The preload has zero AWS SDK references. |
 | Windows EV signing cost when we want auto-update. | Track Azure Trusted Signing pricing; prepare a signed track on a separate branch when budget allows. |
 | Terraform CLI version skew between operator machines. | Pin a minimum version in the wizard prerequisites check. Display the resolved version in Settings. |
 | `app.getPath('userData')` differs between Electron versions — historical incidents. | Lock Electron major version in `package.json`; don't bump in patch releases. |

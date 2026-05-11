@@ -20,7 +20,7 @@ Dev mode runs the Nest API on **:3001** and the Vite dev server on
 **:5173** (with `/api` proxied). Production is a single Node process on
 **:3001**; inside Docker that's published as **:5000**.
 
-## `@gsd/shared`
+## `@hyveon/shared`
 
 `app/packages/shared` — zero-runtime-dependency TypeScript consumed by the
 server **and** all four Lambdas. The canonical location for cross-boundary
@@ -42,9 +42,9 @@ types and permission logic.
 commands are JSON descriptors, not classes; secrets' raw values never
 leave this package's own callers.
 
-## `@gsd/server`
+## `@hyveon/desktop-main`
 
-`app/packages/server` — Nest.js on `@nestjs/platform-express`. The boot
+`app/packages/desktop-main` — Nest.js on `@nestjs/platform-express`. The boot
 sequence in `src/main.ts`:
 
 1. `NestFactory.create(AppModule)`.
@@ -88,7 +88,7 @@ Every route is under `/api/*` and gated by `ApiTokenGuard`.
   restart. Also resolves the bearer token from `API_TOKEN` (wins) or
   `server_config.json:api_token`. State resolution order: (1) runtime
   `terraform/terraform.tfstate`; (2) build-time embedded state from
-  `app/packages/server/src/generated/tfstate.ts` (written by
+  `app/packages/desktop-main/src/generated/tfstate.ts` (written by
   `app/scripts/embed-tfstate.mjs` via the `predev`/`prebuild` npm hooks
   — useful in Docker/CI where the Terraform directory isn't mounted);
   (3) `null` — callers degrade gracefully so the dashboard can render
@@ -138,7 +138,7 @@ everywhere, not `console.log`.
 | `PORT` | `3001` | HTTP listen port. |
 | `AWS_REGION` / `AWS_DEFAULT_REGION` | — | SDK region. Fallback via `ConfigService`. |
 
-## `@gsd/web`
+## `@hyveon/web`
 
 `app/packages/web` — React + Vite.
 
@@ -217,7 +217,7 @@ Specs live under `app/packages/web/e2e/specs/`. Shared stubs and fixtures are in
 
 1. Copy `package.json` + workspace manifests, `npm ci --ignore-scripts`.
 2. Copy source, `npm run build` (shared → server → web).
-3. `CMD ["node", "packages/server/dist/main.js"]`.
+3. `CMD ["node", "packages/desktop-main/dist/main.js"]`.
 
 Only the **server** and **web** packages are baked into the image — the
 four Lambda packages are deployed separately via `terraform apply` and have

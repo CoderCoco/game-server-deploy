@@ -1,5 +1,5 @@
 {
-  "name": "@gsd/lambda-update-dns",
+  "name": "@hyveon/lambda-update-dns",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@gsd/shared": "*"
+    "@hyveon/shared": "*"
   },
   "devDependencies": {
     "@aws-sdk/client-ec2": "^3.600.0",

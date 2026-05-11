@@ -1,5 +1,5 @@
 {
-  "name": "@gsd/lambda-watchdog",
+  "name": "@hyveon/lambda-watchdog",
   "version": "1.0.0",
   "private": true,
   "type": "module",

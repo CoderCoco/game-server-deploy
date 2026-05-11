@@ -13,7 +13,7 @@
 import { Injectable } from '@nestjs/common';
 import { logger } from '../logger.js';
 import { DiscordConfigService } from './DiscordConfigService.js';
-import { COMMAND_DESCRIPTORS } from '@gsd/shared';
+import { COMMAND_DESCRIPTORS } from '@hyveon/shared';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 

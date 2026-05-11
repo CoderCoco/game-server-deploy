@@ -10,8 +10,8 @@ npm run app:test:integration
 ```
 
 This command (from the repo root):
-1. Builds `@gsd/server` via `tsc`.
-2. Builds the `@gsd/web` integration bundle (port 4174, `dist-integration/`).
+1. Builds `@hyveon/desktop-main` via `tsc`.
+2. Builds the `@hyveon/web` integration bundle (port 4174, `dist-integration/`).
 3. Starts the test Nest server on `:3002` and the Vite preview on `:4174`.
 4. Runs `playwright test --config playwright.integration.config.ts`.
 
@@ -34,9 +34,9 @@ Playwright test process
 
 | File | Purpose |
 |------|---------|
-| `app/packages/server/src/test-main.ts` | Integration server entry point. Patches `ECSClient` via `mockClient()` before `NestFactory.create()`, then boots `TestAppModule`. |
-| `app/packages/server/src/test-mocks/mock-store.ts` | In-process `MockStore` singleton with per-command FIFO queues. |
-| `app/packages/server/src/test-mocks/test-mocks.controller.ts` | `POST /api/test/mocks/{reset,ecs/list-tasks,...}` — Playwright uses these to seed responses. |
+| `app/packages/desktop-main/src/test-main.ts` | Integration server entry point. Patches `ECSClient` via `mockClient()` before `NestFactory.create()`, then boots `TestAppModule`. |
+| `app/packages/desktop-main/src/test-mocks/mock-store.ts` | In-process `MockStore` singleton with per-command FIFO queues. |
+| `app/packages/desktop-main/src/test-mocks/test-mocks.controller.ts` | `POST /api/test/mocks/{reset,ecs/list-tasks,...}` — Playwright uses these to seed responses. |
 | `app/packages/web/vite.integration.config.ts` | Vite build config for integration tests (port 4174, `/api` proxy, `VITE_STATUS_POLL_MS=3000`). |
 | `app/packages/web/playwright.integration.config.ts` | Playwright config: `testDir: e2e/integration-specs`, `workers: 1`, two `webServer` entries. |
 | `app/packages/web/e2e/fixtures/server-mocks.ts` | `ServerMocks` class + extended `test` with `serverMocks`, `authedPage`, `dashboard` fixtures. |

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 const fixtureDir = fileURLToPath(new URL('e2e/fixtures', import.meta.url));
 const tfstatePath = join(fixtureDir, 'tfstate.fixture.json');
-const serverDist = fileURLToPath(new URL('../../packages/server/dist', import.meta.url));
+const serverDist = fileURLToPath(new URL('../../packages/desktop-main/dist', import.meta.url));
 
 export default defineConfig({
   testDir: './e2e/integration-specs',
