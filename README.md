@@ -45,7 +45,7 @@ Component deep-dives:
 
 - [**Architecture**](https://codercoco.github.io/Hyveon/architecture/) — full diagram + `/server-start` sequence.
 - [**Terraform**](https://codercoco.github.io/Hyveon/components/terraform/) — every `.tf` file, variables, outputs, gotchas.
-- [**Management app**](https://codercoco.github.io/Hyveon/components/management-app/) — Nest.js API, React dashboard, `@gsd/shared`.
+- [**Management app**](https://codercoco.github.io/Hyveon/components/management-app/) — Nest.js API, React dashboard, `@hyveon/shared`.
 - [**Lambdas**](https://codercoco.github.io/Hyveon/components/lambdas/) — interactions, followup, update-dns, watchdog.
 
 ## Quick start
@@ -117,9 +117,9 @@ pennies/month. Playing 4 hours/day, 5 days/week ≈ **$10–12/month**, vs.
 Hyveon/
 ├── app/                       # Nest.js + React monorepo (npm workspaces)
 │   └── packages/
-│       ├── shared/            # @gsd/shared
-│       ├── server/            # @gsd/server (Nest.js API)
-│       ├── web/               # @gsd/web   (React + Vite)
+│       ├── shared/            # @hyveon/shared
+│       ├── desktop-main/      # @hyveon/desktop-main (Nest.js API)
+│       ├── web/               # @hyveon/web   (React + Vite)
 │       └── lambda/
 │           ├── interactions/  # Discord Function URL entry point
 │           ├── followup/      # Async ECS work + Discord PATCH

@@ -24,9 +24,9 @@ Hyveon/
 │   ├── tsconfig.base.json               # shared TS config
 │   ├── vitest.config.ts
 │   └── packages/
-│       ├── shared/                      # @gsd/shared — pure TS + DDB/Secrets helpers
-│       ├── server/                      # @gsd/server — Nest.js API
-│       ├── web/                         # @gsd/web   — React + Vite dashboard
+│       ├── shared/                      # @hyveon/shared — pure TS + DDB/Secrets helpers
+│       ├── desktop-main/                # @hyveon/desktop-main — Nest.js API
+│       ├── web/                         # @hyveon/web   — React + Vite dashboard
 │       └── lambda/
 │           ├── interactions/            # esbuild → dist/handler.cjs
 │           ├── followup/
@@ -70,7 +70,7 @@ cd ../terraform && terraform fmt -check -recursive && terraform validate && tfli
 | `npm run dev` | `concurrently` Nest (`tsx watch`) + Vite. |
 | `npm run build` | Build shared → server → web in order. |
 | `npm run build:lambdas` | esbuild every Lambda to `dist/handler.cjs`. Required before `terraform apply`. |
-| `npm start` | Run the built Nest server (`node packages/server/dist/main.js`). |
+| `npm start` | Run the built Nest server (`node packages/desktop-main/dist/main.js`). |
 | `npm test` | `vitest run` across every workspace. |
 | `npm run test:watch` | Same but watch mode. |
 | `npm run lint` / `lint:fix` | ESLint flat config over all packages. |
@@ -178,12 +178,12 @@ it's one guild at a time.
 ### 8. `canRun()` ordering
 
 `guild allowlist → admin → per-game user/role + action`. The function is in
-`@gsd/shared` and imported verbatim by the server and both Discord Lambdas.
+`@hyveon/shared` and imported verbatim by the server and both Discord Lambdas.
 Do not duplicate the logic — one copy, tested once.
 
 ### 9. Slash commands are JSON descriptors, not classes
 
-`COMMAND_DESCRIPTORS` in `@gsd/shared/commands.ts` is the only source of
+`COMMAND_DESCRIPTORS` in `@hyveon/shared/commands.ts` is the only source of
 truth for the four slash commands. The interactions Lambda dispatches with
 a ~40-line switch. To add a new command:
 
@@ -196,7 +196,7 @@ a ~40-line switch. To add a new command:
 ### 10. ApiTokenGuard is global
 
 It's registered as `APP_GUARD` in `AppModule` (see
-`app/packages/server/src/app.module.ts`). Every `/api/*` route is behind a
+`app/packages/desktop-main/src/app.module.ts`). Every `/api/*` route is behind a
 bearer token. Do not `@UseGuards()` on individual controllers — that's
 additive, not override. Do not add a `@Public()` decorator pattern unless
 there is a documented reason.
@@ -244,7 +244,7 @@ in the PR body — least-privilege roles are easy to silently widen.
 ## When you touch the Nest server
 
 - New endpoint → add it to the matching controller under
-  `app/packages/server/src/controllers/`, not a new folder layer.
+  `app/packages/desktop-main/src/controllers/`, not a new folder layer.
 - New AWS call → add a method to the appropriate service under
   `services/`. Services are `@Injectable()` and wired through `AwsModule` /
   `DiscordModule`.

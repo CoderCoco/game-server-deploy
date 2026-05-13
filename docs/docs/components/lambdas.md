@@ -21,7 +21,7 @@ Terraform sets the variable with that name in every function definition.
 
 | | |
 |---|---|
-| **Package** | `@gsd/lambda-interactions` |
+| **Package** | `@hyveon/lambda-interactions` |
 | **Trigger** | Lambda Function URL (public HTTPS, `auth_type = NONE`, CORS for `https://discord.com`) — Discord POSTs every interaction here. |
 | **Terraform** | `terraform/interactions.tf`. Output: `interactions_invoke_url`. |
 | **IAM** | `dynamodb:GetItem` on the Discord table, `secretsmanager:GetSecretValue` on the public-key secret, `lambda:InvokeFunction` on the followup Lambda. |
@@ -31,7 +31,7 @@ Terraform sets the variable with that name in every function definition.
 
 1. **Signature verify** — reads `x-signature-ed25519` + `x-signature-timestamp`
    headers, fetches the public key from Secrets Manager (5-minute cache via
-   `@gsd/shared/secrets`), and verifies with `@noble/ed25519` over
+   `@hyveon/shared/secrets`), and verifies with `@noble/ed25519` over
    `timestamp + rawBody`. Rejects 401 on mismatch; without a valid signature
    Discord stops routing to the URL.
 2. **PING** (`type === 1`) → respond `{ type: 1 }` (PONG).
@@ -56,7 +56,7 @@ we can't forge).
 
 | | |
 |---|---|
-| **Package** | `@gsd/lambda-followup` |
+| **Package** | `@hyveon/lambda-followup` |
 | **Trigger** | Async invoke from the interactions Lambda (`InvocationType: 'Event'`). Not exposed externally. |
 | **Terraform** | `terraform/followup.tf`. |
 | **IAM** | `ecs:RunTask` / `StopTask` / `ListTasks` / `DescribeTasks` / `TagResource`, `iam:PassRole` (task execution role — required for RunTask with Fargate), `ec2:DescribeNetworkInterfaces`, `dynamodb:GetItem` / `PutItem`, `secretsmanager:GetSecretValue` on the public key (only read for downstream calls in some paths). |
@@ -113,7 +113,7 @@ Failure modes:
 
 | | |
 |---|---|
-| **Package** | `@gsd/lambda-update-dns` |
+| **Package** | `@hyveon/lambda-update-dns` |
 | **Trigger** | EventBridge rule on `source: aws.ecs`, `detail-type: 'ECS Task State Change'`, `lastStatus` in `['RUNNING', 'STOPPED']`. |
 | **Terraform** | `terraform/route53.tf`. |
 | **IAM** | `route53:ChangeResourceRecordSets`, `route53:ListResourceRecordSets`, `ecs:DescribeTasks`, `ec2:DescribeNetworkInterfaces`, `elasticloadbalancing:RegisterTargets` / `DeregisterTargets`, `dynamodb:GetItem` / `DeleteItem`. |
@@ -166,7 +166,7 @@ Failure modes:
 
 | | |
 |---|---|
-| **Package** | `@gsd/lambda-watchdog` |
+| **Package** | `@hyveon/lambda-watchdog` |
 | **Trigger** | EventBridge schedule at `rate(${watchdog_interval_minutes} minute(s))`. No event payload. |
 | **Terraform** | `terraform/watchdog.tf`. |
 | **IAM** | `ecs:ListTasks` / `DescribeTasks` / `StopTask` / `TagResource` / `ListTagsForResource`, `cloudwatch:GetMetricStatistics`, `route53:ChangeResourceRecordSets` / `ListResourceRecordSets`, `elasticloadbalancing:DeregisterTargets`, `ec2:DescribeNetworkInterfaces`. |

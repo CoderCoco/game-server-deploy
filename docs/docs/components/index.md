@@ -11,7 +11,7 @@ something:
 - **[Terraform](/components/terraform)** — every
   `.tf` file, variables, outputs, and AWS services touched.
 - **[Management app](/components/management-app)** —
-  the Nest.js API, React dashboard, and `@gsd/shared` library.
+  the Nest.js API, React dashboard, and `@hyveon/shared` library.
 - **[Lambdas](/components/lambdas)** — the four
   Node.js Lambdas (interactions, followup, update-dns, watchdog).
 

@@ -4,11 +4,11 @@
 
 The repo uses a single **npm-workspaces** tree rooted at the repo root. Workspaces are:
 
-- `@gsd/shared` — types, `canRun`, sanitizers, status formatter, command descriptors, DynamoDB + Secrets Manager helpers (used by both the server and the Lambdas).
-- `@gsd/server` — Nest.js management API.
-- `@gsd/web` — React + Vite client.
-- `@gsd/lambda-interactions`, `@gsd/lambda-followup`, `@gsd/lambda-update-dns`, `@gsd/lambda-watchdog` — four Lambda packages, each bundled to a single `dist/handler.cjs` by esbuild.
-- `@gsd/scripts` — maintainer helper scripts (`init-parent.ts` scaffolder).
+- `@hyveon/shared` — types, `canRun`, sanitizers, status formatter, command descriptors, DynamoDB + Secrets Manager helpers (used by both the server and the Lambdas).
+- `@hyveon/desktop-main` — Nest.js management API.
+- `@hyveon/web` — React + Vite client.
+- `@hyveon/lambda-interactions`, `@hyveon/lambda-followup`, `@hyveon/lambda-update-dns`, `@hyveon/lambda-watchdog` — four Lambda packages, each bundled to a single `dist/handler.cjs` by esbuild.
+- `@hyveon/scripts` — maintainer helper scripts (`init-parent.ts` scaffolder).
 
 ```bash
 # Install all workspaces in one go (run from repo root)
@@ -60,10 +60,10 @@ Terraform linting uses [tflint](https://github.com/terraform-linters/tflint) wit
 
 ## Architecture
 
-Three loosely-coupled pieces share code via `@gsd/shared`:
+Three loosely-coupled pieces share code via `@hyveon/shared`:
 
 1. **Terraform (`terraform/`)** provisions all AWS infrastructure, including four Node.js Lambdas (interactions, followup, update-dns, watchdog), a DynamoDB table, and two Secrets Manager secrets for Discord credentials.
-2. **Management app (`app/packages/server` + `app/packages/web`)** — Nest.js (on `@nestjs/platform-express`) backend reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs + the Discord store locations, then drives AWS via the AWS SDK v3. React/Vite frontend talks to the Nest API. Services use **Nest's built-in DI** (`@Injectable()`) and **Winston** for structured logging. Feature modules under `app/packages/server/src/modules/` (`AwsModule`, `DiscordModule`) group related providers; HTTP handlers live in `app/packages/server/src/controllers/` as `@Controller`-decorated classes wired up through `AppModule`.
+2. **Management app (`app/packages/desktop-main` + `app/packages/web`)** — Nest.js (on `@nestjs/platform-express`) backend reads `terraform/terraform.tfstate` directly at runtime to discover cluster/subnet/SG IDs + the Discord store locations, then drives AWS via the AWS SDK v3. React/Vite frontend talks to the Nest API. Services use **Nest's built-in DI** (`@Injectable()`) and **Winston** for structured logging. Feature modules under `app/packages/desktop-main/src/modules/` (`AwsModule`, `DiscordModule`) group related providers; HTTP handlers live in `app/packages/desktop-main/src/controllers/` as `@Controller`-decorated classes wired up through `AppModule`.
 3. **Lambdas (`app/packages/lambda/*`)** — four TypeScript Lambda packages. All bundle via esbuild to a single CJS file and are zipped by Terraform's `archive_file` data source. The Discord interaction path (`interactions` + `followup`) is described below; `update-dns` and `watchdog` are ports of the original `update_dns.py` / `watchdog.py` — same behaviour, TypeScript runtime.
 
 There is **no persistent ECS Service**. Servers run only when the user clicks Start (or invokes `/server-start`) — the app/followup-Lambda calls `ecs.run_task()` / `ecs.stop_task()` against per-game task definitions named `{game}-server`. This is the core cost-saving design choice; don't introduce a long-running Service.
@@ -82,28 +82,28 @@ When adding a game, only edit `terraform.tfvars`. Don't hand-write new resources
 
 ### DNS is Lambda-managed, not Terraform-managed
 
-`route53.tf` creates the zone data source and the updater Lambda, but **no `aws_route53_record` resources**. An EventBridge rule on `ECS Task State Change` fires `@gsd/lambda-update-dns`, which UPSERTs a record for `{game}.{hosted_zone_name}` on `RUNNING` and DELETEs on `STOPPED`. Terraform would fight the Lambda — keep DNS records out of Terraform.
+`route53.tf` creates the zone data source and the updater Lambda, but **no `aws_route53_record` resources**. An EventBridge rule on `ECS Task State Change` fires `@hyveon/lambda-update-dns`, which UPSERTs a record for `{game}.{hosted_zone_name}` on `RUNNING` and DELETEs on `STOPPED`. Terraform would fight the Lambda — keep DNS records out of Terraform.
 
 ### Watchdog state lives in ECS task tags
 
-`@gsd/lambda-watchdog` runs on an EventBridge schedule (`rate(${watchdog_interval_minutes} minutes)`) and checks `NetworkPacketsIn` on each task's ENI via CloudWatch. The consecutive-idle counter is **stored as a tag on the ECS task itself** — there's no DynamoDB/SSM for watchdog state. After `watchdog_idle_checks` consecutive idle intervals, the task is stopped (which triggers the DNS-delete path above).
+`@hyveon/lambda-watchdog` runs on an EventBridge schedule (`rate(${watchdog_interval_minutes} minutes)`) and checks `NetworkPacketsIn` on each task's ENI via CloudWatch. The consecutive-idle counter is **stored as a tag on the ECS task itself** — there's no DynamoDB/SSM for watchdog state. After `watchdog_idle_checks` consecutive idle intervals, the task is stopped (which triggers the DNS-delete path above).
 
 ### App → Terraform coupling
 
-`ConfigService.getTfOutputs()` (in `app/packages/server/src/services/ConfigService.ts`) parses `terraform.tfstate` as JSON and caches it in-memory. `invalidateCache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes. The parsed `TfOutputs` shape now also exposes `discord_table_name`, `discord_bot_token_secret_arn`, `discord_public_key_secret_arn`, and `interactions_invoke_url` so `DiscordConfigService` can reach the Discord stores without extra env-var plumbing.
+`ConfigService.getTfOutputs()` (in `app/packages/desktop-main/src/services/ConfigService.ts`) parses `terraform.tfstate` as JSON and caches it in-memory. `invalidateCache()` is called on `/api/games` and `/api/status` to pick up new deploys. The app's container mounts `./terraform:/app/terraform:ro` — this path coupling matters if directory structure changes. The parsed `TfOutputs` shape now also exposes `discord_table_name`, `discord_bot_token_secret_arn`, `discord_public_key_secret_arn`, and `interactions_invoke_url` so `DiscordConfigService` can reach the Discord stores without extra env-var plumbing.
 
-**Build-time state embedding**: `app/scripts/embed-tfstate.mjs` (runs via `predev`/`prebuild` hooks) writes `app/packages/server/src/generated/tfstate.ts`; `ConfigService` uses it as a fallback when the runtime `terraform.tfstate` is absent (Docker/CI). The file is committed as `null` and overwritten at dev/build time.
+**Build-time state embedding**: `app/scripts/embed-tfstate.mjs` (runs via `predev`/`prebuild` hooks) writes `app/packages/desktop-main/src/generated/tfstate.ts`; `ConfigService` uses it as a fallback when the runtime `terraform.tfstate` is absent (Docker/CI). The file is committed as `null` and overwritten at dev/build time.
 
 ### API authentication
 
-Every `/api/*` route is gated behind a bearer token via `ApiTokenGuard` in `app/packages/server/src/guards/api-token.guard.ts`, registered globally in `AppModule` as an `APP_GUARD` provider so it applies to every controller automatically. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts in `main.ts` if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the guard or bypass it on individual controllers — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
+Every `/api/*` route is gated behind a bearer token via `ApiTokenGuard` in `app/packages/desktop-main/src/guards/api-token.guard.ts`, registered globally in `AppModule` as an `APP_GUARD` provider so it applies to every controller automatically. The token comes from env `API_TOKEN` (wins, even when set to empty to deliberately disable) or `api_token` in `server_config.json`. In production (`NODE_ENV=production`), boot aborts in `main.ts` if no token is configured. In dev, a warning is logged and unauthenticated requests are allowed for convenience. The web client stores the token in `localStorage` under key `apiToken` and sends it as `Authorization: Bearer`. Don't remove the guard or bypass it on individual controllers — Copilot flagged the unauthenticated surface as a security issue and this is the fix.
 
 ### Discord bot is fully serverless (Lambda + DynamoDB + Secrets Manager)
 
 There is **no discord.js dependency, no long-running bot process, and no `DiscordBotService`**. The bot is split across two Lambdas provisioned by Terraform (`interactions.tf`, `followup.tf`):
 
-- **`@gsd/lambda-interactions`** — verifies Ed25519 signature, PONGs pings, handles autocomplete synchronously, and defers slash commands to `@gsd/lambda-followup` (Discord's 3-second budget doesn't leave room for ECS calls).
-- **`@gsd/lambda-followup`** — does the ECS work (`RunTask` / `StopTask` / `DescribeTasks`) and PATCHes the original interaction message. For start commands it writes a pending-interaction row to DynamoDB so `@gsd/lambda-update-dns` can patch again with the resolved IP once the task reaches RUNNING.
+- **`@hyveon/lambda-interactions`** — verifies Ed25519 signature, PONGs pings, handles autocomplete synchronously, and defers slash commands to `@hyveon/lambda-followup` (Discord's 3-second budget doesn't leave room for ECS calls).
+- **`@hyveon/lambda-followup`** — does the ECS work (`RunTask` / `StopTask` / `DescribeTasks`) and PATCHes the original interaction message. For start commands it writes a pending-interaction row to DynamoDB so `@hyveon/lambda-update-dns` can patch again with the resolved IP once the task reaches RUNNING.
 
 Persistent state: DynamoDB table `${project_name}-discord` (Discord config + pending-interaction rows with 15-min TTL) and two Secrets Manager secrets (`${project_name}/discord/bot-token`, `${project_name}/discord/public-key`).
 
@@ -111,14 +111,14 @@ Key design rules to preserve:
 
 - **Per-guild command registration only.** `DiscordCommandRegistrar.registerForGuild()` PUTs to `https://discord.com/api/v10/applications/{client_id}/guilds/{guild_id}/commands`. Never register global commands — they'd leak to any guild the bot is invited to.
 - **The allowlist is enforced in the interactions Lambda.** It reads the `DiscordConfig` from DynamoDB on every invocation and rejects any command from a guild not in `allowedGuilds`. There's no always-on process to iterate `guilds.cache` — but there doesn't need to be, because Discord only routes interactions to us; we don't maintain a gateway connection.
-- **Permission resolution is in `canRun()` (in `@gsd/shared/canRun`).** Order is guild allowlist → admin user/role → per-game user/role + action gate. This function is pure and is imported verbatim by both the server and the Lambdas — keep it in `@gsd/shared` so there's exactly one copy.
+- **Permission resolution is in `canRun()` (in `@hyveon/shared/canRun`).** Order is guild allowlist → admin user/role → per-game user/role + action gate. This function is pure and is imported verbatim by both the server and the Lambdas — keep it in `@hyveon/shared` so there's exactly one copy.
 - **Neither secret is ever sent to the client.** `getRedacted()` returns `botTokenSet: boolean` and `publicKeySet: boolean` instead of the values. API response shapes preserve this.
 
 #### Slash commands are JSON descriptors, not classes
 
-The four commands — `/server-start`, `/server-stop`, `/server-status`, `/server-list` — are defined as static JSON in `@gsd/shared/commands.ts` (`COMMAND_DESCRIPTORS`). Discord sends the command name in each interaction; the interactions Lambda switches on it directly. There's no `SlashCommand` / `GameOptionSlashCommand` / `SlashCommandRegistry` abstraction anymore — the dispatch is a ~40-line switch in `handler.ts`. To add a new command:
+The four commands — `/server-start`, `/server-stop`, `/server-status`, `/server-list` — are defined as static JSON in `@hyveon/shared/commands.ts` (`COMMAND_DESCRIPTORS`). Discord sends the command name in each interaction; the interactions Lambda switches on it directly. There's no `SlashCommand` / `GameOptionSlashCommand` / `SlashCommandRegistry` abstraction anymore — the dispatch is a ~40-line switch in `handler.ts`. To add a new command:
 
-1. Append a descriptor to `COMMAND_DESCRIPTORS` in `@gsd/shared/commands.ts`.
+1. Append a descriptor to `COMMAND_DESCRIPTORS` in `@hyveon/shared/commands.ts`.
 2. Add a `case` in the interactions Lambda's `handleApplicationCommand()` (kicking off a followup invoke) and in the followup Lambda's `handler()` switch on `event.kind`.
 3. Update `actionForCommand()` in the same `commands.ts` so `canRun()` gets the right permission bucket.
 4. Rebuild Lambdas + `terraform apply` to redeploy; operators click "Register commands" per guild so Discord picks up the new descriptor.
@@ -166,17 +166,17 @@ The test suite has three complementary tiers:
 
 | Tier | Command | What runs | When to add specs |
 |------|---------|-----------|-------------------|
-| **Unit / integration** | `npm run app:test` | Vitest. Server-side logic, hooks, helpers run under the `node` environment; React component specs in `@gsd/web` run under `jsdom` via `environmentMatchGlobs`. No real network — AWS SDK mocked via `aws-sdk-client-mock`; the `@gsd/web` API client is stubbed via `vi.mock`. | Pure logic, hook behaviour, server controllers, **per-component React behaviour** (rendering, callbacks, internal state transitions). |
+| **Unit / integration** | `npm run app:test` | Vitest. Server-side logic, hooks, helpers run under the `node` environment; React component specs in `@hyveon/web` run under `jsdom` via `environmentMatchGlobs`. No real network — AWS SDK mocked via `aws-sdk-client-mock`; the `@hyveon/web` API client is stubbed via `vi.mock`. | Pure logic, hook behaviour, server controllers, **per-component React behaviour** (rendering, callbacks, internal state transitions). |
 | **E2E (tier 1 — #74)** | `npm run app:test:e2e` | Playwright against `vite build` + `vite preview`. Nest server never runs; every `/api/*` call is stubbed at the network layer via `page.route()`. | User-visible flows: routing, auth gate, button interactions, status-badge rendering, optimistic updates. |
 | **Integration (tier 2 — #75)** | `npm run app:test:integration` | Playwright against `vite build (integration config)` + `vite preview` + real Nest server on `:3002`. AWS SDK intercepted by `aws-sdk-client-mock`. Mock state pushed via `ServerMocks` fixture to `/api/test/mocks/*`. | Real HTTP contract validation, `ApiTokenGuard` behaviour, `ConfigService` tfstate parsing, start/stop flows end-to-end, error propagation from ECS through the API response. |
 
-**React component unit tests (`@gsd/web`):**
+**React component unit tests (`@hyveon/web`):**
 - Use **Vitest + jsdom + `@testing-library/react` + `@testing-library/user-event`**. `@testing-library/jest-dom` matchers (`toBeInTheDocument`, `toHaveTextContent`, etc.) are auto-loaded via `app/vitest.setup.ts`.
 - `app/vitest.config.ts` flips to the `jsdom` environment for everything under `packages/web/**` so server tests stay on Node. The setup file also wires `afterEach(cleanup)` because we run with `globals: false`, which disables RTL's normal auto-cleanup.
 - Tests live **next to the component** (`Foo.tsx` → `Foo.test.tsx`), not in a separate `__tests__` directory. Mock the API client and any module-level singletons via `vi.mock`. Use `vi.stubGlobal('EventSource', …)` for SSE-driven components (jsdom doesn't ship one).
 - Cover: visible rendering for each `state` branch, every callback prop firing with the right argument, internal state transitions (open/close, pause/resume), and any non-trivial pure helper. Don't reach for snapshots — they break on every Tailwind tweak. Don't repeat assertions already covered by the e2e tier (full SSE streaming flow, real network, full routing).
 
-**Routed page tests (`@gsd/web`):**
+**Routed page tests (`@hyveon/web`):**
 - Each routed page (`DashboardPage`, `CostsPage`, `DiscordPage`, `LogsPage`, `SettingsPage`) gets a co-located `*.test.tsx` that mounts the page through `renderPage()` (`app/packages/web/src/test-utils/renderPage.tsx`). The helper wraps children in `PollingProvider → GameStatusProvider → MemoryRouter` so the same provider stack the production app uses is exercised; pass `initialEntries` when the page reads `useLocation`.
 - Mock `../api.js` with `vi.mock` + `vi.hoisted` so the page drives off canned data instead of real fetches. Stub every method the page (and the GameStatusProvider above it) calls — at minimum `api.status` and `api.costsEstimate` — or the test will hang waiting for the polling registry to settle.
 - These tests are intentionally **complementary** to the e2e tier, not a replacement: the e2e specs prove the indicator + chrome render at the route level under a real Vite preview build; the unit tests pin the page's own provider wiring (e.g. that `<PollingIndicator />` resolves to "Updated …" once the mocked status poll resolves) and let us iterate on the page layout without spinning up Playwright.

@@ -24,8 +24,8 @@ import {
   EC2Client,
   DescribeNetworkInterfacesCommand,
 } from '@aws-sdk/client-ec2';
-import { canRun, formatGameStatus, getEffectiveDiscordConfig, putPending } from '@gsd/shared';
-import type { DiscordAction, DiscordConfig, GameStatus } from '@gsd/shared';
+import { canRun, formatGameStatus, getEffectiveDiscordConfig, putPending } from '@hyveon/shared';
+import type { DiscordAction, DiscordConfig, GameStatus } from '@hyveon/shared';
 
 interface FollowupEvent {
   kind: 'start' | 'stop' | 'status' | 'list';
@@ -265,7 +265,7 @@ function recheck(event: FollowupEvent, cfg: DiscordConfig, action: DiscordAction
  * (Discord's 3-second budget doesn't leave room for ECS calls). Does the slow work —
  * `RunTask` / `StopTask` / `DescribeTasks` — then PATCHes the original interaction
  * message via the webhook endpoint. For `start`, also writes a `PENDING#{taskArn}`
- * row to DynamoDB so `@gsd/lambda-update-dns` can PATCH the same interaction once
+ * row to DynamoDB so `@hyveon/lambda-update-dns` can PATCH the same interaction once
  * the task reaches RUNNING and an IP/hostname is resolved.
  */
 export const handler = async (event: FollowupEvent): Promise<void> => {

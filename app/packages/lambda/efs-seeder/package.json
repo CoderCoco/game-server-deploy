@@ -1,5 +1,5 @@
 {
-  "name": "@gsd/lambda-efs-seeder",
+  "name": "@hyveon/lambda-efs-seeder",
   "version": "1.0.0",
   "private": true,
   "type": "module",

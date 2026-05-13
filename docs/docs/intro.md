@@ -50,7 +50,7 @@ Deep-dives on each piece, for when the guides hand-wave past something:
 - [Terraform](/components/terraform) — every `.tf`
   file, variables, outputs, and AWS services touched.
 - [Management app](/components/management-app) — the
-  Nest.js API, React dashboard, and `@gsd/shared` library.
+  Nest.js API, React dashboard, and `@hyveon/shared` library.
 - [Lambdas](/components/lambdas) — the four Node.js
   Lambdas (interactions, followup, update-dns, watchdog).
 
@@ -73,9 +73,9 @@ the `/server-start` sequence) see the
 Hyveon/
 ├── app/                       # Nest.js + React monorepo (npm workspaces)
 │   └── packages/
-│       ├── shared/            # @gsd/shared
-│       ├── server/            # @gsd/server (Nest.js API)
-│       ├── web/               # @gsd/web   (React + Vite)
+│       ├── shared/            # @hyveon/shared
+│       ├── desktop-main/      # @hyveon/desktop-main (Nest.js API)
+│       ├── web/               # @hyveon/web   (React + Vite)
 │       └── lambda/
 │           ├── interactions/  # Discord Function URL entry point
 │           ├── followup/      # async ECS work + Discord PATCH

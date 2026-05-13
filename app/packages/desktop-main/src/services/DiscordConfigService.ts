@@ -9,7 +9,7 @@
  *    `/api/discord/config`.
  *
  * The InteractionsLambda has its own copy of the read paths (via
- * `@gsd/shared`), so this service only exists to back the management UI's
+ * `@hyveon/shared`), so this service only exists to back the management UI's
  * configuration tab.
  */
 import { Injectable } from '@nestjs/common';
@@ -30,10 +30,10 @@ import {
   type DiscordAction,
   type DiscordConfig,
   type RedactedDiscordConfig,
-} from '@gsd/shared';
+} from '@hyveon/shared';
 
 /** Slash-command action that can be gated via permissions. */
-export type { DiscordAction } from '@gsd/shared';
+export type { DiscordAction } from '@hyveon/shared';
 
 function emptyConfig(): DiscordConfig {
   return {
@@ -47,7 +47,7 @@ function emptyConfig(): DiscordConfig {
 /**
  * Management-side interface to the Discord DynamoDB row and the two Secrets
  * Manager secrets. The interactions/followup Lambdas have their own read
- * paths via `@gsd/shared`; this service backs the web UI's Credentials /
+ * paths via `@hyveon/shared`; this service backs the web UI's Credentials /
  * Permissions tabs.
  *
  * Security invariant: the raw `botToken` and `publicKey` values are **never**

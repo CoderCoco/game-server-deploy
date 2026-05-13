@@ -21,8 +21,8 @@ vi.mock('@noble/ed25519', () => ({
 // Mock the shared config + secrets stores so we never hit AWS.
 const getPublicKeyMock = vi.fn();
 const getEffectiveDiscordConfigMock = vi.fn();
-vi.mock('@gsd/shared', async () => {
-  const actual = await vi.importActual<typeof import('@gsd/shared')>('@gsd/shared');
+vi.mock('@hyveon/shared', async () => {
+  const actual = await vi.importActual<typeof import('@hyveon/shared')>('@hyveon/shared');
   return {
     ...actual,
     getPublicKey: (...args: unknown[]) => getPublicKeyMock(...args),

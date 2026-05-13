@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Reads Terraform state at build time and writes
-// app/packages/server/src/generated/tfstate.ts with the parsed state
+// app/packages/desktop-main/src/generated/tfstate.ts with the parsed state
 // embedded as a JSON literal. ConfigService imports it as a fallback when the
 // state file is not present at runtime (e.g. dev without a terraform apply).
 //
@@ -35,7 +35,7 @@ function getRepoRoot() {
   }
 }
 
-const outDir = join(__dirname, '../packages/server/src/generated');
+const outDir = join(__dirname, '../packages/desktop-main/src/generated');
 const outPath = join(outDir, 'tfstate.ts');
 
 mkdirSync(outDir, { recursive: true });
