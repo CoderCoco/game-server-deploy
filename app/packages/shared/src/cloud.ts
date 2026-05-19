@@ -1,4 +1,4 @@
-/** Options for launching a game workload. Intentionally empty for v1; implementations may extend via intersection. */
+/** Options for launching a game workload. Intentionally open/opaque for v1; implementations may accept provider-specific keys or refine this via intersection. */
 export interface StartOpts {
   [key: string]: unknown;
 }
