@@ -8,3 +8,5 @@ export * from './ddb/client.js';
 export * from './ddb/configStore.js';
 export * from './ddb/pendingStore.js';
 export * from './secrets/secretsStore.js';
+export type { DiscordEventReceiver } from './cloud.js';
+export * from './discord/awsLambdaDiscordReceiver.js';
