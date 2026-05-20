@@ -41,6 +41,7 @@ export interface TfOutputs {
   discord_bot_token_secret_arn: string;
   discord_public_key_secret_arn: string;
   interactions_invoke_url: string | null;
+  discord_interactions_url: string | null;
 }
 
 /**
@@ -136,6 +137,7 @@ export class ConfigService {
         discord_bot_token_secret_arn: get('discord_bot_token_secret_arn', ''),
         discord_public_key_secret_arn: get('discord_public_key_secret_arn', ''),
         interactions_invoke_url: get('interactions_invoke_url', null),
+        discord_interactions_url: get('discord_interactions_url', null),
       };
 
       logger.debug('Loaded Terraform outputs', { games: this.tfCache.game_names });
