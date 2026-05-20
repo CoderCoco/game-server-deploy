@@ -6,8 +6,9 @@ import type { DiscordEventReceiver } from '../cloud.js';
  * package — `@hyveon/shared` must not depend on application packages.
  */
 export interface DiscordReceiverConfig {
-  /** The API Gateway invoke URL provisioned for the interactions Lambda, or
-   *  `null` / `undefined` when no endpoint has been deployed yet. */
+  /** The public custom-domain URL for the Discord interactions endpoint
+   *  (terraform output `discord_interactions_url`), or `null` / `undefined`
+   *  when no endpoint has been deployed yet. */
   discord_interactions_url: string | null | undefined;
 }
 
@@ -21,7 +22,7 @@ export interface DiscordReceiverConfig {
  * @example
  * ```ts
  * const receiver = new AwsLambdaDiscordReceiver({
- *   discord_interactions_url: tfOutputs.interactions_invoke_url,
+ *   discord_interactions_url: tfOutputs.discord_interactions_url,
  * });
  * const url = await receiver.getInteractionEndpointUrl();
  * ```

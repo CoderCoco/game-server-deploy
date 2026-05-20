@@ -142,9 +142,9 @@ export interface DiscordEventReceiver {
   /**
    * Resolves the public HTTPS URL that Discord will POST interaction events to.
    *
-   * @returns The fully-qualified interactions endpoint URL (e.g. the API Gateway
-   *   invoke URL for the interactions Lambda), or `null` if no endpoint has been
-   *   configured or provisioned yet.
+   * @returns The fully-qualified interactions endpoint URL registered with Discord
+   *   (e.g. a custom domain or provider-managed public URL), or `null` if no
+   *   endpoint has been configured or provisioned yet.
    */
   getInteractionEndpointUrl(): Promise<string | null>;
 }
